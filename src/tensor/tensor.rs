@@ -103,7 +103,12 @@ pub struct Tensor<T> {
     index_products: IndexProducts,
     data: Vec<T>,
 }
-
+impl<T: Clone> Tensor<T> {
+    pub fn from_value(shape: Shape, value: T) -> Self {
+        let data = vec![value; shape.data_len()];
+        Tensor::new(shape, data).unwrap()
+    }
+}
 impl<T> Tensor<T> {
     pub fn new(shape: Shape, data: Vec<T>) -> Result<Self, TensorCreationErrors> {
         if shape.data_len() != data.len() {
