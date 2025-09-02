@@ -101,9 +101,9 @@ impl Into<Vec<usize>> for IndexProducts {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Tensor<T> {
-    pub shape: Shape,
+    shape: Shape,
     index_products: IndexProducts,
-    pub data: Vec<T>,
+    data: Vec<T>,
 }
 
 impl<T> Tensor<T> {
@@ -119,6 +119,13 @@ impl<T> Tensor<T> {
             index_products,
             data,
         })
+    }
+
+    pub fn shape(&self) -> &Shape {
+        &self.shape
+    }
+    pub fn data(&self) -> &Vec<T> {
+        &self.data
     }
 }
 impl<T> Tensor<T>
