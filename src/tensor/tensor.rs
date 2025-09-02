@@ -10,13 +10,21 @@ pub enum ShapeValidationError {
 }
 
 #[derive(Debug, Error)]
-pub enum TensorCreationErrors {
+pub enum TensorUtilErrors {
     #[error("Shape vector indicates a size different to that of the data provided")]
     ShapeSizeDoesNotMatch,
+    #[error("Shape vector is not 1 on dimension {0} so cannot flatten on this dimension")]
+    DimIsNotOne(usize),
+    #[error("Dimension {dim} greater than number of dimensions in shape: {max_dim}")]
+    DimOutOfBounds { dim: usize, max_dim: usize },
+    #[error("Dimensions are not compatible for concatenation")]
+    ShapesIncompatibleForConcatenation,
 }
 
-pub(crate) fn dot_vectors<T: Add<Output = T> + Mul<Output = T> + Clone>(vec1: &Vec<T>, vec2: &Vec<T>) -> T
-{
+pub(crate) fn dot_vectors<T: Add<Output = T> + Mul<Output = T> + Clone>(
+    vec1: &Vec<T>,
+    vec2: &Vec<T>,
+) -> T {
     vec1.iter()
         .cloned()
         .zip(vec2.iter().cloned())
@@ -79,7 +87,7 @@ impl TryFrom<Vec<usize>> for Shape {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct IndexProducts(pub(crate) Vec<usize>);
 impl IndexProducts {
-    pub(crate) fn from_shape(shape: &Shape) -> IndexProducts {
+    pub(crate) fn from_shape(shape: Shape) -> IndexProducts {
         let mut index_products: Vec<usize> = vec![1; shape.len()];
 
         for i in 1..shape.len() {
@@ -89,6 +97,12 @@ impl IndexProducts {
         }
 
         IndexProducts(index_products)
+    }
+}
+impl Index<usize> for IndexProducts {
+    type Output = usize;
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.0[index]
     }
 }
 impl Into<Vec<usize>> for IndexProducts {
@@ -103,19 +117,13 @@ pub struct Tensor<T> {
     index_products: IndexProducts,
     data: Vec<T>,
 }
-impl<T: Clone> Tensor<T> {
-    pub fn from_value(shape: Shape, value: T) -> Self {
-        let data = vec![value; shape.data_len()];
-        Tensor::new(shape, data).unwrap()
-    }
-}
 impl<T> Tensor<T> {
-    pub fn new(shape: Shape, data: Vec<T>) -> Result<Self, TensorCreationErrors> {
+    pub fn new(shape: Shape, data: Vec<T>) -> Result<Self, TensorUtilErrors> {
         if shape.data_len() != data.len() {
-            return Err(TensorCreationErrors::ShapeSizeDoesNotMatch);
+            return Err(TensorUtilErrors::ShapeSizeDoesNotMatch);
         }
 
-        let index_products = IndexProducts::from_shape(&shape);
+        let index_products = IndexProducts::from_shape(shape.clone());
 
         Ok(Tensor {
             shape,
@@ -130,9 +138,83 @@ impl<T> Tensor<T> {
     pub fn data(&self) -> &Vec<T> {
         &self.data
     }
+
+    pub fn reshape(&mut self, new_shape: Shape) -> Result<(), TensorUtilErrors> {
+        if new_shape.data_len() != self.shape.data_len() {
+            return Err(TensorUtilErrors::ShapeSizeDoesNotMatch);
+        }
+
+        self.shape = new_shape;
+        Ok(())
+    }
+    pub fn flatten(&mut self, dim: usize) -> Result<(), TensorUtilErrors> {
+        if dim >= self.shape.len() {
+            return Err(TensorUtilErrors::DimOutOfBounds {
+                dim: dim,
+                max_dim: self.shape.len(),
+            });
+        }
+
+        if self.shape[dim] != 1 {
+            return Err(TensorUtilErrors::DimIsNotOne(dim));
+        }
+
+        self.shape.0.remove(dim);
+        Ok(())
+    }
+}
+impl<T: Clone> Tensor<T> {
+    pub fn from_value(shape: Shape, value: T) -> Self {
+        let data = vec![value; shape.data_len()];
+        Tensor::new(shape, data).unwrap()
+    }
+
+    pub fn concat(&self, other: &Tensor<T>, dim: usize) -> Result<Tensor<T>, TensorUtilErrors> {
+        if self.shape.len() < other.shape.len() {
+            return Err(TensorUtilErrors::ShapesIncompatibleForConcatenation);
+        }
+        let mut resultant_shape: Vec<usize> = Vec::with_capacity(self.shape.len());
+
+        for i in 0..self.shape.len() {
+            if i == dim {
+                resultant_shape.push(self.shape[i] + other.shape[i]);
+                continue;
+            }
+
+            if self.shape[i] != other.shape[i] {
+                return Err(TensorUtilErrors::ShapesIncompatibleForConcatenation);
+            }
+
+            resultant_shape.push(self.shape[i]);
+        }
+
+        let resultant_shape: Shape = resultant_shape.try_into().unwrap();
+        let mut resultant_data: Vec<T> = Vec::with_capacity(resultant_shape.data_len());
+
+        if dim == 0 {
+            // If the dimension is 0 we can just merge the data one after another
+            resultant_data = self.data.clone();
+            resultant_data.extend(other.data.clone());
+            return Ok(Tensor::new(resultant_shape, resultant_data)?);
+        }
+
+        let mut self_chunks = self.data.chunks(self.index_products[dim - 1]);
+        let mut other_chunks = other.data.chunks(other.index_products[dim - 1]);
+
+        // Note self_chunks and other_chunks have the same length
+        // Because their shapes are the same in the dimensions to the left of the concatenation dim
+        for _ in 0..self_chunks.len() {
+            resultant_data.extend_from_slice(self_chunks.next().unwrap());
+            resultant_data.extend_from_slice(other_chunks.next().unwrap());
+        }
+
+        let result = Tensor::new(resultant_shape, resultant_data)?;
+
+        Ok(result)
+    }
 }
 impl<T: Default + Clone> Tensor<T> {
-    pub fn from_shape(shape: &Shape) -> Tensor<T> {
+    pub fn from_shape(shape: Shape) -> Tensor<T> {
         let data = vec![T::default(); shape.data_len()];
         Tensor {
             data,
@@ -152,7 +234,10 @@ impl<T> Index<&[usize]> for Tensor<T> {
         );
         for i in 0..self.shape.len() {
             if index[i] >= self.shape[i] {
-                panic!("Index for dimension {i} out of bounds: index {}, shape {}", index[i], self.shape[i]);
+                panic!(
+                    "Index for dimension {i} out of bounds: index {}, shape {}",
+                    index[i], self.shape[i]
+                );
             }
         }
 
@@ -169,7 +254,10 @@ impl<T> IndexMut<&[usize]> for Tensor<T> {
         );
         for i in 0..self.shape.len() {
             if index[i] >= self.shape[i] {
-                panic!("Index for dimension {i} out of bounds: index {}, shape {}", index[i], self.shape[i]);
+                panic!(
+                    "Index for dimension {i} out of bounds: index {}, shape {}",
+                    index[i], self.shape[i]
+                );
             }
         }
 
