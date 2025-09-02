@@ -15,13 +15,11 @@ pub enum TensorCreationErrors {
     ShapeSizeDoesNotMatch,
 }
 
-pub(crate) fn dot_vectors<T>(vec1: &Vec<T>, vec2: &Vec<T>) -> T
-where
-    T: Mul<Output = T> + Add<Output = T> + Copy,
+pub(crate) fn dot_vectors<T: Add<Output = T> + Mul<Output = T> + Clone>(vec1: &Vec<T>, vec2: &Vec<T>) -> T
 {
     vec1.iter()
-        .copied()
-        .zip(vec2.iter().copied())
+        .cloned()
+        .zip(vec2.iter().cloned())
         .map(|(x, y)| x * y)
         .reduce(T::add)
         .unwrap()
@@ -128,10 +126,7 @@ impl<T> Tensor<T> {
         &self.data
     }
 }
-impl<T> Tensor<T>
-where
-    T: Default + Clone,
-{
+impl<T: Default + Clone> Tensor<T> {
     pub fn from_shape(shape: &Shape) -> Tensor<T> {
         let data = vec![T::default(); shape.data_len()];
         Tensor {
