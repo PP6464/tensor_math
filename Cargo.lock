@@ -3,13 +3,6 @@
 version = 4
 
 [[package]]
-name = "math_rs"
-version = "0.1.0"
-dependencies = [
- "thiserror",
-]
-
-[[package]]
 name = "proc-macro2"
 version = "1.0.101"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -36,6 +29,13 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "tensor_math"
+version = "0.1.0"
+dependencies = [
+ "thiserror",
 ]
 
 [[package]]
