@@ -77,6 +77,17 @@ impl TryFrom<Vec<usize>> for Shape {
     }
 }
 
+#[macro_export]
+/// Creates a shape from varargs of type usize
+/// Assumes the arguments form a valid shape so
+/// will panic! if the arguments are valid instead
+/// of returning a `Result` type
+macro_rules! ts {
+    ($($shape_dimensions:expr),*$(,)?) => {
+        Shape::new(vec![$($shape_dimensions),*]).unwrap()
+    };
+}
+
 /// Indexing products are effectively cache to help index faster
 /// For example, if I want the value at (1, 0, 3) for a tensor of shape (5, 2, 4)
 /// Then the index in data would be: 1 * (2 * 4) + 0 * (4) + 3

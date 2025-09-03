@@ -1,24 +1,31 @@
 #[cfg(test)]
 mod tests {
     use crate::tensor::tensor::{IndexProducts, Shape, Tensor, TensorUtilErrors};
+    use crate::ts;
 
     #[test]
     fn shape_products() {
-        let shape = Shape::new(vec![2, 3, 4]).unwrap();
+        let shape = ts![2, 3, 4];
         let index_products = IndexProducts::from_shape(shape);
         assert_eq!(vec![12, 4, 1], index_products.0);
     }
 
     #[test]
     #[should_panic]
-    fn invalid_shape() {
-        Shape::new(vec![2, 3, 0]).unwrap();
+    fn invalid_shape_empty() {
+        ts![];
+    }
+
+    #[test]
+    #[should_panic]
+    fn invalid_shape_zero() {
+        ts![2, 0, 3];
     }
 
     #[test]
     #[should_panic]
     fn invalid_shape_size_and_data_length() {
-        let shape = Shape::new(vec![2, 3, 4]).unwrap();
+        let shape = ts![2, 3, 4];
         let data = vec![1, 2, 3, 4];
         Tensor::new(shape, data).unwrap();
     }
@@ -26,7 +33,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn invalid_index() {
-        let shape = Shape::new(vec![2, 3, 4]).unwrap();
+        let shape = ts![2, 3, 4];
         let tensor = Tensor::<i32>::from_shape(shape);
         
         tensor[&[1,2,4]];
@@ -34,10 +41,10 @@ mod tests {
 
     #[test]
     fn concat() {
-        let t1 = Tensor::<i32>::from_shape(Shape::new(vec![4, 2, 3]).unwrap());
-        let t2 = Tensor::<i32>::from_value(Shape::new(vec![4, 1, 3]).unwrap(), 1);
+        let t1 = Tensor::<i32>::from_shape(ts![4, 2, 3]);
+        let t2 = Tensor::<i32>::from_value(ts![4, 1, 3], 1);
         let ans1 = Tensor::new(
-            Shape::new(vec![4, 3, 3]).unwrap(),
+            ts![4, 3, 3],
             vec![
                 0, 0, 0,
                 0, 0, 0,
@@ -55,10 +62,10 @@ mod tests {
         ).unwrap();
         assert_eq!(ans1, t1.concat(&t2, 1).unwrap());
 
-        let t3 = Tensor::<i32>::from_shape(Shape::new(vec![2, 3]).unwrap());
-        let t4 = Tensor::<i32>::from_value(Shape::new(vec![1, 3]).unwrap(), -1);
+        let t3 = Tensor::<i32>::from_shape(ts![2, 3]);
+        let t4 = Tensor::<i32>::from_value(ts![1, 3], -1);
         let ans2 = Tensor::new(
-            Shape::new(vec![3, 3]).unwrap(),
+            ts![3, 3],
             vec![
                 0, 0, 0,
                 0, 0, 0,
@@ -71,38 +78,38 @@ mod tests {
     #[test]
     #[should_panic]
     fn invalid_concat() {
-        let t1 = Tensor::<i32>::from_shape(Shape::new(vec![4, 2, 3]).unwrap());
-        let t2 = Tensor::<i32>::from_shape(Shape::new(vec![3, 1, 2]).unwrap());
+        let t1 = Tensor::<i32>::from_shape(ts![4, 2, 3]);
+        let t2 = Tensor::<i32>::from_shape(ts![3, 1, 2]);
 
         t1.concat(&t2, 0).expect("Should've panicked");
     }
 
     #[test]
     fn reshape_correctly() {
-        let mut t1 = Tensor::<i32>::from_shape(Shape::new(vec![2, 3, 4]).unwrap());
-        t1.reshape(Shape::new(vec![4, 6]).unwrap()).expect("Was a valid reshape but failed");
+        let mut t1 = Tensor::<i32>::from_shape(ts![2, 3, 4]);
+        t1.reshape(ts![4, 6]).expect("Was a valid reshape but failed");
 
-        assert_eq!(*t1.shape(), Shape::new(vec![4, 6]).unwrap());
+        assert_eq!(*t1.shape(), ts![4, 6]);
     }
 
     #[test]
     #[should_panic]
     fn invalid_reshape() {
-        let mut t1 = Tensor::<i32>::from_shape(Shape::new(vec![2, 3, 4]).unwrap());
-        t1.reshape(Shape::new(vec![1,1,1,1,1,12]).unwrap()).expect("Should've panicked");
+        let mut t1 = Tensor::<i32>::from_shape(ts![2, 3, 4]);
+        t1.reshape(ts![1,1,1,1,1,12]).expect("Should've panicked");
     }
     
     #[test]
     fn flatten_correctly() {
-        let mut t1 = Tensor::<i32>::from_shape(Shape::new(vec![2, 3, 1, 4, 1]).unwrap());
+        let mut t1 = Tensor::<i32>::from_shape(ts![2, 3, 1, 4, 1]);
         t1.flatten(2).expect("Valid flatten but failed");
         t1.flatten(3).expect("Valid flatten but failed");
-        assert_eq!(*t1.shape(), Shape::new(vec![2, 3, 4]).unwrap());
+        assert_eq!(*t1.shape(), ts![2, 3, 4]);
     }
 
     #[test]
     fn invalid_flatten_dim_out_of_bounds() {
-        let mut t1 = Tensor::<i32>::from_shape(Shape::new(vec![2, 3, 4]).unwrap());
+        let mut t1 = Tensor::<i32>::from_shape(ts![2, 3, 4]);
         let error = t1.flatten(5).err().unwrap();
 
         match error {
@@ -113,7 +120,7 @@ mod tests {
 
     #[test]
     fn invalid_flatten_dim_not_one() {
-        let mut t1 = Tensor::<i32>::from_shape(Shape::new(vec![2, 3, 4]).unwrap());
+        let mut t1 = Tensor::<i32>::from_shape(ts![2,3,4]);
         let error = t1.flatten(1).err().unwrap();
 
         match error {
