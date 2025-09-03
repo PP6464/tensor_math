@@ -147,5 +147,12 @@ mod tests {
         assert_eq!(t2.data(), t1.data());
         t2.reshape(shape.clone()).expect("Was a valid reshape but failed");
         assert_eq!(t2, t1);
+
+        let shape2 = ts![5, 2];
+        let iter3 = vec![0; shape2.data_len()];
+        let mut t3 : Tensor<i32> = iter3.iter().into();
+        assert_eq!(t3, Tensor::from_value(ts![shape2.data_len()], 0));
+        t3.reshape(shape2.clone()).expect("Was a valid reshape but failed");
+        assert_eq!(t3, Tensor::from_value(shape2, 0));
     }
 }
