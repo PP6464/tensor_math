@@ -100,7 +100,7 @@ macro_rules! ts {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct IndexProducts(pub(crate) Vec<usize>);
 impl IndexProducts {
-    pub(crate) fn from_shape(shape: Shape) -> IndexProducts {
+    pub(crate) fn from_shape(shape: &Shape) -> IndexProducts {
         let mut index_products: Vec<usize> = vec![1; shape.len()];
 
         for i in 1..shape.len() {
@@ -131,15 +131,15 @@ pub struct Tensor<T> {
     data: Vec<T>,
 }
 impl<T> Tensor<T> {
-    pub fn new(shape: Shape, data: Vec<T>) -> Result<Self, TensorUtilErrors> {
+    pub fn new(shape: &Shape, data: Vec<T>) -> Result<Self, TensorUtilErrors> {
         if shape.data_len() != data.len() {
             return Err(TensorUtilErrors::ShapeSizeDoesNotMatch);
         }
 
-        let index_products = IndexProducts::from_shape(shape.clone());
+        let index_products = IndexProducts::from_shape(shape);
 
         Ok(Tensor {
-            shape,
+            shape: shape.clone(),
             index_products,
             data,
         })
@@ -152,7 +152,7 @@ impl<T> Tensor<T> {
         &self.data
     }
 
-    pub fn reshape(&mut self, new_shape: Shape) -> Result<(), TensorUtilErrors> {
+    pub fn reshape(&mut self, new_shape: &Shape) -> Result<(), TensorUtilErrors> {
         if new_shape.data_len() != self.shape.data_len() {
             return Err(TensorUtilErrors::ShapeSizeDoesNotMatch);
         }
@@ -174,12 +174,12 @@ impl<T> Tensor<T> {
         }
 
         self.shape.0.remove(dim);
-        self.index_products = IndexProducts::from_shape(self.shape.clone());
+        self.index_products = IndexProducts::from_shape(&self.shape);
         Ok(())
     }
 }
 impl<T: Clone> Tensor<T> {
-    pub fn from_value(shape: Shape, value: T) -> Self {
+    pub fn from_value(shape: &Shape, value: T) -> Self {
         let data = vec![value; shape.data_len()];
         Tensor::new(shape, data).unwrap()
     }
@@ -190,6 +190,7 @@ impl<T: Clone> Tensor<T> {
         }
         let mut resultant_shape: Vec<usize> = Vec::with_capacity(self.shape.len());
 
+        // Ensure shapes match on every dim that is not the dim along which to concatenate
         for i in 0..self.shape.len() {
             if i == dim {
                 resultant_shape.push(self.shape[i] + other.shape[i]);
@@ -210,12 +211,14 @@ impl<T: Clone> Tensor<T> {
             // If the dimension is 0 we can just merge the data one after another
             resultant_data = self.data.clone();
             resultant_data.extend(other.data.clone());
-            return Ok(Tensor::new(resultant_shape, resultant_data)?);
+            return Ok(Tensor::new(&resultant_shape, resultant_data)?);
         }
 
         let mut self_chunks = self.data.chunks(self.index_products[dim - 1]);
         let mut other_chunks = other.data.chunks(other.index_products[dim - 1]);
 
+        // Merge together chunks from self and other in the correct manner to get
+        // the result for concatenating self and other (in that order)
         // Note self_chunks and other_chunks have the same length
         // Because their shapes are the same in the dimensions to the left of the concatenation dim
         for _ in 0..self_chunks.len() {
@@ -223,13 +226,13 @@ impl<T: Clone> Tensor<T> {
             resultant_data.extend_from_slice(other_chunks.next().unwrap());
         }
 
-        let result = Tensor::new(resultant_shape, resultant_data)?;
+        let result = Tensor::new(&resultant_shape, resultant_data)?;
 
         Ok(result)
     }
 }
 impl<T: Default + Clone> Tensor<T> {
-    pub fn from_shape(shape: Shape) -> Tensor<T> {
+    pub fn from_shape(shape: &Shape) -> Tensor<T> {
         let data = vec![T::default(); shape.data_len()];
         Tensor {
             data,
@@ -282,7 +285,7 @@ impl<T> IndexMut<&[usize]> for Tensor<T> {
 }
 impl<T> IntoIterator for Tensor<T> {
     type Item = T;
-    type IntoIter = std::vec::IntoIter<Self::Item>;
+    type IntoIter = IntoIter<Self::Item>;
     fn into_iter(self) -> Self::IntoIter {
         self.data.into_iter()
     }
@@ -291,13 +294,13 @@ impl<T> IntoIterator for Tensor<T> {
 impl<'a, T: Clone> From<Iter<'a, T>> for Tensor<T> {
     fn from(value: Iter<'a, T>) -> Self {
         let data: Vec<T> = value.map(|x| x.clone()).collect();
-        Tensor::new(ts![data.len()], data).unwrap()
+        Tensor::new(&ts![data.len()], data).unwrap()
     }
 }
 /// Converts an `IntoIter<T>` into a `Tensor<T>` of shape (length_of_iter)
 impl<T> From<IntoIter<T>> for Tensor<T> {
     fn from(value: IntoIter<T>) -> Self {
         let data: Vec<T> = value.collect();
-        Tensor::new(ts![data.len()], data).unwrap()
+        Tensor::new(&ts![data.len()], data).unwrap()
     }
 }
