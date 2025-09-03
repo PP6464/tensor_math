@@ -76,12 +76,11 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn invalid_concat() {
         let t1 = Tensor::<i32>::from_shape(ts![4, 2, 3]);
         let t2 = Tensor::<i32>::from_shape(ts![3, 1, 2]);
 
-        t1.concat(&t2, 0).expect("Should've panicked");
+        t1.concat(&t2, 0).expect_err("Should've panicked");
     }
 
     #[test]
@@ -93,10 +92,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn invalid_reshape() {
         let mut t1 = Tensor::<i32>::from_shape(ts![2, 3, 4]);
-        t1.reshape(ts![1,1,1,1,1,12]).expect("Should've panicked");
+        t1.reshape(ts![1,1,1,1,1,12]).expect_err("Should've panicked");
     }
     
     #[test]
@@ -127,5 +125,27 @@ mod tests {
             TensorUtilErrors::DimIsNotOne(_) => {},
             _ => panic!("Incorrect error"),
         }
+    }
+
+    #[test]
+    fn tensor_iterator() {
+        let shape = ts![2, 3];
+        let t1 = Tensor::<i32>::from_shape(shape.clone());
+        let iter1 = t1.clone().into_iter();
+        let iter2 = t1.clone().into_iter();
+
+        let mut count = 0;
+        for x in iter1 {
+            assert_eq!(x, 0);
+            count += 1;
+        }
+
+        assert_eq!(count, shape.data_len());
+
+        let mut t2 : Tensor<i32> = iter2.into();
+        assert_eq!(t2.shape(), &ts![shape.data_len()]);
+        assert_eq!(t2.data(), t1.data());
+        t2.reshape(shape.clone()).expect("Was a valid reshape but failed");
+        assert_eq!(t2, t1);
     }
 }

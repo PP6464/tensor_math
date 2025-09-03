@@ -1,4 +1,6 @@
 use std::ops::{Add, Index, IndexMut, Mul};
+use std::slice::Iter;
+use std::vec::IntoIter;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -155,13 +157,14 @@ impl<T> Tensor<T> {
             return Err(TensorUtilErrors::ShapeSizeDoesNotMatch);
         }
 
-        self.shape = new_shape;
+        self.shape = new_shape.clone();
+        self.index_products = IndexProducts::from_shape(new_shape);
         Ok(())
     }
     pub fn flatten(&mut self, dim: usize) -> Result<(), TensorUtilErrors> {
         if dim >= self.shape.len() {
             return Err(TensorUtilErrors::DimOutOfBounds {
-                dim: dim,
+                dim,
                 max_dim: self.shape.len(),
             });
         }
@@ -171,6 +174,7 @@ impl<T> Tensor<T> {
         }
 
         self.shape.0.remove(dim);
+        self.index_products = IndexProducts::from_shape(self.shape.clone());
         Ok(())
     }
 }
@@ -274,5 +278,26 @@ impl<T> IndexMut<&[usize]> for Tensor<T> {
 
         let addr = dot_vectors(&self.index_products.clone().into(), &index.to_vec());
         &mut self.data[addr]
+    }
+}
+impl<T> IntoIterator for Tensor<T> {
+    type Item = T;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.data.into_iter()
+    }
+}
+/// Converts an iterator into a `Tensor` of shape (length_of_iter)
+impl<'a, T: Clone> From<Iter<'a, T>> for Tensor<T> {
+    fn from(value: Iter<'a, T>) -> Self {
+        let data: Vec<T> = value.map(|x| x.clone()).collect();
+        Tensor::new(ts![data.len()], data).unwrap()
+    }
+}
+/// Converts an `IntoIter<T>` into a `Tensor<T>` of shape (length_of_iter)
+impl<T> From<IntoIter<T>> for Tensor<T> {
+    fn from(value: IntoIter<T>) -> Self {
+        let data: Vec<T> = value.collect();
+        Tensor::new(ts![data.len()], data).unwrap()
     }
 }
