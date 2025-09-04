@@ -141,4 +141,9 @@ mod tests {
         t3.reshape(&shape2).expect("Was a valid reshape but failed");
         assert_eq!(t3, Tensor::from_value(&shape2, 0));
     }
+
+    #[test]
+    fn random_tensor() {
+        Tensor::<i32>::rand(&ts![2, 3]);
+    }
 }

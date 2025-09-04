@@ -1,6 +1,8 @@
 use std::ops::{Add, Index, IndexMut, Mul};
 use std::slice::Iter;
 use std::vec::IntoIter;
+use rand::distr::{Distribution, StandardUniform};
+use rand::{Fill, Rng};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -235,10 +237,22 @@ impl<T: Default + Clone> Tensor<T> {
     pub fn from_shape(shape: &Shape) -> Tensor<T> {
         let elements = vec![T::default(); shape.element_count()];
         Tensor {
-            elements: elements,
+            elements,
             shape: shape.clone(),
             index_products: IndexProducts::from_shape(shape),
         }
+    }
+}
+/// Generate a `Tensor` full of random values of type `T`
+/// For any type `T` that implements `rand::distr::Distribution`
+impl<T: Default + Clone> Tensor<T> where StandardUniform: Distribution<T>, [T]: Fill {
+    pub(crate) fn rand(shape: &Shape) -> Tensor<T> {
+        let mut elements = vec![T::default(); shape.element_count()];
+        let mut rng = rand::rng();
+
+        rng.fill(elements.as_mut_slice());
+
+        Tensor::new(shape, elements).unwrap()
     }
 }
 impl<T> Index<&[usize]> for Tensor<T> {
