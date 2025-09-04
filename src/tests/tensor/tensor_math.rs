@@ -170,4 +170,24 @@ mod tensor_math_tests {
         assert_eq!(ans_mul, &t1 * val);
         assert_eq!(ans_div, t1 / val);
     }
+
+    #[test]
+    fn unary_minus() {
+        let t1 = Tensor::<i32>::new(
+            &ts![2, 3],
+            vec![
+                1, 3, -4,
+                4, 5, 2,
+            ],
+        ).unwrap();
+        let ans = Tensor::<i32>::new(
+            &ts![2, 3],
+            vec![
+                -1, -3, 4,
+                -4, -5, -2,
+            ],
+        ).unwrap();
+
+        assert_eq!(ans, -t1);
+    }
 }

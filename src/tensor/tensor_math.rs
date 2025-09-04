@@ -1,5 +1,5 @@
 use crate::tensor::tensor::Tensor;
-use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Sub};
+use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Sub};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -147,3 +147,18 @@ impl_bin_op!(Div, div);
 impl_bin_op!(BitXor, bitxor);
 impl_bin_op!(BitAnd, bitand);
 impl_bin_op!(BitOr, bitor);
+
+impl<T: Neg<Output=T> + Clone> Neg for Tensor<T> {
+    type Output = Tensor<T>;
+
+    fn neg(self) -> Self::Output {
+        let elements = self
+            .elements()
+            .into_iter()
+            .cloned()
+            .map(|a| -a)
+            .collect();
+
+        Tensor::new(self.shape(), elements).unwrap()
+    }
+}
