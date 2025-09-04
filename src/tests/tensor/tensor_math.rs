@@ -125,4 +125,49 @@ mod tensor_math_tests {
         t2[&[1, 1]] = 0;
         let _ = t1 / t2;
     }
+
+    #[test]
+    fn single_element_implementations() {
+        let t1 = Tensor::<i32>::new(
+            &ts![2, 3],
+            vec![
+                0, 1, 2,
+                -1, 4, -10,
+            ],
+        ).unwrap();
+        let val = 5;
+
+        let ans_add = Tensor::<i32>::new(
+            &ts![2, 3],
+            vec![
+                5, 6, 7,
+                4, 9, -5,
+            ],
+        ).unwrap();
+        let ans_sub = Tensor::<i32>::new(
+            &ts![2, 3],
+            vec![
+                -5, -4, -3,
+                -6, -1, -15,
+            ],
+        ).unwrap();
+        let ans_mul = Tensor::<i32>::new(
+            &ts![2, 3],
+            vec![
+                0, 5, 10,
+                -5, 20, -50,
+            ],
+        ).unwrap();
+        let ans_div = Tensor::<i32>::new(
+            &ts![2, 3],
+            vec![
+                0, 0, 0,
+                0, 0, -2
+            ],
+        ).unwrap();
+        assert_eq!(ans_add, &t1 + val);
+        assert_eq!(ans_sub, t1.clone() - &val);
+        assert_eq!(ans_mul, &t1 * val);
+        assert_eq!(ans_div, t1 / val);
+    }
 }
