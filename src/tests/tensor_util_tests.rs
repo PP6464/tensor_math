@@ -126,18 +126,18 @@ mod tests {
             count += 1;
         }
 
-        assert_eq!(count, shape.data_len());
+        assert_eq!(count, shape.element_count());
 
         let mut t2: Tensor<i32> = iter2.into();
-        assert_eq!(t2.shape(), &ts![shape.data_len()]);
-        assert_eq!(t2.data(), t1.data());
+        assert_eq!(t2.shape(), &ts![shape.element_count()]);
+        assert_eq!(t2.elements(), t1.elements());
         t2.reshape(&shape).expect("Was a valid reshape but failed");
         assert_eq!(t2, t1);
 
         let shape2 = ts![5, 2];
-        let iter3 = vec![0; shape2.data_len()];
+        let iter3 = vec![0; shape2.element_count()];
         let mut t3: Tensor<i32> = iter3.iter().into();
-        assert_eq!(t3, Tensor::from_value(&ts![shape2.data_len()], 0));
+        assert_eq!(t3, Tensor::from_value(&ts![shape2.element_count()], 0));
         t3.reshape(&shape2).expect("Was a valid reshape but failed");
         assert_eq!(t3, Tensor::from_value(&shape2, 0));
     }
