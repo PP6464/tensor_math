@@ -1,1 +1,1 @@
-mod tensor_util_tests;
+mod tensor;

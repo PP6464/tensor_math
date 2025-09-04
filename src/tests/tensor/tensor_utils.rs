@@ -50,7 +50,7 @@ mod tests {
                 0, 0, 0, 0, 0, 1, 1, 1,
             ],
         )
-        .unwrap();
+            .unwrap();
         assert_eq!(ans1, t1.concat(&t2, 1).unwrap());
 
         let t3 = Tensor::<i32>::from_shape(&ts![2, 3]);
