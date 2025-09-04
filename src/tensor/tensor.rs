@@ -154,6 +154,7 @@ impl<T> Tensor<T> {
         &self.elements
     }
 
+    /// Reshape a `Tensor` in-place
     pub fn reshape(&mut self, new_shape: &Shape) -> Result<(), TensorUtilErrors> {
         if new_shape.element_count() != self.shape.element_count() {
             return Err(TensorUtilErrors::ShapeSizeDoesNotMatch);
@@ -163,6 +164,8 @@ impl<T> Tensor<T> {
         self.index_products = IndexProducts::from_shape(new_shape);
         Ok(())
     }
+
+    /// Flatten a `Tensor` on a given dimension in-place
     pub fn flatten(&mut self, dim: usize) -> Result<(), TensorUtilErrors> {
         if dim >= self.shape.rank() {
             return Err(TensorUtilErrors::DimOutOfBounds {
@@ -186,6 +189,7 @@ impl<T: Clone> Tensor<T> {
         Tensor::new(shape, elements).unwrap()
     }
 
+    /// Concatenates a `Tensor` with another `Tensor` along the specified dimension
     pub fn concat(&self, other: &Tensor<T>, dim: usize) -> Result<Tensor<T>, TensorUtilErrors> {
         if self.shape.rank() < other.shape.rank() {
             return Err(TensorUtilErrors::ShapesIncompatibleForConcatenation);
