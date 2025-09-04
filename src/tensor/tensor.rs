@@ -150,12 +150,22 @@ impl<T> Tensor<T> {
     pub fn shape(&self) -> &Shape {
         &self.shape
     }
+
     pub fn elements(&self) -> &Vec<T> {
         &self.elements
     }
 
+    /// Reshape a `Tensor`, consuming it and returning the new one
+    pub fn reshape(self, new_shape: &Shape) -> Result<Tensor<T>, TensorUtilErrors> {
+        if new_shape.element_count() != self.shape.element_count() {
+            return Err(TensorUtilErrors::ShapeSizeDoesNotMatch);
+        }
+
+        Ok(Tensor::new(new_shape, self.elements)?)
+    }
+
     /// Reshape a `Tensor` in-place
-    pub fn reshape(&mut self, new_shape: &Shape) -> Result<(), TensorUtilErrors> {
+    pub fn reshape_in_place(&mut self, new_shape: &Shape) -> Result<(), TensorUtilErrors> {
         if new_shape.element_count() != self.shape.element_count() {
             return Err(TensorUtilErrors::ShapeSizeDoesNotMatch);
         }
@@ -165,8 +175,26 @@ impl<T> Tensor<T> {
         Ok(())
     }
 
+    /// Flatten a `Tensor` on a given dimension, consuming it and returning the new one
+    pub fn flatten(self, dim: usize) -> Result<Tensor<T>, TensorUtilErrors> {
+        if dim >= self.shape.rank() {
+            return Err(TensorUtilErrors::DimOutOfBounds {
+                dim,
+                max_dim: self.shape.rank(),
+            });
+        }
+
+        if self.shape[dim] != 1 {
+            return Err(TensorUtilErrors::DimIsNotOne(dim));
+        }
+
+        let mut copy = self.shape;
+        copy.0.remove(dim);
+        Ok(Tensor::new(&copy, self.elements)?)
+    }
+
     /// Flatten a `Tensor` on a given dimension in-place
-    pub fn flatten(&mut self, dim: usize) -> Result<(), TensorUtilErrors> {
+    pub fn flatten_in_place(&mut self, dim: usize) -> Result<(), TensorUtilErrors> {
         if dim >= self.shape.rank() {
             return Err(TensorUtilErrors::DimOutOfBounds {
                 dim,

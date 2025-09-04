@@ -70,7 +70,7 @@ mod tensor_util_tests {
     #[test]
     fn reshape_correctly() {
         let mut t1 = Tensor::<i32>::from_shape(&ts![2, 3, 4]);
-        t1.reshape(&ts![4, 6])
+        t1.reshape_in_place(&ts![4, 6])
             .expect("Was a valid reshape but failed");
 
         assert_eq!(*t1.shape(), ts![4, 6]);
@@ -79,22 +79,22 @@ mod tensor_util_tests {
     #[test]
     fn invalid_reshape() {
         let mut t1 = Tensor::<i32>::from_shape(&ts![2, 3, 4]);
-        t1.reshape(&ts![1, 1, 1, 1, 1, 12])
+        t1.reshape_in_place(&ts![1, 1, 1, 1, 1, 12])
             .expect_err("Should've panicked");
     }
 
     #[test]
     fn flatten_correctly() {
         let mut t1 = Tensor::<i32>::from_shape(&ts![2, 3, 1, 4, 1]);
-        t1.flatten(2).expect("Valid flatten but failed");
-        t1.flatten(3).expect("Valid flatten but failed");
+        t1.flatten_in_place(2).expect("Valid flatten but failed");
+        t1.flatten_in_place(3).expect("Valid flatten but failed");
         assert_eq!(*t1.shape(), ts![2, 3, 4]);
     }
 
     #[test]
     fn invalid_flatten_dim_out_of_bounds() {
         let mut t1 = Tensor::<i32>::from_shape(&ts![2, 3, 4]);
-        let error = t1.flatten(5).err().unwrap();
+        let error = t1.flatten_in_place(5).err().unwrap();
 
         match error {
             TensorUtilErrors::DimOutOfBounds { dim: _, max_dim: _ } => {}
@@ -105,7 +105,7 @@ mod tensor_util_tests {
     #[test]
     fn invalid_flatten_dim_not_one() {
         let mut t1 = Tensor::<i32>::from_shape(&ts![2, 3, 4]);
-        let error = t1.flatten(1).err().unwrap();
+        let error = t1.flatten_in_place(1).err().unwrap();
 
         match error {
             TensorUtilErrors::DimIsNotOne(_) => {}
@@ -131,14 +131,14 @@ mod tensor_util_tests {
         let mut t2: Tensor<i32> = iter2.into();
         assert_eq!(t2.shape(), &ts![shape.element_count()]);
         assert_eq!(t2.elements(), t1.elements());
-        t2.reshape(&shape).expect("Was a valid reshape but failed");
+        t2.reshape_in_place(&shape).expect("Was a valid reshape but failed");
         assert_eq!(t2, t1);
 
         let shape2 = ts![5, 2];
         let iter3 = vec![0; shape2.element_count()];
         let mut t3: Tensor<i32> = iter3.iter().into();
         assert_eq!(t3, Tensor::from_value(&ts![shape2.element_count()], 0));
-        t3.reshape(&shape2).expect("Was a valid reshape but failed");
+        t3.reshape_in_place(&shape2).expect("Was a valid reshape but failed");
         assert_eq!(t3, Tensor::from_value(&shape2, 0));
     }
 
