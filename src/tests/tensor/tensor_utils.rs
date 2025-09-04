@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod tests {
+mod tensor_util_tests {
     use crate::tensor::tensor::{IndexProducts, Shape, Tensor, TensorUtilErrors};
     use crate::ts;
 
