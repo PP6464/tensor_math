@@ -1,14 +1,6 @@
+use crate::tensor::tensor::TensorErrors;
 use crate::tensor::tensor::{dot_vectors, IndexProducts, Shape, Tensor};
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Rem, Sub};
-use thiserror::Error;
-
-#[derive(Debug, Error)]
-pub enum TensorMathErrors {
-    #[error("Shapes are not compatible")]
-    ShapesIncompatible,
-    #[error("Transposition permutation invalid")]
-    TransposePermutationInvalid,
-}
 
 /// Implement an operation elementwise
 /// Also allows you to implement operations with a `Tensor` and a single value
@@ -23,7 +15,7 @@ macro_rules! impl_bin_op {
                     self.shape(),
                     rhs.shape(),
                     "{}",
-                    TensorMathErrors::ShapesIncompatible
+                    TensorErrors::ShapesIncompatible
                 );
 
                 let elements = self
@@ -45,7 +37,7 @@ macro_rules! impl_bin_op {
                     self.shape(),
                     rhs.shape(),
                     "{}",
-                    TensorMathErrors::ShapesIncompatible
+                    TensorErrors::ShapesIncompatible
                 );
 
                 let elements = self
@@ -67,7 +59,7 @@ macro_rules! impl_bin_op {
                     self.shape(),
                     rhs.shape(),
                     "{}",
-                    TensorMathErrors::ShapesIncompatible
+                    TensorErrors::ShapesIncompatible
                 );
 
                 let elements = self
@@ -89,7 +81,7 @@ macro_rules! impl_bin_op {
                     self.shape(),
                     rhs.shape(),
                     "{}",
-                    TensorMathErrors::ShapesIncompatible
+                    TensorErrors::ShapesIncompatible
                 );
 
                 let elements = self
@@ -192,12 +184,12 @@ pub struct Transpose {
 }
 
 impl Transpose {
-    pub fn new(permutation: &Vec<usize>) -> Result<Self, TensorMathErrors> {
+    pub fn new(permutation: &Vec<usize>) -> Result<Self, TensorErrors> {
         let mut perm_copy = permutation.to_vec();
         perm_copy.sort();
 
         if perm_copy != (0..permutation.len()).collect::<Vec<usize>>() {
-            return Err(TensorMathErrors::TransposePermutationInvalid);
+            return Err(TensorErrors::TransposePermutationInvalid);
         }
 
         Ok(Transpose {
@@ -212,9 +204,9 @@ impl Transpose {
     }
 
     /// Swap two axes, consuming the original and returning the new one
-    pub fn swap_axes(self, axis1: usize, axis2: usize) -> Result<Self, TensorMathErrors> {
+    pub fn swap_axes(self, axis1: usize, axis2: usize) -> Result<Self, TensorErrors> {
         if axis1 >= self.permutation.len() || axis2 >= self.permutation.len() {
-            return Err(TensorMathErrors::TransposePermutationInvalid);
+            return Err(TensorErrors::TransposePermutationInvalid);
         }
 
         let mut new_perm = self.permutation;
@@ -224,9 +216,9 @@ impl Transpose {
     }
 
     /// Swap two axes in-place
-    pub fn swap_axes_in_place(&mut self, axis1: usize, axis2: usize) -> Result<(), TensorMathErrors> {
+    pub fn swap_axes_in_place(&mut self, axis1: usize, axis2: usize) -> Result<(), TensorErrors> {
         if axis1 >= self.permutation.len() || axis2 >= self.permutation.len() {
-            return Err(TensorMathErrors::TransposePermutationInvalid);
+            return Err(TensorErrors::TransposePermutationInvalid);
         }
 
         self.permutation.swap(axis1, axis2);
@@ -234,9 +226,9 @@ impl Transpose {
         Ok(())
     }
 
-    pub fn new_shape(&self, old_shape: &Shape) -> Result<Shape, TensorMathErrors> {
+    pub fn new_shape(&self, old_shape: &Shape) -> Result<Shape, TensorErrors> {
         if old_shape.rank() != self.permutation.len() {
-            return Err(TensorMathErrors::ShapesIncompatible);
+            return Err(TensorErrors::ShapesIncompatible);
         }
 
         let mut new_shape_vec = Vec::with_capacity(old_shape.rank());
@@ -248,9 +240,9 @@ impl Transpose {
         Ok(Shape::new(new_shape_vec).unwrap())
     }
 
-    pub fn new_index(&self, old_index: &[usize]) -> Result<Vec<usize>, TensorMathErrors> {
+    pub fn new_index(&self, old_index: &[usize]) -> Result<Vec<usize>, TensorErrors> {
         if old_index.len() != self.permutation.len() {
-            return Err(TensorMathErrors::ShapesIncompatible);
+            return Err(TensorErrors::ShapesIncompatible);
         }
 
         let mut new_index_vec = Vec::with_capacity(old_index.len());
@@ -264,9 +256,9 @@ impl Transpose {
 }
 impl<T : Clone> Tensor<T> {
     /// Transposes a `Tensor`, consuming it and returning the new one
-    pub fn transpose(self, transpose: &Transpose) -> Result<Tensor<T>, TensorMathErrors> {
+    pub fn transpose(self, transpose: &Transpose) -> Result<Tensor<T>, TensorErrors> {
         if transpose.permutation.len() != self.shape().rank() {
-            return Err(TensorMathErrors::ShapesIncompatible);
+            return Err(TensorErrors::ShapesIncompatible);
         }
 
         let new_shape = transpose.new_shape(self.shape())?;
@@ -289,11 +281,11 @@ impl<T : Clone> Tensor<T> {
             new_elements[addr_in_new_elements] = self.elements[i].clone();
         }
 
-        Ok(Tensor::new(&new_shape, new_elements.to_vec()).unwrap())
+        Ok(Tensor::new(&new_shape, new_elements.to_vec())?)
     }
 
     /// Transpose a `Tensor` in-place
-    pub fn transpose_in_place(&mut self, transpose: &Transpose) -> Result<(), TensorMathErrors> {
+    pub fn transpose_in_place(&mut self, transpose: &Transpose) -> Result<(), TensorErrors> {
         let new_tensor = self.clone().transpose(&transpose)?;
 
         self.elements = new_tensor.elements;

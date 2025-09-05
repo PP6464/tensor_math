@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tensor_util_tests {
-    use crate::tensor::tensor::{IndexProducts, Shape, Tensor, TensorUtilErrors};
+    use crate::tensor::tensor::{IndexProducts, Shape, Tensor, TensorErrors};
     use crate::ts;
 
     #[test]
@@ -98,7 +98,7 @@ mod tensor_util_tests {
         let error = t1.flatten_in_place(5).err().unwrap();
 
         match error {
-            TensorUtilErrors::DimOutOfBounds { dim: _, max_dim: _ } => {}
+            TensorErrors::DimOutOfBounds { dim: _, max_dim: _ } => {}
             _ => panic!("Incorrect error"),
         }
     }
@@ -109,7 +109,7 @@ mod tensor_util_tests {
         let error = t1.flatten_in_place(1).err().unwrap();
 
         match error {
-            TensorUtilErrors::DimIsNotOne(_) => {}
+            TensorErrors::DimIsNotOne(_) => {}
             _ => panic!("Incorrect error"),
         }
     }

@@ -14,7 +14,7 @@ pub enum ShapeValidationError {
 }
 
 #[derive(Debug, Error)]
-pub enum TensorUtilErrors {
+pub enum TensorErrors {
     #[error("Shape vector indicates a size different to that of the elements provided")]
     ShapeSizeDoesNotMatch,
     #[error("Shape vector is not 1 on dimension {0} so cannot flatten on this dimension")]
@@ -23,6 +23,10 @@ pub enum TensorUtilErrors {
     DimOutOfBounds { dim: usize, max_dim: usize },
     #[error("Dimensions are not compatible for concatenation")]
     ShapesIncompatibleForConcatenation,
+    #[error("Shapes are not compatible")]
+    ShapesIncompatible,
+    #[error("Transposition permutation invalid")]
+    TransposePermutationInvalid,
 }
 
 pub(crate) fn dot_vectors<T: Add<Output = T> + Mul<Output = T> + Clone>(
@@ -133,9 +137,9 @@ pub struct Tensor<T> {
     pub(crate) elements: Vec<T>,
 }
 impl<T> Tensor<T> {
-    pub fn new(shape: &Shape, elements: Vec<T>) -> Result<Self, TensorUtilErrors> {
+    pub fn new(shape: &Shape, elements: Vec<T>) -> Result<Self, TensorErrors> {
         if shape.element_count() != elements.len() {
-            return Err(TensorUtilErrors::ShapeSizeDoesNotMatch);
+            return Err(TensorErrors::ShapeSizeDoesNotMatch);
         }
 
         let index_products = IndexProducts::from_shape(shape);
@@ -156,18 +160,18 @@ impl<T> Tensor<T> {
     }
 
     /// Reshape a `Tensor`, consuming it and returning the new one
-    pub fn reshape(self, new_shape: &Shape) -> Result<Tensor<T>, TensorUtilErrors> {
+    pub fn reshape(self, new_shape: &Shape) -> Result<Tensor<T>, TensorErrors> {
         if new_shape.element_count() != self.shape.element_count() {
-            return Err(TensorUtilErrors::ShapeSizeDoesNotMatch);
+            return Err(TensorErrors::ShapeSizeDoesNotMatch);
         }
 
         Ok(Tensor::new(new_shape, self.elements)?)
     }
 
     /// Reshape a `Tensor` in-place
-    pub fn reshape_in_place(&mut self, new_shape: &Shape) -> Result<(), TensorUtilErrors> {
+    pub fn reshape_in_place(&mut self, new_shape: &Shape) -> Result<(), TensorErrors> {
         if new_shape.element_count() != self.shape.element_count() {
-            return Err(TensorUtilErrors::ShapeSizeDoesNotMatch);
+            return Err(TensorErrors::ShapeSizeDoesNotMatch);
         }
 
         self.shape = new_shape.clone();
@@ -176,16 +180,16 @@ impl<T> Tensor<T> {
     }
 
     /// Flatten a `Tensor` on a given dimension, consuming it and returning the new one
-    pub fn flatten(self, dim: usize) -> Result<Tensor<T>, TensorUtilErrors> {
+    pub fn flatten(self, dim: usize) -> Result<Tensor<T>, TensorErrors> {
         if dim >= self.shape.rank() {
-            return Err(TensorUtilErrors::DimOutOfBounds {
+            return Err(TensorErrors::DimOutOfBounds {
                 dim,
                 max_dim: self.shape.rank(),
             });
         }
 
         if self.shape[dim] != 1 {
-            return Err(TensorUtilErrors::DimIsNotOne(dim));
+            return Err(TensorErrors::DimIsNotOne(dim));
         }
 
         let mut copy = self.shape;
@@ -194,16 +198,16 @@ impl<T> Tensor<T> {
     }
 
     /// Flatten a `Tensor` on a given dimension in-place
-    pub fn flatten_in_place(&mut self, dim: usize) -> Result<(), TensorUtilErrors> {
+    pub fn flatten_in_place(&mut self, dim: usize) -> Result<(), TensorErrors> {
         if dim >= self.shape.rank() {
-            return Err(TensorUtilErrors::DimOutOfBounds {
+            return Err(TensorErrors::DimOutOfBounds {
                 dim,
                 max_dim: self.shape.rank(),
             });
         }
 
         if self.shape[dim] != 1 {
-            return Err(TensorUtilErrors::DimIsNotOne(dim));
+            return Err(TensorErrors::DimIsNotOne(dim));
         }
 
         self.shape.0.remove(dim);
@@ -218,9 +222,9 @@ impl<T: Clone> Tensor<T> {
     }
 
     /// Concatenates a `Tensor` with another `Tensor` along the specified dimension
-    pub fn concat(&self, other: &Tensor<T>, dim: usize) -> Result<Tensor<T>, TensorUtilErrors> {
+    pub fn concat(&self, other: &Tensor<T>, dim: usize) -> Result<Tensor<T>, TensorErrors> {
         if self.shape.rank() < other.shape.rank() {
-            return Err(TensorUtilErrors::ShapesIncompatibleForConcatenation);
+            return Err(TensorErrors::ShapesIncompatibleForConcatenation);
         }
         let mut resultant_shape: Vec<usize> = Vec::with_capacity(self.shape.rank());
 
@@ -232,7 +236,7 @@ impl<T: Clone> Tensor<T> {
             }
 
             if self.shape[i] != other.shape[i] {
-                return Err(TensorUtilErrors::ShapesIncompatibleForConcatenation);
+                return Err(TensorErrors::ShapesIncompatibleForConcatenation);
             }
 
             resultant_shape.push(self.shape[i]);
