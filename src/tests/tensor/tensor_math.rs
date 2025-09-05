@@ -2,6 +2,7 @@
 mod tensor_math_tests {
     use crate::tensor::tensor::Shape;
     use crate::tensor::tensor::Tensor;
+    use crate::tensor::tensor_math::Transpose;
     use crate::ts;
 
     #[test]
@@ -189,5 +190,44 @@ mod tensor_math_tests {
         ).unwrap();
 
         assert_eq!(ans, -t1);
+    }
+
+    #[test]
+    fn transpose() {
+        let t1 = Tensor::<i32>::new(
+            &ts![2, 3, 4],
+            (0..24).collect()
+        ).unwrap();
+        let mut t2 = Tensor::<i32>::new(
+            &ts![2, 3],
+            (0..6).collect()
+        ).unwrap();
+        let transposed_t1 = t1.clone().transpose(&Transpose::new(&vec![0, 2, 1]).unwrap()).unwrap();
+        t2.transpose_in_place(&Transpose::new(&vec![1, 0]).unwrap()).unwrap();
+        let transposed_t2 = t2.clone();
+        let ans1 = Tensor::<i32>::new(
+            &ts![2, 4, 3],
+            vec![
+                0, 4, 8,
+                1, 5, 9,
+                2, 6, 10,
+                3, 7, 11,
+                12, 16, 20,
+                13, 17, 21,
+                14, 18, 22,
+                15, 19, 23,
+            ],
+        ).unwrap();
+        let ans2 = Tensor::<i32>::new(
+            &ts![3, 2],
+            vec![
+                0, 3,
+                1, 4,
+                2, 5,
+            ],
+        ).unwrap();
+
+        assert_eq!(ans1, transposed_t1);
+        assert_eq!(ans2, transposed_t2);
     }
 }
