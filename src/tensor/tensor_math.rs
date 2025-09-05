@@ -205,6 +205,8 @@ impl Transpose {
         })
     }
 
+    /// Gives an instance of `Transpose` that corresponds to a default permutation
+    /// i.e. no axes are changed.
     pub fn default(n: usize) -> Self {
         Transpose::new((0..n).collect::<Vec<usize>>().as_ref()).unwrap()
     }
@@ -221,6 +223,7 @@ impl Transpose {
         Transpose::new(&new_perm)
     }
 
+    /// Swap two axes in-place
     pub fn swap_axes_in_place(&mut self, axis1: usize, axis2: usize) -> Result<(), TensorMathErrors> {
         if axis1 >= self.permutation.len() || axis2 >= self.permutation.len() {
             return Err(TensorMathErrors::TransposePermutationInvalid);
