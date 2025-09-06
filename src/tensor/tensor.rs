@@ -21,8 +21,6 @@ pub enum TensorErrors {
     DimIsNotOne(usize),
     #[error("Dimension {dim} greater than number of dimensions in shape: {max_dim}")]
     DimOutOfBounds { dim: usize, max_dim: usize },
-    #[error("Dimensions are not compatible for concatenation")]
-    ShapesIncompatibleForConcatenation,
     #[error("Shapes are not compatible")]
     ShapesIncompatible,
     #[error("Transposition permutation invalid")]
@@ -39,6 +37,19 @@ pub(crate) fn dot_vectors<T: Add<Output = T> + Mul<Output = T> + Clone>(
         .map(|(x, y)| x * y)
         .reduce(T::add)
         .unwrap()
+}
+pub(crate) fn tensor_index(index: usize, shape: &Shape) -> Vec<usize> {
+    let mut index_vec = Vec::with_capacity(shape.rank());
+    let mut remainder = index;
+    let index_products = IndexProducts::from_shape(shape);
+
+    for j in index_products.0.iter() {
+        let floored_div = remainder / j;
+        index_vec.push(floored_div);
+        remainder = remainder % j;
+    }
+
+    index_vec
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -224,7 +235,7 @@ impl<T: Clone> Tensor<T> {
     /// Concatenates a `Tensor` with another `Tensor` along the specified dimension
     pub fn concat(&self, other: &Tensor<T>, dim: usize) -> Result<Tensor<T>, TensorErrors> {
         if self.shape.rank() < other.shape.rank() {
-            return Err(TensorErrors::ShapesIncompatibleForConcatenation);
+            return Err(TensorErrors::ShapesIncompatible);
         }
         let mut resultant_shape: Vec<usize> = Vec::with_capacity(self.shape.rank());
 
@@ -236,7 +247,7 @@ impl<T: Clone> Tensor<T> {
             }
 
             if self.shape[i] != other.shape[i] {
-                return Err(TensorErrors::ShapesIncompatibleForConcatenation);
+                return Err(TensorErrors::ShapesIncompatible);
             }
 
             resultant_shape.push(self.shape[i]);
