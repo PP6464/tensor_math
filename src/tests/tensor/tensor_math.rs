@@ -230,4 +230,59 @@ mod tensor_math_tests {
         assert_eq!(ans1, transposed_t1);
         assert_eq!(ans2, transposed_t2);
     }
+
+    #[test]
+    fn tensor_contraction_multiplication() {
+        let t1 = Tensor::<i32>::new(
+            &ts![2, 3],
+            (0..6).collect()
+        ).unwrap();
+        let t2 = Tensor::<i32>::new(
+            &ts![3, 3],
+            (0..9).collect()
+        ).unwrap();
+        let ans = Tensor::<i32>::new(
+            &ts![2, 3],
+            vec![
+                15, 18, 21,
+                42, 54, 66
+            ],
+        ).unwrap();
+        assert_eq!(ans, t1.contract_mul(&t2).unwrap());
+
+        let t3 = Tensor::<i32>::new(
+            &ts![2, 3],
+            vec![
+                5, 10, 2,
+                3, -2, 1,
+            ],
+        ).unwrap();
+        let t4 = Tensor::<i32>::new(
+            &ts![3, 2, 2],
+            (0..12).collect(),
+        ).unwrap();
+        let ans = Tensor::<i32>::new(
+            &ts![2, 2, 2],
+            vec![
+                56, 73,
+                90, 107,
+                0, 2,
+                4, 6,
+            ],
+        ).unwrap();
+        assert_eq!(ans, t3.contract_mul(&t4).unwrap());
+    }
+
+    #[test]
+    fn tensor_contraction_multiplication_shape_invalid() {
+        let t1 = Tensor::<i32>::new(
+            &ts![2, 3],
+            (0..6).collect(),
+        ).unwrap();
+        let t2 = Tensor::<i32>::new(
+          &ts![2, 2],
+          (0..4).collect(),
+        ).unwrap();
+        t1.contract_mul(&t2).expect_err("Invalid shapes");
+    }
 }

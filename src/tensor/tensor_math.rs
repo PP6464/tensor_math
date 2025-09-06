@@ -1,4 +1,4 @@
-use crate::tensor::tensor::TensorErrors;
+use crate::tensor::tensor::{tensor_index, TensorErrors};
 use crate::tensor::tensor::{dot_vectors, IndexProducts, Shape, Tensor};
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Rem, Sub};
 
@@ -254,7 +254,8 @@ impl Transpose {
         Ok(new_index_vec)
     }
 }
-impl<T : Clone> Tensor<T> {
+
+impl<T: Clone> Tensor<T> {
     /// Transposes a `Tensor`, consuming it and returning the new one
     pub fn transpose(self, transpose: &Transpose) -> Result<Tensor<T>, TensorErrors> {
         if transpose.permutation.len() != self.shape().rank() {
@@ -266,14 +267,7 @@ impl<T : Clone> Tensor<T> {
         let mut new_elements = self.elements().clone();
 
         for i in 0..new_shape.element_count() {
-            let mut old_index_vec = Vec::with_capacity(new_shape.rank());
-            let mut remainder = i;
-
-            for j in self.index_products.0.iter() {
-                let floored_div = remainder / j;
-                old_index_vec.push(floored_div);
-                remainder = remainder % j;
-            }
+            let old_index_vec = tensor_index(i, self.shape());
 
             let new_index = transpose.new_index(&old_index_vec)?;
             let addr_in_new_elements = dot_vectors(&new_index, &new_index_products.0);
@@ -293,5 +287,61 @@ impl<T : Clone> Tensor<T> {
         self.index_products = new_tensor.index_products;
 
         Ok(())
+    }
+}
+impl<T: Clone + Add<Output=T> + Mul<Output=T>> Tensor<T> {
+    /// Perform tensor-contraction multiplication, which is a more general form of matrix multiplication
+    /// A `Tensor` of shape (a,b,c) multiplied in this way by a `Tensor` of shape (c, d, e, f)
+    /// will produce a resultant `Tensor` of shape (a, b, d, e, f) by the following formula:
+    /// result(a, b, d, e, f) = sum(x=0, x=c) { first(a, b, x) * second(x, d, e, f) }
+    /// This method consumes the original `Tensor` (but not the other one) and returns the result
+    pub fn contract_mul(self, other: &Tensor<T>) -> Result<Tensor<T>, TensorErrors> {
+        if self.shape.0.last().unwrap() != other.shape.0.first().unwrap() {
+            return Err(TensorErrors::ShapesIncompatible);
+        }
+
+        let mut resultant_shape_vec = self
+            .shape
+            .0
+            .iter()
+            .take(self.shape.rank() - 1)
+            .cloned()
+            .collect::<Vec<usize>>();
+
+        resultant_shape_vec
+            .extend(
+                other
+                    .shape
+                    .0
+                    .iter()
+                    .rev()
+                    .take(other.shape.rank() - 1)
+                    .rev()
+                    .cloned(),
+            );
+        let resultant_shape = Shape::new(resultant_shape_vec).unwrap();
+        let mut resultant_elements = Vec::with_capacity(resultant_shape.element_count());
+
+        for i in 0..resultant_shape.element_count() {
+            let index = tensor_index(i, &resultant_shape);
+            let (self_chunk, other_chunk) = index.split_at(self.shape.rank() - 1);
+            let mut self_elements = Vec::with_capacity(*self.shape.0.last().unwrap());
+            let mut other_elements = Vec::with_capacity(*other.shape.0.first().unwrap());
+
+            for j in 0..*self.shape.0.last().unwrap() {
+                let mut self_index = self_chunk.to_vec();
+                self_index.push(j);
+
+                self_elements.push(self[&self_index].clone());
+
+                let mut other_index = other_chunk.to_vec();
+                other_index.insert(0, j);
+                other_elements.push(other[&other_index].clone());
+            }
+
+            resultant_elements.push(dot_vectors(&self_elements, &other_elements));
+        }
+
+        Ok(Tensor::new(&resultant_shape, resultant_elements.to_vec())?)
     }
 }
