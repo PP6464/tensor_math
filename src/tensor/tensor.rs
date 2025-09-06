@@ -225,6 +225,13 @@ impl<T> Tensor<T> {
         self.index_products = IndexProducts::from_shape(&self.shape);
         Ok(())
     }
+
+    /// Apply a transformation to a `Tensor` element-wise, consuming the original and returning the result
+    pub fn transform_elementwise<O>(self, closure: impl FnMut(T) -> O) -> Tensor<O> {
+        let shape = self.shape().clone();
+        let new_elements = self.elements.into_iter().map(closure).collect();
+        Tensor::new(&shape, new_elements).unwrap()
+    }
 }
 impl<T: Clone> Tensor<T> {
     pub fn from_value(shape: &Shape, value: T) -> Self {

@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod tensor_util_tests {
+    use std::f64::consts::PI;
     use crate::tensor::tensor::{IndexProducts, Shape, Tensor, TensorErrors};
     use crate::ts;
 
@@ -148,5 +149,25 @@ mod tensor_util_tests {
     #[test]
     fn random_tensor() {
         Tensor::<i32>::rand(&ts![2, 3]);
+    }
+
+    #[test]
+    fn transform_elementwise() {
+        let t1 = Tensor::<f64>::new(
+            &ts![2, 3],
+            vec![
+                0.0, PI / 6.0, PI / 3.0,
+                PI / 2.0, 2.0 * PI / 3.0, 5.0 * PI / 6.0
+            ],
+        ).unwrap();
+        let transformed = t1.transform_elementwise(f64::cos);
+        let ans = Tensor::<f64>::new(
+            &ts![2, 3],
+            vec![
+                1.0, f64::sqrt(3.0) / 2.0, 0.5,
+                0.0, -0.5, -f64::sqrt(3.0) / 2.0,
+            ],
+        ).unwrap();
+        assert!((ans - transformed).into_iter().map(f64::abs).sum::<f64>() < 1e-6);
     }
 }
