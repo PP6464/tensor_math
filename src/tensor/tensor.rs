@@ -169,6 +169,10 @@ impl<T> Tensor<T> {
     pub fn shape(&self) -> &Shape {
         &self.shape
     }
+    
+    pub fn rank(&self) -> usize {
+        self.shape.rank()
+    }
 
     pub fn elements(&self) -> &Vec<T> {
         &self.elements
@@ -196,10 +200,10 @@ impl<T> Tensor<T> {
 
     /// Flatten a `Tensor` on a given dimension, consuming it and returning the new one
     pub fn flatten(self, dim: usize) -> Result<Tensor<T>, TensorErrors> {
-        if dim >= self.shape.rank() {
+        if dim >= self.rank() {
             return Err(TensorErrors::DimOutOfBounds {
                 dim,
-                max_dim: self.shape.rank(),
+                max_dim: self.rank(),
             });
         }
 
@@ -214,10 +218,10 @@ impl<T> Tensor<T> {
 
     /// Flatten a `Tensor` on a given dimension in-place
     pub fn flatten_in_place(&mut self, dim: usize) -> Result<(), TensorErrors> {
-        if dim >= self.shape.rank() {
+        if dim >= self.rank() {
             return Err(TensorErrors::DimOutOfBounds {
                 dim,
-                max_dim: self.shape.rank(),
+                max_dim: self.rank(),
             });
         }
 
@@ -245,13 +249,13 @@ impl<T: Clone> Tensor<T> {
 
     /// Concatenates a `Tensor` with another `Tensor` along the specified dimension
     pub fn concat(&self, other: &Tensor<T>, dim: usize) -> Result<Tensor<T>, TensorErrors> {
-        if self.shape.rank() < other.shape.rank() {
+        if self.rank() < other.rank() {
             return Err(TensorErrors::ShapesIncompatible);
         }
-        let mut resultant_shape: Vec<usize> = Vec::with_capacity(self.shape.rank());
+        let mut resultant_shape: Vec<usize> = Vec::with_capacity(self.rank());
 
         // Ensure shapes match on every dim that is not the dim along which to concatenate
-        for i in 0..self.shape.rank() {
+        for i in 0..self.rank() {
             if i == dim {
                 resultant_shape.push(self.shape[i] + other.shape[i]);
                 continue;
@@ -335,11 +339,11 @@ impl<T> Index<&[usize]> for Tensor<T> {
 
     fn index(&self, index: &[usize]) -> &Self::Output {
         assert_eq!(
-            self.shape.rank(),
+            self.rank(),
             index.len(),
             "Shape dimension and index dimension do not match"
         );
-        for i in 0..self.shape.rank() {
+        for i in 0..self.rank() {
             if index[i] >= self.shape[i] {
                 panic!(
                     "Index for dimension {i} out of bounds: index {}, shape {}",
@@ -355,11 +359,11 @@ impl<T> Index<&[usize]> for Tensor<T> {
 impl<T> IndexMut<&[usize]> for Tensor<T> {
     fn index_mut(&mut self, index: &[usize]) -> &mut T {
         assert_eq!(
-            self.shape.rank(),
+            self.rank(),
             index.len(),
             "Shape dimension and index dimension do not match"
         );
-        for i in 0..self.shape.rank() {
+        for i in 0..self.rank() {
             if index[i] >= self.shape[i] {
                 panic!(
                     "Index for dimension {i} out of bounds: index {}, shape {}",
