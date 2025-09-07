@@ -1,4 +1,4 @@
-use std::ops::{Add, Index, IndexMut, Mul};
+use std::ops::{Add, Deref, Index, IndexMut, Mul};
 use std::slice::Iter;
 use std::vec::IntoIter;
 use rand::distr::{Distribution, StandardUniform};
@@ -374,5 +374,12 @@ impl<T> From<IntoIter<T>> for Tensor<T> {
     fn from(value: IntoIter<T>) -> Self {
         let elements: Vec<T> = value.collect();
         Tensor::new(&ts![elements.len()], elements).unwrap()
+    }
+}
+impl<T> Deref for Tensor<T> {
+    type Target = [T];
+
+    fn deref(&self) -> &Self::Target {
+        self.elements.as_slice()
     }
 }
