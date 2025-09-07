@@ -38,9 +38,13 @@ pub(crate) fn dot_vectors<T: Add<Output = T> + Mul<Output = T> + Clone>(
         .reduce(T::add)
         .unwrap()
 }
-pub(crate) fn tensor_index(index: usize, shape: &Shape) -> Vec<usize> {
+
+/// Computes the tensor index for a given address (also takes the shape of the `Tensor`)
+/// E.g. for a `Tensor` of shape (2, 3, 2), address 4 in the data would correspond to the index (0, 2, 0)
+/// and the address 11 would correspond to (1, 2, 1) etc.
+pub fn tensor_index(address: usize, shape: &Shape) -> Vec<usize> {
     let mut index_vec = Vec::with_capacity(shape.rank());
-    let mut remainder = index;
+    let mut remainder = address;
     let index_products = IndexProducts::from_shape(shape);
 
     for j in index_products.0.iter() {
