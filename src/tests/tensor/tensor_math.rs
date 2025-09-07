@@ -2,7 +2,7 @@
 mod tensor_math_tests {
     use crate::tensor::tensor::Shape;
     use crate::tensor::tensor::Tensor;
-    use crate::tensor::tensor_math::{kronecker_product, Transpose};
+    use crate::tensor::tensor_math::{kronecker_product, trace, Transpose};
     use crate::ts;
 
     #[test]
@@ -307,5 +307,34 @@ mod tensor_math_tests {
             ans_vec,
         ).unwrap();
         assert_eq!(kronecker_product(&t1, &t2), ans);
+    }
+
+    #[test]
+    fn test_trace() {
+        let t1 = Tensor::<i32>::new(
+            &ts![2, 2],
+            (0..4).collect(),
+        ).unwrap();
+        assert_eq!(3, trace(&t1));
+    }
+
+    #[test]
+    #[should_panic]
+    fn invalid_trace_not_mat() {
+        let t1 = Tensor::<i32>::new(
+            &ts![2, 2, 3],
+            (0..12).collect(),
+        ).unwrap();
+        trace(&t1);
+    }
+
+    #[test]
+    #[should_panic]
+    fn invalid_trace_non_square() {
+        let t1 = Tensor::<i32>::new(
+            &ts![2, 3],
+            (0..6).collect(),
+        ).unwrap();
+        trace(&t1);
     }
 }

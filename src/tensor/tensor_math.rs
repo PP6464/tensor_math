@@ -1,6 +1,7 @@
 use crate::tensor::tensor::{tensor_index, TensorErrors};
 use crate::tensor::tensor::{dot_vectors, IndexProducts, Shape, Tensor};
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Rem, Sub};
+use num::complex::{Complex64, ComplexFloat};
 
 /// Implement an operation elementwise
 /// Also allows you to implement operations with a `Tensor` and a single value
@@ -287,6 +288,20 @@ impl<T: Clone> Tensor<T> {
         Ok(())
     }
 }
+impl<T: Add<Output=T> + Clone> Tensor<T> {
+    /// Compute the sum of the tensor
+    pub fn sum(&self) -> T {
+        self.iter().cloned().reduce(T::add).unwrap()
+    }
+}
+impl<T: PartialOrd + Clone> Tensor<T> {
+    /// Bounds the values between `min` and `max`
+    /// consuming the original and returning the result
+    pub fn clip(self, min: T, max: T) -> Tensor<T> {
+        let shape = self.shape();
+        Tensor::new(shape, self.iter().cloned().map(|x| if x < min { min.clone() } else if x > max { max.clone() } else { x }).collect()).unwrap()
+    }
+}
 impl<T: Clone + Add<Output=T> + Mul<Output=T>> Tensor<T> {
     /// Perform tensor-contraction multiplication, which is a more general form of matrix multiplication
     /// A `Tensor` of shape (a,b,c) multiplied in this way by a `Tensor` of shape (c, d, e, f)
@@ -302,7 +317,7 @@ impl<T: Clone + Add<Output=T> + Mul<Output=T>> Tensor<T> {
             .shape
             .0
             .iter()
-            .take(self.shape.rank() - 1)
+            .take(self.rank() - 1)
             .cloned()
             .collect::<Vec<usize>>();
 
@@ -313,7 +328,7 @@ impl<T: Clone + Add<Output=T> + Mul<Output=T>> Tensor<T> {
                     .0
                     .iter()
                     .rev()
-                    .take(other.shape.rank() - 1)
+                    .take(other.rank() - 1)
                     .rev()
                     .cloned(),
             );
@@ -322,7 +337,7 @@ impl<T: Clone + Add<Output=T> + Mul<Output=T>> Tensor<T> {
 
         for i in 0..resultant_shape.element_count() {
             let index = tensor_index(i, &resultant_shape);
-            let (self_chunk, other_chunk) = index.split_at(self.shape.rank() - 1);
+            let (self_chunk, other_chunk) = index.split_at(self.rank() - 1);
             let mut self_elements = Vec::with_capacity(*self.shape.0.last().unwrap());
             let mut other_elements = Vec::with_capacity(*other.shape.0.first().unwrap());
 
@@ -356,20 +371,20 @@ impl<T: Clone + Add<Output=T> + Mul<Output=T>> Tensor<T> {
 pub fn kronecker_product<T: Clone + Mul<Output=T>>(t1: &Tensor<T>, t2: &Tensor<T>) -> Tensor<T> {
     let mut new_shape_vec = Vec::new();
 
-    if t1.shape.rank() > t2.shape.rank() {
-        for i in 0..t2.shape.rank() {
+    if t1.rank() > t2.rank() {
+        for i in 0..t2.rank() {
             new_shape_vec.push(t1.shape[i] * t2.shape[i]);
         }
 
-        for i in t2.shape.rank()..t1.shape.rank() {
+        for i in t2.rank()..t1.rank() {
             new_shape_vec.push(t1.shape[i]);
         }
     } else {
-        for i in 0..t1.shape.rank() {
+        for i in 0..t1.rank() {
             new_shape_vec.push(t1.shape[i] * t2.shape[i]);
         }
 
-        for i in t1.shape.rank()..t2.shape.rank() {
+        for i in t1.rank()..t2.rank() {
             new_shape_vec.push(t2.shape[i]);
         }
     }
@@ -384,3 +399,222 @@ pub fn kronecker_product<T: Clone + Mul<Output=T>>(t1: &Tensor<T>, t2: &Tensor<T
 
     Tensor::new(&new_shape, new_elements).unwrap()
 }
+
+// Define a bunch of convenience mathematical functions for f64
+// They will consume the original tensor and return the result
+impl Tensor<f64> {
+    /// Exponentiates each element in the tensor
+    pub fn exp(self) -> Tensor<f64> {
+        self.transform_elementwise(f64::exp)
+    }
+
+    /// Raises n to the power of each element.
+    /// This method uses `f64::powf` so beware of `f64::NaN` values
+    /// if you have a negative value raised to the power of 0.5 for example
+    pub fn exp_base_n(self, n: f64) -> Tensor<f64> {
+        self.transform_elementwise(|x| f64::powf(n, x))
+    }
+
+    /// Raises each element to the power of n
+    /// Like `exp_base_n` this can give `NaN` values if you aren't careful
+    /// with what you are raising to which power
+    pub fn pow(self, n: f64) -> Tensor<f64> {
+        self.transform_elementwise(|x| f64::powf(x, n))
+    }
+
+    /// Computes the sin of each element
+    pub fn sin(self) -> Tensor<f64> {
+        self.transform_elementwise(f64::sin)
+    }
+
+    /// Computes the cos of each element
+    pub fn cos(self) -> Tensor<f64> {
+        self.transform_elementwise(f64::cos)
+    }
+
+    /// Computes the tan of each element
+    pub fn tan(self) -> Tensor<f64> {
+        self.transform_elementwise(f64::tan)
+    }
+
+    /// Computes the arcsin of each element
+    pub fn asin(self) -> Tensor<f64> {
+        self.transform_elementwise(f64::asin)
+    }
+
+    /// Computes the arccos of each element
+    pub fn acos(self) -> Tensor<f64> {
+        self.transform_elementwise(f64::acos)
+    }
+
+    /// Computes the atan of each element
+    pub fn atan(self) -> Tensor<f64> {
+        self.transform_elementwise(f64::atan)
+    }
+
+    /// Computes the reciprocal of each element.
+    /// Use in conjunction with trigonometric functions to get sec(x), coth(x) etc.
+    pub fn recip(self) -> Tensor<f64> {
+        self.transform_elementwise(f64::recip)
+    }
+
+    /// Computes the sinh of each element
+    pub fn sinh(self) -> Tensor<f64> {
+        self.transform_elementwise(f64::sinh)
+    }
+
+    /// Computes the cosh of each element
+    pub fn cosh(self) -> Tensor<f64> {
+        self.transform_elementwise(f64::cosh)
+    }
+
+    /// Computes the tanh of each element
+    pub fn tanh(self) -> Tensor<f64> {
+        self.transform_elementwise(f64::tanh)
+    }
+
+    /// Computes the arsinh of each element
+    pub fn asinh(self) -> Tensor<f64> {
+        self.transform_elementwise(f64::asinh)
+    }
+
+    /// Computes the arcosh of each element
+    pub fn acosh(self) -> Tensor<f64> {
+        self.transform_elementwise(f64::acosh)
+    }
+
+    /// Computes the artanh of each element
+    pub fn atanh(self) -> Tensor<f64> {
+        self.transform_elementwise(f64::atanh)
+    }
+
+    /// Computes the sigmoid function for each element.
+    /// Sigmoid(x) = 1 / (1 + exp(-x))
+    pub fn sigmoid(self) -> Tensor<f64> {
+        ((-self).exp() + 1.0).recip()
+    }
+
+    /// Computes the ReLU function for each element
+    pub fn relu(self) -> Tensor<f64> {
+        self.transform_elementwise(|x| if x > 0.0 { x } else { 0.0 })
+    }
+
+    /// Computes the leaky ReLU function for each element
+    pub fn leaky_relu(self, alpha: f64) -> Tensor<f64> {
+        self.transform_elementwise(|x| if x > 0.0 { x } else { alpha * x })
+    }
+
+    /// Applies softmax to the tensor
+    pub fn softmax(self) -> Tensor<f64> {
+        let new = self.exp();
+        let sum = new.sum();
+        new / sum
+    }
+}
+
+// Define a bunch of convenience mathematical functions for Tensor<Complex64>
+// They will consume the original tensor and return the result
+impl Tensor<Complex64> {
+    /// Computes the exponential of each element
+    pub fn exp(self) -> Tensor<Complex64> {
+        self.transform_elementwise(Complex64::exp)
+    }
+
+    /// Raises n to the power of each element
+    pub fn exp_base_n(self, n: Complex64) -> Tensor<Complex64> {
+        self.transform_elementwise(|x| n.powc(x))
+    }
+
+    /// Raises each element to the power of n
+    pub fn pow(self, n: Complex64) -> Tensor<Complex64> {
+        self.transform_elementwise(|x| x.powc(n))
+    }
+
+    /// Computes the sin of each element
+    pub fn sin(self) -> Tensor<Complex64> {
+        self.transform_elementwise(Complex64::sin)
+    }
+
+    /// Computes the cos of each element
+    pub fn cos(self) -> Tensor<Complex64> {
+        self.transform_elementwise(Complex64::cos)
+    }
+
+    /// Computes the tan of each element
+    pub fn tan(self) -> Tensor<Complex64> {
+        self.transform_elementwise(Complex64::tan)
+    }
+
+    /// Computes the arcsin of each element
+    pub fn asin(self) -> Tensor<Complex64> {
+        self.transform_elementwise(Complex64::asin)
+    }
+
+    /// Computes the arccos of each element
+    pub fn acos(self) -> Tensor<Complex64> {
+        self.transform_elementwise(Complex64::acos)
+    }
+
+    /// Computes the arctan of each element
+    pub fn atan(self) -> Tensor<Complex64> {
+        self.transform_elementwise(Complex64::atan)
+    }
+
+    /// Computes the sinh of each element
+    pub fn sinh(self) -> Tensor<Complex64> {
+        self.transform_elementwise(Complex64::sinh)
+    }
+
+    /// Computes the cosh of each element
+    pub fn cosh(self) -> Tensor<Complex64> {
+        self.transform_elementwise(Complex64::cosh)
+    }
+
+    /// Computes the tanh of each element
+    pub fn tanh(self) -> Tensor<Complex64> {
+        self.transform_elementwise(Complex64::tanh)
+    }
+
+    /// Computes the arsinh of each element
+    pub fn asinh(self) -> Tensor<Complex64> {
+        self.transform_elementwise(Complex64::asinh)
+    }
+
+    /// Computes the arcosh of each element
+    pub fn acosh(self) -> Tensor<Complex64> {
+        self.transform_elementwise(Complex64::acosh)
+    }
+
+    /// Computes the artanh of each element
+    pub fn atanh(self) -> Tensor<Complex64> {
+        self.transform_elementwise(Complex64::atanh)
+    }
+
+    /// Computes the reciprocal of each element.
+    /// Use in conjunction with trigonometric functions to get sec(x), coth(x) etc.
+    pub fn recip(self) -> Tensor<Complex64> {
+        self.transform_elementwise(Complex64::recip)
+    }
+
+    /// Applies softmax to the tensor
+    pub fn softmax(self) -> Tensor<Complex64> {
+        let new = self.exp();
+        let sum = new.sum();
+        new / sum
+    }
+}
+
+// Matrix specific functions
+pub fn trace<T: Add<Output = T> + Clone>(t: &Tensor<T>) -> T {
+    assert_eq!(t.rank(), 2, "This implementation of trace is only for matrices");
+    assert_eq!(t.shape.0[0], t.shape.0[1], "Trace is only defined for square matrices");
+
+    let mut sum = t.elements.first().unwrap().clone();
+
+    for i in 1..t.shape.0.iter().min().unwrap().clone() {
+        sum = sum.add(t[&[i, i]].clone());
+    }
+
+    sum
+}
+
