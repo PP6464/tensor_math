@@ -2,7 +2,7 @@
 mod tensor_math_tests {
     use crate::tensor::tensor::Shape;
     use crate::tensor::tensor::Tensor;
-    use crate::tensor::tensor_math::Transpose;
+    use crate::tensor::tensor_math::{kronecker_product, Transpose};
     use crate::ts;
 
     #[test]
@@ -284,5 +284,28 @@ mod tensor_math_tests {
           (0..4).collect(),
         ).unwrap();
         t1.contract_mul(&t2).expect_err("Invalid shapes");
+    }
+
+    #[test]
+    fn test_kronecker_product() {
+        let t1 = Tensor::<i32>::new(
+            &ts![2, 3],
+            (0..6).collect(),
+        ).unwrap();
+        let t2 = Tensor::<i32>::new(
+            &ts![5, 2, 2],
+            (0..20).collect(),
+        ).unwrap();
+        let mut ans_vec = vec![0; 20];
+        ans_vec.extend(0..20);
+        ans_vec.extend((0..20).map(|i| i * 2));
+        ans_vec.extend((0..20).map(|i| i * 3));
+        ans_vec.extend((0..20).map(|i| i * 4));
+        ans_vec.extend((0..20).map(|i| i * 5));
+        let ans = Tensor::<i32>::new(
+            &ts![10, 6, 2],
+            ans_vec,
+        ).unwrap();
+        assert_eq!(kronecker_product(&t1, &t2), ans);
     }
 }

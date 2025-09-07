@@ -345,3 +345,44 @@ impl<T: Clone + Add<Output=T> + Mul<Output=T>> Tensor<T> {
         Ok(Tensor::new(&resultant_shape, resultant_elements.to_vec())?)
     }
 }
+
+// More complex mathematical functions
+
+/// Implements the Kronecker product for two tensors.
+/// The Kronecker product scales the second tensor by each element of the first tensor,
+/// giving a `Tensor` of type `Tensor<T>`. This is then simplified into just `Tensor<T>`
+/// with the result having a shape that is the element-wise product of the two input
+/// tensors' shapes (if one has a lower rank than the other, then the rest of the larger rank
+/// tensor's shape values are inserted afterward).
+/// Borrows both immutably and returns the result.
+pub fn kronecker_product<T: Clone + Mul<Output=T>>(t1: &Tensor<T>, t2: &Tensor<T>) -> Tensor<T> {
+    let mut new_shape_vec = Vec::new();
+
+    if t1.shape.rank() > t2.shape.rank() {
+        for i in 0..t2.shape.rank() {
+            new_shape_vec.push(t1.shape[i] * t2.shape[i]);
+        }
+
+        for i in t2.shape.rank()..t1.shape.rank() {
+            new_shape_vec.push(t1.shape[i]);
+        }
+    } else {
+        for i in 0..t1.shape.rank() {
+            new_shape_vec.push(t1.shape[i] * t2.shape[i]);
+        }
+
+        for i in t1.shape.rank()..t2.shape.rank() {
+            new_shape_vec.push(t2.shape[i]);
+        }
+    }
+
+    let new_shape = Shape::new(new_shape_vec).unwrap();
+    let mut new_elements = Vec::with_capacity(new_shape.element_count());
+
+    for i in t1.elements.iter().cloned() {
+        let tensor = t2 * i;
+        new_elements.extend(tensor.elements);
+    }
+
+    Tensor::new(&new_shape, new_elements).unwrap()
+}
