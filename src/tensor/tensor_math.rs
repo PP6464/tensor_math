@@ -266,13 +266,11 @@ impl<T: Clone> Tensor<T> {
         let new_index_products = IndexProducts::from_shape(&new_shape);
         let mut new_elements = self.elements().clone();
 
-        for i in 0..new_shape.element_count() {
-            let old_index_vec = tensor_index(i, self.shape());
+        for (old_index, elem) in self.enumerated_iter() {
+            let new_index = transpose.new_index(&old_index)?;
+            let new_addr = dot_vectors(&new_index, &new_index_products.0);
 
-            let new_index = transpose.new_index(&old_index_vec)?;
-            let addr_in_new_elements = dot_vectors(&new_index, &new_index_products.0);
-
-            new_elements[addr_in_new_elements] = self.elements[i].clone();
+            new_elements[new_addr] = elem;
         }
 
         Ok(Tensor::new(&new_shape, new_elements.to_vec())?)

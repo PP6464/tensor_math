@@ -1,8 +1,8 @@
+use rand::distr::{Distribution, StandardUniform};
+use rand::{Fill, Rng};
 use std::ops::{Add, Deref, Index, IndexMut, Mul};
 use std::slice::Iter;
 use std::vec::IntoIter;
-use rand::distr::{Distribution, StandardUniform};
-use rand::{Fill, Rng};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -289,6 +289,23 @@ impl<T: Clone> Tensor<T> {
         let result = Tensor::new(&resultant_shape, resultant_elements)?;
 
         Ok(result)
+    }
+
+    /// Give an iterable that is enumerated with tensor indices
+    pub fn enumerated_iter(&self) -> impl Iterator<Item = (Vec<usize>, T)> + '_ {
+        self.elements
+            .iter()
+            .cloned()
+            .enumerate()
+            .map(|(index, element)| (tensor_index(index, &self.shape), element))
+    }
+
+    /// Give a mutable iterable that is enumerated with tensor indices
+    pub fn enumerated_iter_mut(&mut self) -> impl Iterator<Item = (Vec<usize>, &mut T)> + '_  {
+        self.elements
+            .iter_mut()
+            .enumerate()
+            .map(|(index, element)| (tensor_index(index, &self.shape), element))
     }
 }
 impl<T: Default + Clone> Tensor<T> {
