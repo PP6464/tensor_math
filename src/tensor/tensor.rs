@@ -25,6 +25,8 @@ pub enum TensorErrors {
     ShapesIncompatible,
     #[error("Transposition permutation invalid")]
     TransposePermutationInvalid,
+    #[error("Determinant is zero")]
+    DeterminantZero,
 }
 
 pub(crate) fn dot_vectors<T: Add<Output = T> + Mul<Output = T> + Clone>(

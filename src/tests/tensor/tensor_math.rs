@@ -2,7 +2,7 @@
 mod tensor_math_tests {
     use crate::tensor::tensor::Shape;
     use crate::tensor::tensor::Tensor;
-    use crate::tensor::tensor_math::{det, kronecker_product, trace, Transpose};
+    use crate::tensor::tensor_math::{det, identity, inv, kronecker_product, trace, Transpose};
     use crate::ts;
 
     #[test]
@@ -349,5 +349,29 @@ mod tensor_math_tests {
             ],
         ).unwrap();
         assert_eq!(det(&t1), 123);
+    }
+
+    #[test]
+    fn inverse() {
+        let t1 = Tensor::<f64>::new(
+            &ts![3, 3],
+            vec![
+                3.0, 4.0, 5.0,
+                2.0, -1.0, 4.0,
+                3.0, -5.0, -10.0
+            ],
+        ).unwrap();
+        let inverse = inv(&t1).unwrap();
+        let ans = Tensor::<f64>::new(
+            &ts![3, 3],
+            vec![
+                10.0 / 61.0, 5.0 / 61.0, 7.0 / 61.0,
+                32.0 / 183.0, -15.0 / 61.0, -2.0 / 183.0,
+                -7.0 / 183.0, 9.0 / 61.0, -11.0 / 183.0,
+            ],
+        ).unwrap();
+
+        assert_eq!(inverse, ans);
+        assert!((t1.contract_mul(&inverse).unwrap() - identity(3)).sum() < 1e-6);
     }
 }

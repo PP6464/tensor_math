@@ -2,6 +2,7 @@ use crate::tensor::tensor::{tensor_index, TensorErrors};
 use crate::tensor::tensor::{dot_vectors, IndexProducts, Shape, Tensor};
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Rem, Sub};
 use num::complex::{Complex64, ComplexFloat};
+use crate::tensor::tensor::TensorErrors::DeterminantZero;
 use crate::ts;
 
 /// Implement an operation elementwise
@@ -666,3 +667,69 @@ pub fn det<T: Add<Output = T> + Mul<Output = T> + Sub<Output = T> + Clone + Defa
     determinant
 }
 
+/// Calculates the inverse for a matrix of values of type `T`.
+/// This assumes that `T::default()` returns a 0-value of type `T`,
+/// which is the case for all common number types, and Complex64 as well.
+/// Beware of NaN values or panicking if the determinant is 0.
+pub fn inv<T>(t: &Tensor<T>) -> Result<Tensor<T>, TensorErrors>
+where T: Add<Output=T> + Mul<Output=T> + Sub<Output=T> + Div<Output=T>  + Neg<Output = T> + Clone + Default + PartialEq + std::fmt::Debug
+{
+    assert_eq!(t.rank(), 2, "Inversion is only defined for matrices");
+    assert_eq!(t.shape[0], t.shape[1], "Inversion is only defined for square matrices");
+
+    let ord = t.shape[0];
+    let mut res = Tensor::<T>::from_shape(t.shape());
+    let d = det(&t);
+
+    if d == T::default() {
+        return Err(DeterminantZero);
+    }
+
+    // Construct adjoint matrix
+    let rest_of_shape = ts![ord - 1, ord - 1];
+    let mut rest_of_tensor = Tensor::<T>::from_shape(&rest_of_shape);
+
+    // i is for which row we are on
+    for i in 0..ord {
+
+        // j is for which column we are on
+        for j in 0..ord {
+            let is_minus = (i + j) % 2 != 0;
+            let mut skipped_row = false;
+
+            // k is for which row we are on when filling the rest_of tensor
+            for k in 0..ord {
+                if i == k { skipped_row = true; continue; }
+
+                let mut skipped_col = false;
+
+                // l is for which column we are on when filling the rest_of tensor
+                for l in 0..ord {
+                    if j == l { skipped_col = true; continue; }
+
+                    rest_of_tensor[
+                        &[
+                            if skipped_row { k - 1 } else { k },
+                            if skipped_col { l - 1 } else { l },
+                        ]
+                    ] = t[&[k, l]].clone();
+                }
+            }
+
+            res[&[j, i]] = if is_minus { -det(&rest_of_tensor) } else { det(&rest_of_tensor) };
+        }
+    }
+
+    Ok(res / d)
+}
+
+/// Constructs an identity matrix of `f64` values of the given size
+pub fn identity(n: usize) -> Tensor<f64> {
+    let mut t = Tensor::from_shape(&ts![n, n]);
+
+    for i in 0..n {
+        t[&[i, i]] = 1.0;
+    }
+
+    t
+}
