@@ -606,6 +606,7 @@ impl Tensor<Complex64> {
 }
 
 // Matrix specific functions
+/// Computes the trace of a matrix
 pub fn trace<T: Add<Output = T> + Clone>(t: &Tensor<T>) -> T {
     assert_eq!(t.rank(), 2, "This implementation of trace is only for matrices");
     assert_eq!(t.shape.0[0], t.shape.0[1], "Trace is only defined for square matrices");
