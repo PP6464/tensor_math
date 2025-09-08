@@ -2,7 +2,7 @@
 mod tensor_math_tests {
     use crate::tensor::tensor::Shape;
     use crate::tensor::tensor::Tensor;
-    use crate::tensor::tensor_math::{kronecker_product, trace, Transpose};
+    use crate::tensor::tensor_math::{det, kronecker_product, trace, Transpose};
     use crate::ts;
 
     #[test]
@@ -336,5 +336,18 @@ mod tensor_math_tests {
             (0..6).collect(),
         ).unwrap();
         trace(&t1);
+    }
+
+    #[test]
+    fn determinant() {
+        let t1 = Tensor::<i32>::new(
+            &ts![3, 3],
+            vec![
+                5, -2, 1,
+                8, 9, -5,
+                1, 0, 2,
+            ],
+        ).unwrap();
+        assert_eq!(det(&t1), 123);
     }
 }

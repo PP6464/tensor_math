@@ -2,6 +2,7 @@ use crate::tensor::tensor::{tensor_index, TensorErrors};
 use crate::tensor::tensor::{dot_vectors, IndexProducts, Shape, Tensor};
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Rem, Sub};
 use num::complex::{Complex64, ComplexFloat};
+use crate::ts;
 
 /// Implement an operation elementwise
 /// Also allows you to implement operations with a `Tensor` and a single value
@@ -616,5 +617,51 @@ pub fn trace<T: Add<Output = T> + Clone>(t: &Tensor<T>) -> T {
     }
 
     sum
+}
+
+/// Calculates the determinant for a matrix of values of type `T`.
+/// This assumes that `T::default()` returns a 0-value of type `T`,
+/// which is the case for all common number types, and Complex64 as well.
+pub fn det<T: Add<Output = T> + Mul<Output = T> + Sub<Output = T> + Clone + Default>(t: &Tensor<T>) -> T {
+    assert_eq!(t.rank(), 2, "Determinant is only for matrices");
+    assert_eq!(t.shape[0], t.shape[1], "Determinant is only defined for square matrices");
+
+    let ord = t.shape[0];
+
+    if ord == 2 {
+        return t[&[0, 0]].clone() * t[&[1, 1]].clone() - t[&[0, 1]].clone() * t[&[1, 0]].clone();
+    }
+
+    if ord == 1 {
+        return t[&[0, 0]].clone();
+    }
+
+    let mut determinant = T::default();
+
+    for i in 0..ord {
+        let is_minus = i % 2 != 0;
+
+        let rest_of_shape = ts![ord - 1, ord - 1];
+        let mut rest_of_tensor = Tensor::<T>::from_shape(&rest_of_shape);
+        let mut skipped = false;
+
+        // j is for which column we are on
+        for j in 0..ord {
+            if j == i { skipped = true; continue; }
+
+            // k is for which row we are on
+            for k in 1..ord {
+                rest_of_tensor[&[k - 1, if skipped { j - 1 } else { j }]] = t[&[k, j]].clone();
+            }
+        }
+
+        if is_minus {
+            determinant = determinant - t[&[0, i]].clone() * det(&rest_of_tensor)
+        } else {
+            determinant = determinant + t[&[0, i]].clone() * det(&rest_of_tensor)
+        }
+    }
+
+    determinant
 }
 
