@@ -404,3 +404,8 @@ impl<T> Deref for Tensor<T> {
         self.elements.as_slice()
     }
 }
+impl<T: Default + Clone> Default for Tensor<T> {
+    fn default() -> Self {
+        Tensor::from_shape(&ts![1])
+    }
+}
