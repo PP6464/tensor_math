@@ -2,7 +2,7 @@
 mod tensor_math_tests {
     use crate::tensor::tensor::Shape;
     use crate::tensor::tensor::Tensor;
-    use crate::tensor::tensor_math::{det, identity, inv, kronecker_product, trace, Transpose};
+    use crate::tensor::tensor_math::{det, identity, inv, kronecker_product, pool, pool_avg, pool_max, pool_min, pool_sum, trace, Transpose};
     use crate::ts;
 
     #[test]
@@ -373,5 +373,100 @@ mod tensor_math_tests {
 
         assert_eq!(inverse, ans);
         assert!((t1.contract_mul(&inverse).unwrap() - identity(3)).sum() < 1e-6);
+    }
+
+    #[test]
+    fn pool_tensor() {
+        let t1: Tensor<f64> = Tensor::<i32>::new(
+            &ts![3, 3, 3],
+            vec![
+                1, 5, -1,
+                2, 3, -5,
+                12, 10, -10,
+                
+                1, -4, 2,
+                9, 6, 8,
+                -1, 0, -1,
+                
+                -8, 7, 4,
+                5, 1, 2,
+                -5, 3, 1,
+            ],
+        ).unwrap().transform_elementwise(|x| x.into());
+        
+        let avg_pool = pool(
+            &t1,
+            pool_avg,
+            &ts![2, 2, 2],
+            &ts![2, 2, 2],
+        );
+        let sum_pool = pool(
+            &t1,
+            pool_sum,
+            &ts![2, 2, 2],
+            &ts![2, 2, 2],
+        );
+        let max_pool = pool(
+            &t1,
+            pool_max,
+            &ts![2, 2, 2],
+            &ts![1, 1, 1],
+        );
+        let min_pool = pool(
+            &t1,
+            pool_min,
+            &ts![3, 1, 1],
+            &ts![3, 1, 1],
+        );
+        
+        let sum_ans = Tensor::<f64>::new(
+            &ts![2, 2, 2],
+            vec![
+                23.0, 4.0,
+                21.0, -11.0,
+                
+                5.0, 6.0,
+                -2.0, 1.0,
+            ],
+        ).unwrap();
+        let avg_ans = Tensor::<f64>::new(
+            &ts![2, 2, 2],
+            vec![
+                2.875, 1.0,
+                5.25, -5.5,
+
+                1.25, 3.0,
+                -1.0, 1.0,
+            ],
+        ).unwrap();
+        let max_ans = Tensor::<f64>::new(
+            &ts![3, 3, 3],
+            vec![
+                9.0, 8.0, 8.0,
+                12.0, 10.0, 8.0,
+                12.0, 10.0, -1.0,
+                
+                9.0, 8.0, 8.0, 
+                9.0, 8.0, 8.0,
+                3.0, 3.0, 1.0,
+                
+                7.0, 7.0, 4.0,
+                5.0, 3.0, 2.0,
+                3.0, 3.0, 1.0,
+            ],
+        ).unwrap();
+        let min_ans = Tensor::<f64>::new(
+            &ts![1, 3, 3],
+            vec![
+                -8.0, -4.0, -1.0,
+                2.0, 1.0, -5.0,
+                -5.0, 0.0, -10.0,
+            ],
+        ).unwrap();
+        
+        assert_eq!(avg_pool, avg_ans);
+        assert_eq!(sum_pool, sum_ans);
+        assert_eq!(max_pool, max_ans);
+        assert_eq!(min_pool, min_ans);
     }
 }

@@ -2,6 +2,7 @@ use crate::tensor::tensor::{tensor_index, TensorErrors};
 use crate::tensor::tensor::{dot_vectors, IndexProducts, Shape, Tensor};
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Rem, Sub};
 use num::complex::{Complex64, ComplexFloat};
+use num::ToPrimitive;
 use crate::tensor::tensor::TensorErrors::DeterminantZero;
 use crate::ts;
 
@@ -672,7 +673,7 @@ pub fn det<T: Add<Output = T> + Mul<Output = T> + Sub<Output = T> + Clone + Defa
 /// which is the case for all common number types, and Complex64 as well.
 /// Beware of NaN values or panicking if the determinant is 0.
 pub fn inv<T>(t: &Tensor<T>) -> Result<Tensor<T>, TensorErrors>
-where T: Add<Output=T> + Mul<Output=T> + Sub<Output=T> + Div<Output=T>  + Neg<Output = T> + Clone + Default + PartialEq + std::fmt::Debug
+where T: Add<Output=T> + Mul<Output=T> + Sub<Output=T> + Div<Output=T>  + Neg<Output = T> + Clone + Default + PartialEq
 {
     assert_eq!(t.rank(), 2, "Inversion is only defined for matrices");
     assert_eq!(t.shape[0], t.shape[1], "Inversion is only defined for square matrices");
@@ -732,4 +733,109 @@ pub fn identity(n: usize) -> Tensor<f64> {
     }
 
     t
+}
+
+/// Pools a `Tensor<T>` into a `Tensor<O>` using a custom pooling function.
+/// The custom function will take a `Tensor<T>` that corresponds to the slice that the kernel covers.
+/// If the kernel is hanging over the edge of the tensor, then only the bits of the tensor that fit are included.
+/// This is reflected in the shape of the input tensor.
+/// Default functions for `max` and `avg` are given as well.
+pub fn pool<T: Clone + Default, O: Clone + Default>(
+    t: &Tensor<T>,
+    pool_fn: impl Fn(Tensor<T>) -> O,
+    kernel_shape: &Shape,
+    stride_shape: &Shape,
+) -> Tensor<O> {
+    assert_eq!(kernel_shape.rank(), t.rank(), "Kernel shape rank and tensor shape rank are not the same");
+    assert_eq!(stride_shape.rank(), t.rank(), "Stride shape rank and tensor shape rank are not the same");
+
+    let res_shape = &Shape::new(
+        t
+            .shape()
+            .0
+            .iter()
+            .cloned()
+            .zip(stride_shape.0.iter().cloned())
+            .map(|(x, y)| x.div_ceil(y))
+            .collect::<Vec<usize>>(),
+    ).unwrap();
+
+    let mut result = Tensor::from_value(
+        res_shape,
+        O::default(),
+    );
+
+    for (pos, val) in result.enumerated_iter_mut() {
+        let start_pos = pos.iter().zip(stride_shape.0.iter()).map(|(x, y)| x * y).collect::<Vec<usize>>();
+        let end_pos = start_pos.iter().zip(kernel_shape.0.iter()).enumerate().map(|(i, (x, y))| {
+            let shape_val = t.shape[i];
+
+            if x + y < shape_val {
+                x + y - 1
+            } else {
+                shape_val - 1
+            }
+        }).collect::<Vec<usize>>();
+
+        let mut input = Tensor::<T>::from_shape(
+            &Shape::new(
+                end_pos
+                    .iter()
+                    .zip(start_pos.iter())
+                    .map(|(x, y)| x - y + 1)
+                    .collect::<Vec<usize>>(),
+            ).unwrap()
+        );
+
+        for (input_pos, input_val) in input.enumerated_iter_mut() {
+            let elem_pos = input_pos.iter().zip(start_pos.iter()).map(|(x, y)| x + y).collect::<Vec<usize>>();
+
+            *input_val = t[elem_pos.as_slice()].clone();
+        }
+
+        *val = pool_fn(input);
+    }
+
+    result
+}
+
+/// Default pooling function to sum the values
+pub fn pool_sum<T: Add<Output = T> + Clone>(t: Tensor<T>) -> T {
+    t.iter().cloned().reduce(T::add).unwrap()
+}
+
+/// Default pooling function to find the maximum value
+pub fn pool_max<T: PartialOrd + Clone>(t: Tensor<T>) -> T {
+    let mut max = t.first().unwrap().clone();
+
+    for i in t.iter() {
+        if *i > max {
+            max = i.clone();
+        }
+    }
+
+    max
+}
+
+/// Default pooling function to find the minimum value
+pub fn pool_min<T: PartialOrd + Clone>(t: Tensor<T>) -> T {
+    let mut min = t.first().unwrap().clone();
+
+    for i in t.iter() {
+        if *i < min {
+            min = i.clone();
+        }
+    }
+
+    min
+}
+
+/// Default pooling function to find the average
+/// Bear in mind the total number of elements is the total number of elements in the input,
+/// so if you want the total to stay the same even for overhanging input tensors then you will
+/// need to write your own version
+pub fn pool_avg<T: Add<Output = T> + Div<f64, Output = T> + Clone>(t: Tensor<T>) -> T {
+    let elems = t.shape().element_count().to_f64().unwrap();
+    let sum = pool_sum(t);
+    sum / elems
 }
