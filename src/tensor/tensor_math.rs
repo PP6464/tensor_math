@@ -830,10 +830,10 @@ pub fn pool_min<T: PartialOrd + Clone>(t: Tensor<T>) -> T {
     min
 }
 
-/// Default pooling function to find the average
+/// Default pooling function to find the average.
 /// Bear in mind the total number of elements is the total number of elements in the input,
-/// so if you want the total to stay the same even for overhanging input tensors then you will
-/// need to write your own version
+/// so if you want the total number of elements to stay the same even for overhanging
+///  input tensors then you will need to write your own version.
 pub fn pool_avg<T: Add<Output = T> + Div<f64, Output = T> + Clone>(t: Tensor<T>) -> T {
     let elems = t.shape().element_count().to_f64().unwrap();
     let sum = pool_sum(t);
