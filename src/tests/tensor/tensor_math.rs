@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod tensor_math_tests {
+    use num::complex::{Complex64, ComplexFloat};
     use crate::tensor::tensor::Shape;
     use crate::tensor::tensor::Tensor;
     use crate::tensor::tensor_math::{det, identity, inv, kronecker_product, pool, pool_avg, pool_max, pool_min, pool_sum, trace, Transpose};
@@ -468,5 +469,48 @@ mod tensor_math_tests {
         assert_eq!(sum_pool, sum_ans);
         assert_eq!(max_pool, max_ans);
         assert_eq!(min_pool, min_ans);
+    }
+
+    #[test]
+    fn normalised() {
+        let t1 = Tensor::<f64>::new(
+            &ts![3, 3, 3],
+            (0..27).map(|x| x as f64).collect::<Vec<f64>>(),
+        ).unwrap();
+
+        let t1_norm_l1 = t1.clone().norm_l1();
+        let t1_norm_l2 = t1.norm_l2();
+
+        let t1_norm_l1_ans = Tensor::<f64>::new(
+            &ts![3, 3, 3],
+            (0..27).map(|x| (x as f64) / 351.0).collect::<Vec<f64>>(),
+        ).unwrap();
+        let t1_norm_l2_ans = Tensor::<f64>::new(
+            &ts![3, 3, 3],
+            (0..27).map(|x| (x as f64) / 6201.0).collect::<Vec<f64>>(),
+        ).unwrap();
+        
+        assert_eq!(t1_norm_l1, t1_norm_l1_ans);
+        assert_eq!(t1_norm_l2, t1_norm_l2_ans);
+
+        let t2 = Tensor::<Complex64>::new(
+            &&ts![2, 3],
+            (0..6).map(|x| Complex64 { re: x as f64, im: x as f64 } ).collect(),
+        ).unwrap();
+        
+        let t2_norm_l1 = t2.clone().norm_l1();
+        let t2_norm_l2 = t2.norm_l2();
+        
+        let t2_norm_l1_ans = Tensor::<Complex64>::new(
+            &ts![2, 3],
+            (0..6).map(|x| Complex64 { re: (x as f64) / (15.0 * f64::sqrt(2.0)), im: (x as f64) / (15.0 * f64::sqrt(2.0)) } ).collect(),
+        ).unwrap();
+        let t2_norm_l2_ans = Tensor::<Complex64>::new(
+            &ts![2, 3],
+            (0..6).map(|x| Complex64 { re: (x as f64) / 110.0, im: (x as f64) / 110.0 } ).collect(),
+        ).unwrap();
+        
+        assert!((t2_norm_l1_ans - t2_norm_l1).transform_elementwise(Complex64::abs).sum() < 1e-6);
+        assert!((t2_norm_l2_ans - t2_norm_l2).transform_elementwise(Complex64::abs).sum() < 1e-6);
     }
 }

@@ -2,7 +2,7 @@ use crate::tensor::tensor::{tensor_index, TensorErrors};
 use crate::tensor::tensor::{dot_vectors, IndexProducts, Shape, Tensor};
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Rem, Sub};
 use num::complex::{Complex64, ComplexFloat};
-use num::ToPrimitive;
+use num::{ToPrimitive};
 use crate::tensor::tensor::TensorErrors::DeterminantZero;
 use crate::ts;
 
@@ -513,6 +513,18 @@ impl Tensor<f64> {
         let sum = new.sum();
         new / sum
     }
+
+    /// Normalises the tensor so the sum of magnitudes is 1
+    pub fn norm_l1(self) -> Tensor<f64> {
+        let mag = self.clone().transform_elementwise(|x| x.abs()).sum();
+        self / mag
+    }
+
+    /// Normalises the tensor so the sum of the squares of the magnitudes is 1
+    pub fn norm_l2(self) -> Tensor<f64> {
+        let mag = self.clone().transform_elementwise(|x| x * x).sum();
+        self / mag
+    }
 }
 
 // Define a bunch of convenience mathematical functions for Tensor<Complex64>
@@ -604,6 +616,18 @@ impl Tensor<Complex64> {
         let new = self.exp();
         let sum = new.sum();
         new / sum
+    }
+
+    /// Normalises the tensor so the sum of magnitudes is 1
+    pub fn norm_l1(self) -> Tensor<Complex64> {
+        let mag: Complex64 = self.clone().transform_elementwise(|x| x.abs()).sum().into();
+        self / mag
+    }
+
+    /// Normalises the tensor so the sum of the squares of the magnitudes is 1
+    pub fn norm_l2(self) -> Tensor<Complex64> {
+        let mag: Complex64 = self.clone().transform_elementwise(|x| (x * x).abs()).sum().into();
+        self / mag
     }
 }
 
