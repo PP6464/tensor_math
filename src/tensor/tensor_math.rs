@@ -1,3 +1,4 @@
+use std::f64::consts::PI;
 use crate::tensor::tensor::{tensor_index, TensorErrors};
 use crate::tensor::tensor::{dot_vectors, IndexProducts, Shape, Tensor};
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Rem, Sub};
@@ -695,7 +696,7 @@ pub fn det<T: Add<Output = T> + Mul<Output = T> + Sub<Output = T> + Clone + Defa
 /// Calculates the inverse for a matrix of values of type `T`.
 /// This assumes that `T::default()` returns a 0-value of type `T`,
 /// which is the case for all common number types, and Complex64 as well.
-/// Beware of NaN values or panicking if the determinant is 0.
+/// If the determinant is 0 you will receive `TensorErrors::DeterminantZero`
 pub fn inv<T>(t: &Tensor<T>) -> Result<Tensor<T>, TensorErrors>
 where T: Add<Output=T> + Mul<Output=T> + Sub<Output=T> + Div<Output=T>  + Neg<Output = T> + Clone + Default + PartialEq
 {
@@ -863,3 +864,81 @@ pub fn pool_avg<T: Add<Output = T> + Div<f64, Output = T> + Clone>(t: Tensor<T>)
     let sum = pool_sum(t);
     sum / elems
 }
+
+/// Creates a tensor of values of the Gaussian pdf with a specified standard deviation.
+/// The shape of the result is also specified by the user. The mean is the centre value,
+/// but when tensors have an even number of elements in a certain axis, then the centre
+/// is treated as being in between the two.
+pub fn gaussian_pdf_single_sigma(sigma: f64, shape: &Shape) -> Tensor<f64> {
+    assert!(sigma > 0.0, "Sigma must be positive");
+
+    let mut res = Tensor::<f64>::from_shape(shape);
+    let centre = shape.0.iter().map(|x| { (x - 1).to_f64().unwrap() / 2.0 }).collect::<Vec<f64>>();
+
+    for (pos, val) in res.enumerated_iter_mut() {
+        let exponent = centre.iter().zip(pos.iter()).map(|(x, y)| {
+            (x - y.to_f64().unwrap()).powi(2)
+        }).reduce(f64::add).unwrap() * -1.0 / (2.0 * sigma.powi(2));
+
+        *val = f64::exp(exponent) / (sigma * f64::sqrt(2.0 * PI)).powi(shape.rank() as i32)
+    }
+
+    res
+}
+
+/// Creates a tensor of values of the Gaussian pdf with a specified list
+/// of standard deviations, one for each axis of the tensor.
+/// The shape of the result is also specified by the user. The mean is the centre value,
+/// but when tensors have an even number of elements in a certain axis, then the centre
+/// is treated as being in between the two.
+pub fn gaussian_pdf_multi_sigma(sigma: Vec<f64>, shape: &Shape) -> Tensor<f64> {
+    assert_eq!(sigma.len(), shape.rank(), "Sigma vector must have the same length as the rank of the tensor");
+    assert!(sigma.iter().all(|x| x > &0.0), "Sigma must be positive");
+
+    let mut res = Tensor::<f64>::from_shape(shape);
+    let centre = shape.0.iter().map(|x| { (x - 1).to_f64().unwrap() / 2.0 }).collect::<Vec<f64>>();
+
+    for (pos, val) in res.enumerated_iter_mut() {
+        let mut exponent = 0.0;
+
+        for (i, s) in sigma.iter().enumerate() {
+            exponent -= (pos[i].to_f64().unwrap() - centre[i]).powi(2) / (2.0 * s * s)
+        }
+
+        let mut denominator = 1.0;
+
+        for s in sigma.iter() {
+            denominator *= s * f64::sqrt(2.0 * PI);
+        }
+
+        *val = f64::exp(exponent) / denominator;
+    }
+
+    res
+}
+
+// The following is WIP
+// /// Creates a tensor of values of the Gaussian pdf with a specified covariance matrix.
+// /// The shape of the result is also specified by the user. The mean is the centre value,
+// /// but when tensors have an even number of elements in a certain axis, then the centre
+// /// is treated as being in between the two.
+// pub fn gaussian_pdf_mat_sigma(sigma: Tensor<f64>, shape: &Shape) -> Tensor<f64> {
+//     assert_eq!(sigma.rank(), 2, "Sigma should be a matrix");
+//     assert_eq!(sigma.shape[0], sigma.shape[1], "Sigma should be a square matrix");
+//     assert!(sigma.iter().all(|x| x > &0.0), "All values in sigma must be positive");
+//
+//     let ord = sigma.shape[0];
+//
+//     assert_eq!(ord, shape.rank(), "Sigma matrix should have the same order as the rank of the result");
+//
+//     let mut res = Tensor::<f64>::from_shape(shape);
+//     let sigma_inv = inv(&sigma).unwrap();
+//
+//     let centre = shape.0.iter().map(|x| { (x - 1).to_f64().unwrap() / 2.0 }).collect::<Vec<f64>>();
+//
+//     for (pos, val) in res.enumerated_iter_mut() {
+//
+//     }
+//
+//     res
+// }

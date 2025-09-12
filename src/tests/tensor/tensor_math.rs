@@ -1,9 +1,10 @@
 #[cfg(test)]
 mod tensor_math_tests {
+    use std::f64::consts::PI;
     use num::complex::{Complex64, ComplexFloat};
-    use crate::tensor::tensor::Shape;
+    use crate::tensor::tensor::{Shape, TensorErrors};
     use crate::tensor::tensor::Tensor;
-    use crate::tensor::tensor_math::{det, identity, inv, kronecker_product, pool, pool_avg, pool_max, pool_min, pool_sum, trace, Transpose};
+    use crate::tensor::tensor_math::{det, gaussian_pdf_multi_sigma, gaussian_pdf_single_sigma, identity, inv, kronecker_product, pool, pool_avg, pool_max, pool_min, pool_sum, trace, Transpose};
     use crate::ts;
 
     #[test]
@@ -353,6 +354,26 @@ mod tensor_math_tests {
     }
 
     #[test]
+    #[should_panic]
+    fn invalid_det_matrix_only() {
+        let t1 = Tensor::<i32>::new(
+            &ts![3, 3, 3],
+            (0..27).collect()
+        ).unwrap();
+        det(&t1);
+    }
+
+    #[test]
+    #[should_panic]
+    fn invalid_det_square_matrix_only() {
+        let t1 = Tensor::<i32>::new(
+            &ts![3, 2],
+            (0..6).collect()
+        ).unwrap();
+        det(&t1);
+    }
+
+    #[test]
     fn inverse() {
         let t1 = Tensor::<f64>::new(
             &ts![3, 3],
@@ -374,6 +395,35 @@ mod tensor_math_tests {
 
         assert_eq!(inverse, ans);
         assert!((t1.contract_mul(&inverse).unwrap() - identity(3)).sum() < 1e-6);
+    }
+
+    #[test]
+    fn inverse_det_0() {
+        let t1 = Tensor::<f64>::new(
+            &ts![3, 3],
+            vec![0.0; 9],
+        ).unwrap();
+        inv(&t1).expect_err(format!("{:?}", TensorErrors::DeterminantZero).as_str());
+    }
+
+    #[test]
+    #[should_panic]
+    fn invalid_inversion_matrix_only() {
+        let t1 = Tensor::<i32>::new(
+            &ts![3, 3, 3],
+            (0..27).collect()
+        ).unwrap();
+        inv(&t1).expect("TODO: panic message");
+    }
+
+    #[test]
+    #[should_panic]
+    fn invalid_inversion_square_matrix_only() {
+        let t1 = Tensor::<i32>::new(
+            &ts![3, 2],
+            (0..6).collect()
+        ).unwrap();
+        inv(&t1).expect("TODO: panic message");
     }
 
     #[test]
@@ -512,5 +562,55 @@ mod tensor_math_tests {
         
         assert!((t2_norm_l1_ans - t2_norm_l1).transform_elementwise(Complex64::abs).sum() < 1e-6);
         assert!((t2_norm_l2_ans - t2_norm_l2).transform_elementwise(Complex64::abs).sum() < 1e-6);
+    }
+
+    #[test]
+    fn single_sigma_gaussian_pdf() {
+        let t1 = gaussian_pdf_single_sigma(0.5, &ts![5, 3]);
+        let ans = (Tensor::<f64>::new(
+            &ts![5, 3],
+            vec![
+                5.0, 4.0, 5.0,
+                2.0, 1.0, 2.0,
+                1.0, 0.0, 1.0,
+                2.0, 1.0, 2.0,
+                5.0, 4.0, 5.0
+            ],
+        ).unwrap() * -2.0).exp() * 2.0 / PI;
+        assert!((t1 - ans).transform_elementwise(f64::abs).sum() < 1e-6);
+    }
+
+    #[test]
+    fn multi_sigma_gaussian_pdf() {
+        let t1 = gaussian_pdf_multi_sigma(vec![0.25, 0.4], &ts![5, 3]);
+        let ans = (Tensor::<f64>::new(
+            &ts![5, 3],
+            vec![
+                35.125, 32.0, 35.125,
+                11.125, 8.0, 11.125,
+                3.125, 0.0, 3.125,
+                11.125, 8.0, 11.125,
+                35.125, 32.0, 35.125,
+            ],
+        ).unwrap() * -1.0).exp() * 5.0 / PI;
+        assert!((t1 - ans).transform_elementwise(f64::abs).sum() < 1e-6);
+    }
+
+    #[test]
+    #[should_panic]
+    fn invalid_multi_sigma_gaussian_pdf_zero_sigma() {
+        gaussian_pdf_multi_sigma(vec![0.0, 0.5], &ts![1, 1]);
+    }
+
+    #[test]
+    #[should_panic]
+    fn invalid_multi_sigma_gaussian_pdf_negative_sigma() {
+        gaussian_pdf_multi_sigma(vec![0.5, -0.5], &ts![1, 1]);
+    }
+
+    #[test]
+    #[should_panic]
+    fn invalid_multi_sigma_gaussian_pdf_sigma_len_invalid() {
+        gaussian_pdf_multi_sigma(vec![0.1, 0.5], &ts![1, 1, 3]);
     }
 }
