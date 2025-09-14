@@ -170,4 +170,45 @@ mod tensor_util_tests {
         ).unwrap();
         assert!((ans - transformed).into_iter().map(f64::abs).sum::<f64>() < 1e-6);
     }
+
+    #[test]
+    fn slicing() {
+        let t1 = Tensor::<i32>::new(
+            &ts![3, 3, 3],
+            (0..27).collect(),
+        ).unwrap();
+
+        let sliced = t1.slice(&[
+            0..3,
+            1..2,
+            1..3,
+        ]);
+        let ans = Tensor::<i32>::new(
+            &ts![3, 1, 2],
+            vec![
+                4, 5,
+                13, 14,
+                22, 23
+            ],
+        ).unwrap();
+
+        assert_eq!(sliced, ans);
+    }
+
+    #[test]
+    #[should_panic]
+    fn invalid_slice_out_of_bounds() {
+        let t1 = Tensor::<i32>::from_shape(&ts![2, 3]);
+        t1.slice(&[
+            1..5,
+            0..3,
+        ]);
+    }
+
+    #[test]
+    #[should_panic]
+    fn invalid_slice_incorrect_rank() {
+        let t1 = Tensor::<i32>::from_shape(&ts![2, 3]);
+        t1.slice(&[]);
+    }
 }

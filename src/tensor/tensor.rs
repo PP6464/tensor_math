@@ -1,6 +1,6 @@
 use rand::distr::{Distribution, StandardUniform};
 use rand::{Fill, Rng};
-use std::ops::{Add, Deref, DerefMut, Index, IndexMut, Mul};
+use std::ops::{Add, Deref, DerefMut, Index, IndexMut, Mul, Range};
 use std::slice::Iter;
 use std::vec::IntoIter;
 use thiserror::Error;
@@ -313,6 +313,30 @@ impl<T: Clone> Tensor<T> {
             .enumerate()
             .map(|(index, element)| (tensor_index(index, &self.shape), element))
     }
+
+    /// Gives a cloned immutable slice to a region in the tensor specified
+    /// by a vector of range of indices for each dimension of the tensor
+    pub fn slice(&self, indices: &[Range<usize>]) -> Tensor<T> {
+        assert_eq!(indices.len(), self.rank(), "Slice must have the same number of ranges as the rank of the tensor");
+        for (i, range) in indices.iter().enumerate() {
+            assert!(range.end <= self.shape[i], "Index range for dimension {i} out of bounds: maximum = {}, range = {}..{}", self.shape[i] - 1, range.start, range.end);
+        }
+
+        let start = indices.iter().map(|range| range.start).collect::<Vec<usize>>();
+
+        let res_shape = Shape::new(indices.iter().map(|r| { r.end - r.start }).collect()).unwrap();
+        let mut res = Tensor::<T>::from_value(&res_shape, self.first().unwrap().clone());
+
+        for (pos, val) in res.enumerated_iter_mut() {
+            let orig_index = pos.iter().zip(start.iter()).map(|(x, y)| x + y).collect::<Vec<usize>>();
+
+            *val = self[&orig_index.as_slice()].clone();
+        }
+
+        res
+    }
+
+
 }
 impl<T: Default + Clone> Tensor<T> {
     pub fn from_shape(shape: &Shape) -> Tensor<T> {
