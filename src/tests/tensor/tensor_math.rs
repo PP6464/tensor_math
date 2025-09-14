@@ -4,7 +4,7 @@ mod tensor_math_tests {
     use num::complex::{Complex64, ComplexFloat};
     use crate::tensor::tensor::{Shape, TensorErrors};
     use crate::tensor::tensor::Tensor;
-    use crate::tensor::tensor_math::{det, gaussian_pdf_multi_sigma, gaussian_pdf_single_sigma, identity, inv, kronecker_product, pool, pool_avg, pool_max, pool_min, pool_sum, trace, Transpose};
+    use crate::tensor::tensor_math::{det, gaussian_pdf_multi_sigma, gaussian_pdf_single_sigma, gaussian_sample, identity, inv, kronecker_product, pool, pool_avg, pool_max, pool_min, pool_sum, trace, Transpose};
     use crate::ts;
 
     #[test]
@@ -562,6 +562,34 @@ mod tensor_math_tests {
         
         assert!((t2_norm_l1_ans - t2_norm_l1).transform_elementwise(Complex64::abs).sum() < 1e-6);
         assert!((t2_norm_l2_ans - t2_norm_l2).transform_elementwise(Complex64::abs).sum() < 1e-6);
+    }
+
+    #[test]
+    fn rand_gaussian_sample() {
+        let t1 = gaussian_sample(1.0, &ts![3, 3, 3], -10.0, 10.0);
+
+        assert!(t1.iter().all(|x| -10.0 <= *x));
+        assert!(t1.iter().all(|x| 10.0 >= *x));
+
+        println!("{:?}", t1);
+    }
+
+    #[test]
+    #[should_panic]
+    fn rand_gaussian_sample_invalid_min_more_than_max() {
+        gaussian_sample(1.0, &ts![3, 3, 3], 10.0, -10.0);
+    }
+
+    #[test]
+    #[should_panic]
+    fn rand_gaussian_sample_invalid_min_eq_max() {
+        gaussian_sample(1.0, &ts![3, 3, 3], 10.0, 10.0);
+    }
+
+    #[test]
+    #[should_panic]
+    fn rand_gaussian_sample_invalid_neg_sigma() {
+        gaussian_sample(-1.0, &ts![3, 3, 3], -100.0, -10.0);
     }
 
     #[test]

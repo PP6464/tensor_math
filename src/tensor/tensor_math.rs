@@ -1,11 +1,13 @@
-use std::f64::consts::PI;
-use crate::tensor::tensor::{tensor_index, TensorErrors};
-use crate::tensor::tensor::{dot_vectors, IndexProducts, Shape, Tensor};
-use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Rem, Sub};
-use num::complex::{Complex64, ComplexFloat};
-use num::{ToPrimitive};
 use crate::tensor::tensor::TensorErrors::DeterminantZero;
+use crate::tensor::tensor::{dot_vectors, IndexProducts, Shape, Tensor};
+use crate::tensor::tensor::{tensor_index, TensorErrors};
 use crate::ts;
+use num::complex::{Complex64, ComplexFloat};
+use num::ToPrimitive;
+use rand::distr::weighted::WeightedIndex;
+use std::f64::consts::PI;
+use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Rem, Sub};
+use rand::distr::Distribution;
 
 /// Implement an operation elementwise
 /// Also allows you to implement operations with a `Tensor` and a single value
@@ -292,7 +294,7 @@ impl<T: Clone> Tensor<T> {
         Ok(())
     }
 }
-impl<T: Add<Output=T> + Clone> Tensor<T> {
+impl<T: Add<Output = T> + Clone> Tensor<T> {
     /// Compute the sum of the tensor
     pub fn sum(&self) -> T {
         self.iter().cloned().reduce(T::add).unwrap()
@@ -303,10 +305,25 @@ impl<T: PartialOrd + Clone> Tensor<T> {
     /// consuming the original and returning the result
     pub fn clip(self, min: T, max: T) -> Tensor<T> {
         let shape = self.shape();
-        Tensor::new(shape, self.iter().cloned().map(|x| if x < min { min.clone() } else if x > max { max.clone() } else { x }).collect()).unwrap()
+        Tensor::new(
+            shape,
+            self.iter()
+                .cloned()
+                .map(|x| {
+                    if x < min {
+                        min.clone()
+                    } else if x > max {
+                        max.clone()
+                    } else {
+                        x
+                    }
+                })
+                .collect(),
+        )
+        .unwrap()
     }
 }
-impl<T: Clone + Add<Output=T> + Mul<Output=T>> Tensor<T> {
+impl<T: Clone + Add<Output = T> + Mul<Output = T>> Tensor<T> {
     /// Perform tensor-contraction multiplication, which is a more general form of matrix multiplication
     /// A `Tensor` of shape (a,b,c) multiplied in this way by a `Tensor` of shape (c, d, e, f)
     /// will produce a resultant `Tensor` of shape (a, b, d, e, f) by the following formula:
@@ -325,17 +342,16 @@ impl<T: Clone + Add<Output=T> + Mul<Output=T>> Tensor<T> {
             .cloned()
             .collect::<Vec<usize>>();
 
-        resultant_shape_vec
-            .extend(
-                other
-                    .shape
-                    .0
-                    .iter()
-                    .rev()
-                    .take(other.rank() - 1)
-                    .rev()
-                    .cloned(),
-            );
+        resultant_shape_vec.extend(
+            other
+                .shape
+                .0
+                .iter()
+                .rev()
+                .take(other.rank() - 1)
+                .rev()
+                .cloned(),
+        );
         let resultant_shape = Shape::new(resultant_shape_vec).unwrap();
         let mut resultant_elements = Vec::with_capacity(resultant_shape.element_count());
 
@@ -372,7 +388,7 @@ impl<T: Clone + Add<Output=T> + Mul<Output=T>> Tensor<T> {
 /// tensors' shapes (if one has a lower rank than the other, then the rest of the larger rank
 /// tensor's shape values are inserted afterward).
 /// Borrows both immutably and returns the result.
-pub fn kronecker_product<T: Clone + Mul<Output=T>>(t1: &Tensor<T>, t2: &Tensor<T>) -> Tensor<T> {
+pub fn kronecker_product<T: Clone + Mul<Output = T>>(t1: &Tensor<T>, t2: &Tensor<T>) -> Tensor<T> {
     let mut new_shape_vec = Vec::new();
 
     if t1.rank() > t2.rank() {
@@ -627,7 +643,11 @@ impl Tensor<Complex64> {
 
     /// Normalises the tensor so the sum of the squares of the magnitudes is 1
     pub fn norm_l2(self) -> Tensor<Complex64> {
-        let mag: Complex64 = self.clone().transform_elementwise(|x| (x * x).abs()).sum().into();
+        let mag: Complex64 = self
+            .clone()
+            .transform_elementwise(|x| (x * x).abs())
+            .sum()
+            .into();
         self / mag
     }
 }
@@ -635,8 +655,15 @@ impl Tensor<Complex64> {
 // Matrix specific functions
 /// Computes the trace of a matrix
 pub fn trace<T: Add<Output = T> + Clone>(t: &Tensor<T>) -> T {
-    assert_eq!(t.rank(), 2, "This implementation of trace is only for matrices");
-    assert_eq!(t.shape.0[0], t.shape.0[1], "Trace is only defined for square matrices");
+    assert_eq!(
+        t.rank(),
+        2,
+        "This implementation of trace is only for matrices"
+    );
+    assert_eq!(
+        t.shape.0[0], t.shape.0[1],
+        "Trace is only defined for square matrices"
+    );
 
     let mut sum = t.elements.first().unwrap().clone();
 
@@ -650,9 +677,14 @@ pub fn trace<T: Add<Output = T> + Clone>(t: &Tensor<T>) -> T {
 /// Calculates the determinant for a matrix of values of type `T`.
 /// This assumes that `T::default()` returns a 0-value of type `T`,
 /// which is the case for all common number types, and Complex64 as well.
-pub fn det<T: Add<Output = T> + Mul<Output = T> + Sub<Output = T> + Clone + Default>(t: &Tensor<T>) -> T {
+pub fn det<T: Add<Output = T> + Mul<Output = T> + Sub<Output = T> + Clone + Default>(
+    t: &Tensor<T>,
+) -> T {
     assert_eq!(t.rank(), 2, "Determinant is only for matrices");
-    assert_eq!(t.shape[0], t.shape[1], "Determinant is only defined for square matrices");
+    assert_eq!(
+        t.shape[0], t.shape[1],
+        "Determinant is only defined for square matrices"
+    );
 
     let ord = t.shape[0];
 
@@ -675,7 +707,10 @@ pub fn det<T: Add<Output = T> + Mul<Output = T> + Sub<Output = T> + Clone + Defa
 
         // j is for which column we are on
         for j in 0..ord {
-            if j == i { skipped = true; continue; }
+            if j == i {
+                skipped = true;
+                continue;
+            }
 
             // k is for which row we are on
             for k in 1..ord {
@@ -698,10 +733,21 @@ pub fn det<T: Add<Output = T> + Mul<Output = T> + Sub<Output = T> + Clone + Defa
 /// which is the case for all common number types, and Complex64 as well.
 /// If the determinant is 0 you will receive `TensorErrors::DeterminantZero`
 pub fn inv<T>(t: &Tensor<T>) -> Result<Tensor<T>, TensorErrors>
-where T: Add<Output=T> + Mul<Output=T> + Sub<Output=T> + Div<Output=T>  + Neg<Output = T> + Clone + Default + PartialEq
+where
+    T: Add<Output = T>
+        + Mul<Output = T>
+        + Sub<Output = T>
+        + Div<Output = T>
+        + Neg<Output = T>
+        + Clone
+        + Default
+        + PartialEq,
 {
     assert_eq!(t.rank(), 2, "Inversion is only defined for matrices");
-    assert_eq!(t.shape[0], t.shape[1], "Inversion is only defined for square matrices");
+    assert_eq!(
+        t.shape[0], t.shape[1],
+        "Inversion is only defined for square matrices"
+    );
 
     let ord = t.shape[0];
     let mut res = Tensor::<T>::from_shape(t.shape());
@@ -717,7 +763,6 @@ where T: Add<Output=T> + Mul<Output=T> + Sub<Output=T> + Div<Output=T>  + Neg<Ou
 
     // i is for which row we are on
     for i in 0..ord {
-
         // j is for which column we are on
         for j in 0..ord {
             let is_minus = (i + j) % 2 != 0;
@@ -725,24 +770,32 @@ where T: Add<Output=T> + Mul<Output=T> + Sub<Output=T> + Div<Output=T>  + Neg<Ou
 
             // k is for which row we are on when filling the rest_of tensor
             for k in 0..ord {
-                if i == k { skipped_row = true; continue; }
+                if i == k {
+                    skipped_row = true;
+                    continue;
+                }
 
                 let mut skipped_col = false;
 
                 // l is for which column we are on when filling the rest_of tensor
                 for l in 0..ord {
-                    if j == l { skipped_col = true; continue; }
+                    if j == l {
+                        skipped_col = true;
+                        continue;
+                    }
 
-                    rest_of_tensor[
-                        &[
-                            if skipped_row { k - 1 } else { k },
-                            if skipped_col { l - 1 } else { l },
-                        ]
-                    ] = t[&[k, l]].clone();
+                    rest_of_tensor[&[
+                        if skipped_row { k - 1 } else { k },
+                        if skipped_col { l - 1 } else { l },
+                    ]] = t[&[k, l]].clone();
                 }
             }
 
-            res[&[j, i]] = if is_minus { -det(&rest_of_tensor) } else { det(&rest_of_tensor) };
+            res[&[j, i]] = if is_minus {
+                -det(&rest_of_tensor)
+            } else {
+                det(&rest_of_tensor)
+            };
         }
     }
 
@@ -771,36 +824,50 @@ pub fn pool<T: Clone + Default, O: Clone + Default>(
     kernel_shape: &Shape,
     stride_shape: &Shape,
 ) -> Tensor<O> {
-    assert_eq!(kernel_shape.rank(), t.rank(), "Kernel shape rank and tensor shape rank are not the same");
-    assert_eq!(stride_shape.rank(), t.rank(), "Stride shape rank and tensor shape rank are not the same");
+    assert_eq!(
+        kernel_shape.rank(),
+        t.rank(),
+        "Kernel shape rank and tensor shape rank are not the same"
+    );
+    assert_eq!(
+        stride_shape.rank(),
+        t.rank(),
+        "Stride shape rank and tensor shape rank are not the same"
+    );
 
     let res_shape = &Shape::new(
-        t
-            .shape()
+        t.shape()
             .0
             .iter()
             .cloned()
             .zip(stride_shape.0.iter().cloned())
             .map(|(x, y)| x.div_ceil(y))
             .collect::<Vec<usize>>(),
-    ).unwrap();
+    )
+    .unwrap();
 
-    let mut result = Tensor::from_value(
-        res_shape,
-        O::default(),
-    );
+    let mut result = Tensor::from_value(res_shape, O::default());
 
     for (pos, val) in result.enumerated_iter_mut() {
-        let start_pos = pos.iter().zip(stride_shape.0.iter()).map(|(x, y)| x * y).collect::<Vec<usize>>();
-        let end_pos = start_pos.iter().zip(kernel_shape.0.iter()).enumerate().map(|(i, (x, y))| {
-            let shape_val = t.shape[i];
+        let start_pos = pos
+            .iter()
+            .zip(stride_shape.0.iter())
+            .map(|(x, y)| x * y)
+            .collect::<Vec<usize>>();
+        let end_pos = start_pos
+            .iter()
+            .zip(kernel_shape.0.iter())
+            .enumerate()
+            .map(|(i, (x, y))| {
+                let shape_val = t.shape[i];
 
-            if x + y < shape_val {
-                x + y - 1
-            } else {
-                shape_val - 1
-            }
-        }).collect::<Vec<usize>>();
+                if x + y < shape_val {
+                    x + y - 1
+                } else {
+                    shape_val - 1
+                }
+            })
+            .collect::<Vec<usize>>();
 
         let mut input = Tensor::<T>::from_shape(
             &Shape::new(
@@ -809,11 +876,16 @@ pub fn pool<T: Clone + Default, O: Clone + Default>(
                     .zip(start_pos.iter())
                     .map(|(x, y)| x - y + 1)
                     .collect::<Vec<usize>>(),
-            ).unwrap()
+            )
+            .unwrap(),
         );
 
         for (input_pos, input_val) in input.enumerated_iter_mut() {
-            let elem_pos = input_pos.iter().zip(start_pos.iter()).map(|(x, y)| x + y).collect::<Vec<usize>>();
+            let elem_pos = input_pos
+                .iter()
+                .zip(start_pos.iter())
+                .map(|(x, y)| x + y)
+                .collect::<Vec<usize>>();
 
             *input_val = t[elem_pos.as_slice()].clone();
         }
@@ -873,12 +945,21 @@ pub fn gaussian_pdf_single_sigma(sigma: f64, shape: &Shape) -> Tensor<f64> {
     assert!(sigma > 0.0, "Sigma must be positive");
 
     let mut res = Tensor::<f64>::from_shape(shape);
-    let centre = shape.0.iter().map(|x| { (x - 1).to_f64().unwrap() / 2.0 }).collect::<Vec<f64>>();
+    let centre = shape
+        .0
+        .iter()
+        .map(|x| (x - 1).to_f64().unwrap() / 2.0)
+        .collect::<Vec<f64>>();
 
     for (pos, val) in res.enumerated_iter_mut() {
-        let exponent = centre.iter().zip(pos.iter()).map(|(x, y)| {
-            (x - y.to_f64().unwrap()).powi(2)
-        }).reduce(f64::add).unwrap() * -1.0 / (2.0 * sigma.powi(2));
+        let exponent = centre
+            .iter()
+            .zip(pos.iter())
+            .map(|(x, y)| (x - y.to_f64().unwrap()).powi(2))
+            .reduce(f64::add)
+            .unwrap()
+            * -1.0
+            / (2.0 * sigma.powi(2));
 
         *val = f64::exp(exponent) / (sigma * f64::sqrt(2.0 * PI)).powi(shape.rank() as i32)
     }
@@ -892,11 +973,19 @@ pub fn gaussian_pdf_single_sigma(sigma: f64, shape: &Shape) -> Tensor<f64> {
 /// but when tensors have an even number of elements in a certain axis, then the centre
 /// is treated as being in between the two.
 pub fn gaussian_pdf_multi_sigma(sigma: Vec<f64>, shape: &Shape) -> Tensor<f64> {
-    assert_eq!(sigma.len(), shape.rank(), "Sigma vector must have the same length as the rank of the tensor");
+    assert_eq!(
+        sigma.len(),
+        shape.rank(),
+        "Sigma vector must have the same length as the rank of the tensor"
+    );
     assert!(sigma.iter().all(|x| x > &0.0), "Sigma must be positive");
 
     let mut res = Tensor::<f64>::from_shape(shape);
-    let centre = shape.0.iter().map(|x| { (x - 1).to_f64().unwrap() / 2.0 }).collect::<Vec<f64>>();
+    let centre = shape
+        .0
+        .iter()
+        .map(|x| (x - 1).to_f64().unwrap() / 2.0)
+        .collect::<Vec<f64>>();
 
     for (pos, val) in res.enumerated_iter_mut() {
         let mut exponent = 0.0;
@@ -912,6 +1001,32 @@ pub fn gaussian_pdf_multi_sigma(sigma: Vec<f64>, shape: &Shape) -> Tensor<f64> {
         }
 
         *val = f64::exp(exponent) / denominator;
+    }
+
+    res
+}
+
+/// Creates a tensor of values with the specified shape where the values are sampled from a
+/// Gaussian distribution. The min and max values allow you to specify the range of the outputs.
+/// The possible outputs will be 1001 different outputs spaced evenly across the interval [min, max\].
+pub fn gaussian_sample(sigma: f64, shape: &Shape, min: f64, max: f64) -> Tensor<f64> {
+    assert!(max > min, "Maximum must be greater than minimum");
+    assert!(sigma > 0.0, "Sigma must be positive");
+
+    let step_size = (max - min) / 1e3;
+
+    let mut res = Tensor::<f64>::from_shape(shape);
+    let dist = WeightedIndex::new(
+        (0..=1000)
+            .map(|x| f64::exp(-((x.to_f64().unwrap() - 500.0).powi(2)) / (2.0 * sigma.powi(2))))
+            .collect::<Vec<f64>>(),
+    )
+    .unwrap();
+    let mut rng = rand::rng();
+
+    for val in res.iter_mut() {
+        let index = dist.sample(&mut rng).to_f64().unwrap();
+        *val = min + index * step_size;
     }
 
     res
