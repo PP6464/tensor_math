@@ -1,6 +1,6 @@
 use rand::distr::{Distribution, StandardUniform};
 use rand::{Fill, Rng};
-use std::ops::{Add, Deref, Index, IndexMut, Mul};
+use std::ops::{Add, Deref, DerefMut, Index, IndexMut, Mul};
 use std::slice::Iter;
 use std::vec::IntoIter;
 use thiserror::Error;
@@ -405,6 +405,9 @@ impl<T> Deref for Tensor<T> {
     fn deref(&self) -> &Self::Target {
         self.elements.as_slice()
     }
+}
+impl<T> DerefMut for Tensor<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target { self.elements.as_mut_slice() }
 }
 impl<T: Default + Clone> Default for Tensor<T> {
     fn default() -> Self {
