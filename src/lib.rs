@@ -1,4 +1,2 @@
-mod tests;
-mod tensor;
-
-
+pub mod tests;
+pub mod tensor;

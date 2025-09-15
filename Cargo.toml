@@ -7,3 +7,8 @@ edition = "2021"
 thiserror = "2.0.16"
 rand = "0.9.2"
 num = "0.4.3"
+criterion = "0.7.0"
+
+[[bench]]
+name = "tensor_benches"
+harness = false
