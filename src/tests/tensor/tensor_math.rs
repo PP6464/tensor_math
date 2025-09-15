@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tensor_math_tests {
     use std::f64::consts::PI;
+    use float_cmp::{approx_eq, assert_approx_eq};
     use num::complex::{Complex64, ComplexFloat};
     use crate::tensor::tensor::{Shape, TensorErrors};
     use crate::tensor::tensor::Tensor;
@@ -394,7 +395,9 @@ mod tensor_math_tests {
         ).unwrap();
 
         assert_eq!(inverse, ans);
-        assert!((t1.contract_mul(&inverse).unwrap() - identity(3)).sum() < 1e-6);
+        assert!(t1.contract_mul(&inverse).unwrap().enumerated_iter().all(|(i, x)| {
+            approx_eq!(f64, x, identity(3)[&i], epsilon = 1e-15)
+        }));
     }
 
     #[test]
@@ -560,8 +563,8 @@ mod tensor_math_tests {
             (0..6).map(|x| Complex64 { re: (x as f64) / 110.0, im: (x as f64) / 110.0 } ).collect(),
         ).unwrap();
         
-        assert!((t2_norm_l1_ans - t2_norm_l1).transform_elementwise(Complex64::abs).sum() < 1e-6);
-        assert!((t2_norm_l2_ans - t2_norm_l2).transform_elementwise(Complex64::abs).sum() < 1e-6);
+        assert_approx_eq!(f64, (t2_norm_l1_ans - t2_norm_l1).transform_elementwise(Complex64::abs).sum(), 0.0, epsilon = 1e-15);
+        assert_approx_eq!(f64, (t2_norm_l2_ans - t2_norm_l2).transform_elementwise(Complex64::abs).sum(), 0.0, epsilon = 1e-15);
     }
 
     #[test]
@@ -605,7 +608,7 @@ mod tensor_math_tests {
                 5.0, 4.0, 5.0
             ],
         ).unwrap() * -2.0).exp() * 2.0 / PI;
-        assert!((t1 - ans).transform_elementwise(f64::abs).sum() < 1e-6);
+        assert_approx_eq!(f64, (t1 - ans).transform_elementwise(f64::abs).sum(), 0.0, epsilon = 1e-15);
     }
 
     #[test]
@@ -621,7 +624,7 @@ mod tensor_math_tests {
                 35.125, 32.0, 35.125,
             ],
         ).unwrap() * -1.0).exp() * 5.0 / PI;
-        assert!((t1 - ans).transform_elementwise(f64::abs).sum() < 1e-6);
+        assert_approx_eq!(f64, (t1 - ans).transform_elementwise(f64::abs).sum(), 0.0, epsilon = 1e-15);
     }
 
     #[test]
