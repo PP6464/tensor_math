@@ -1,3 +1,4 @@
+use std::hint::black_box;
 use criterion::{criterion_group, criterion_main, Criterion};
 use tensor_math::tensor::tensor::{Tensor, Shape};
 use tensor_math::ts;
@@ -8,7 +9,7 @@ pub fn bench_concat(c: &mut Criterion) {
 
     c.bench_function("concat", |b| {
         b.iter(|| {
-            t1.concat(&t2, 1).unwrap();
+            t1.concat(black_box(&t2), black_box(1)).unwrap();
         })
     });
 }
