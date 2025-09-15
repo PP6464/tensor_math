@@ -47,9 +47,9 @@ pub(crate) fn dot_vectors<T: Add<Output = T> + Mul<Output = T> + Clone>(
 pub fn tensor_index(address: usize, shape: &Shape) -> Vec<usize> {
     let mut index_vec = Vec::with_capacity(shape.rank());
     let mut remainder = address;
-    let index_products = IndexProducts::from_shape(shape);
+    let strides = Strides::from_shape(shape);
 
-    for j in index_products.0.iter() {
+    for j in strides.0.iter() {
         let floored_div = remainder / j;
         index_vec.push(floored_div);
         remainder = remainder % j;
@@ -113,35 +113,30 @@ macro_rules! ts {
     };
 }
 
-/// Indexing products are effectively cache to help index faster
-/// For example, if I want the value at (1, 0, 3) for a tensor of shape (5, 2, 4)
-/// Then the index in elements would be: 1 * (2 * 4) + 0 * (4) + 3
-/// So you could make an index_products vector, which would be:
-/// index_products = [2*4,4,1\]; (just put a 1 at the end)
-/// so that all you have to do is:
-/// addr = dot_vectors(index_vector, index_products)
+/// Cache the strides required to index the tensor.
+/// addr = dot_vectors(index_vector, strides)
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub(crate) struct IndexProducts(pub(crate) Vec<usize>);
-impl IndexProducts {
-    pub(crate) fn from_shape(shape: &Shape) -> IndexProducts {
-        let mut index_products: Vec<usize> = vec![1; shape.rank()];
+pub(crate) struct Strides(pub(crate) Vec<usize>);
+impl Strides {
+    pub(crate) fn from_shape(shape: &Shape) -> Strides {
+        let mut strides: Vec<usize> = vec![1; shape.rank()];
 
         for i in 1..shape.rank() {
             let current_index = shape.rank() - 1 - i;
-            index_products[current_index] =
-                shape[current_index + 1] * index_products[current_index + 1];
+            strides[current_index] =
+                shape[current_index + 1] * strides[current_index + 1];
         }
 
-        IndexProducts(index_products)
+        Strides(strides)
     }
 }
-impl Index<usize> for IndexProducts {
+impl Index<usize> for Strides {
     type Output = usize;
     fn index(&self, index: usize) -> &Self::Output {
         &self.0[index]
     }
 }
-impl Into<Vec<usize>> for IndexProducts {
+impl Into<Vec<usize>> for Strides {
     fn into(self) -> Vec<usize> {
         self.0
     }
@@ -150,7 +145,7 @@ impl Into<Vec<usize>> for IndexProducts {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Tensor<T> {
     pub(crate) shape: Shape,
-    pub(crate) index_products: IndexProducts,
+    pub(crate) strides: Strides,
     pub(crate) elements: Vec<T>,
 }
 impl<T> Tensor<T> {
@@ -159,11 +154,11 @@ impl<T> Tensor<T> {
             return Err(TensorErrors::ShapeSizeDoesNotMatch);
         }
 
-        let index_products = IndexProducts::from_shape(shape);
+        let strides = Strides::from_shape(shape);
 
         Ok(Tensor {
             shape: shape.clone(),
-            index_products,
+            strides,
             elements,
         })
     }
@@ -196,7 +191,7 @@ impl<T> Tensor<T> {
         }
 
         self.shape = new_shape.clone();
-        self.index_products = IndexProducts::from_shape(new_shape);
+        self.strides = Strides::from_shape(new_shape);
         Ok(())
     }
 
@@ -232,7 +227,7 @@ impl<T> Tensor<T> {
         }
 
         self.shape.0.remove(dim);
-        self.index_products = IndexProducts::from_shape(&self.shape);
+        self.strides = Strides::from_shape(&self.shape);
         Ok(())
     }
 
@@ -280,8 +275,8 @@ impl<T: Clone> Tensor<T> {
             return Ok(Tensor::new(&resultant_shape, resultant_elements)?);
         }
 
-        let mut self_chunks = self.elements.chunks(self.index_products[dim - 1]);
-        let mut other_chunks = other.elements.chunks(other.index_products[dim - 1]);
+        let mut self_chunks = self.elements.chunks(self.strides[dim - 1]);
+        let mut other_chunks = other.elements.chunks(other.strides[dim - 1]);
 
         // Merge together chunks from self and other in the correct manner to get
         // the result for concatenating self and other (in that order)
@@ -344,7 +339,7 @@ impl<T: Default + Clone> Tensor<T> {
         Tensor {
             elements,
             shape: shape.clone(),
-            index_products: IndexProducts::from_shape(shape),
+            strides: Strides::from_shape(shape),
         }
     }
 }
@@ -378,7 +373,7 @@ impl<T> Index<&[usize]> for Tensor<T> {
             }
         }
 
-        let addr = dot_vectors(&self.index_products.clone().into(), &index.to_vec());
+        let addr = dot_vectors(&self.strides.clone().into(), &index.to_vec());
         &self.elements[addr]
     }
 }
@@ -398,7 +393,7 @@ impl<T> IndexMut<&[usize]> for Tensor<T> {
             }
         }
 
-        let addr = dot_vectors(&self.index_products.clone().into(), &index.to_vec());
+        let addr = dot_vectors(&self.strides.clone().into(), &index.to_vec());
         &mut self.elements[addr]
     }
 }

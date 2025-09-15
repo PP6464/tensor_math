@@ -1,13 +1,13 @@
 #[cfg(test)]
 mod tensor_util_tests {
     use std::f64::consts::PI;
-    use crate::tensor::tensor::{IndexProducts, Shape, Tensor, TensorErrors};
+    use crate::tensor::tensor::{Strides, Shape, Tensor, TensorErrors};
     use crate::ts;
 
     #[test]
     fn shape_products() {
         let shape = ts![2, 3, 4];
-        let index_products = IndexProducts::from_shape(&shape);
+        let index_products = Strides::from_shape(&shape);
         assert_eq!(vec![12, 4, 1], index_products.0);
     }
 

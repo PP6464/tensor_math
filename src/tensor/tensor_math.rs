@@ -1,5 +1,5 @@
 use crate::tensor::tensor::TensorErrors::DeterminantZero;
-use crate::tensor::tensor::{dot_vectors, IndexProducts, Shape, Tensor};
+use crate::tensor::tensor::{dot_vectors, Strides, Shape, Tensor};
 use crate::tensor::tensor::{tensor_index, TensorErrors};
 use crate::ts;
 use num::complex::{Complex64, ComplexFloat};
@@ -270,12 +270,12 @@ impl<T: Clone> Tensor<T> {
         }
 
         let new_shape = transpose.new_shape(self.shape())?;
-        let new_index_products = IndexProducts::from_shape(&new_shape);
+        let new_strides = Strides::from_shape(&new_shape);
         let mut new_elements = self.elements().clone();
 
         for (old_index, elem) in self.enumerated_iter() {
             let new_index = transpose.new_index(&old_index)?;
-            let new_addr = dot_vectors(&new_index, &new_index_products.0);
+            let new_addr = dot_vectors(&new_index, &new_strides.0);
 
             new_elements[new_addr] = elem;
         }
@@ -289,7 +289,7 @@ impl<T: Clone> Tensor<T> {
 
         self.elements = new_tensor.elements;
         self.shape = new_tensor.shape;
-        self.index_products = new_tensor.index_products;
+        self.strides = new_tensor.strides;
 
         Ok(())
     }
