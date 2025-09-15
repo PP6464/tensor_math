@@ -701,27 +701,31 @@ pub fn det<T: Add<Output = T> + Mul<Output = T> + Sub<Output = T> + Clone + Defa
     for i in 0..ord {
         let is_minus = i % 2 != 0;
 
-        let rest_of_shape = ts![ord - 1, ord - 1];
-        let mut rest_of_tensor = Tensor::<T>::from_shape(&rest_of_shape);
-        let mut skipped = false;
+        if i == 0 {
+            let slice = t.slice(&[1..ord, 1..ord]);
+            determinant = determinant + t[&[0, i]].clone() * det(&slice);
 
-        // j is for which column we are on
-        for j in 0..ord {
-            if j == i {
-                skipped = true;
-                continue;
-            }
-
-            // k is for which row we are on
-            for k in 1..ord {
-                rest_of_tensor[&[k - 1, if skipped { j - 1 } else { j }]] = t[&[k, j]].clone();
-            }
+            continue;
         }
 
+        if i == ord - 1 {
+            let slice = t.slice(&[1..ord, 0..(ord - 1)]);
+
+            if is_minus {
+                determinant = determinant - t[&[0, i]].clone() * det(&slice);
+            } else {
+                determinant = determinant + t[&[0, i]].clone() * det(&slice);
+            }
+
+            continue;
+        }
+
+        let slice = t.slice(&[1..ord, 0..i]).concat(&t.slice(&[1..ord, i+1..ord]), 1).unwrap();
+
         if is_minus {
-            determinant = determinant - t[&[0, i]].clone() * det(&rest_of_tensor)
+            determinant = determinant - t[&[0, i]].clone() * det(&slice)
         } else {
-            determinant = determinant + t[&[0, i]].clone() * det(&rest_of_tensor)
+            determinant = determinant + t[&[0, i]].clone() * det(&slice)
         }
     }
 
@@ -758,43 +762,34 @@ where
     }
 
     // Construct adjoint matrix
-    let rest_of_shape = ts![ord - 1, ord - 1];
-    let mut rest_of_tensor = Tensor::<T>::from_shape(&rest_of_shape);
 
     // i is for which row we are on
     for i in 0..ord {
         // j is for which column we are on
         for j in 0..ord {
             let is_minus = (i + j) % 2 != 0;
-            let mut skipped_row = false;
 
-            // k is for which row we are on when filling the rest_of tensor
-            for k in 0..ord {
-                if i == k {
-                    skipped_row = true;
-                    continue;
+            let slice = match (i, j) {
+                (0, 0) => t.slice(&[1..ord, 1..ord]),
+                _ if (i, j) == (ord - 1, ord - 1) => t.slice(&[0..i, 0..j]),
+                _ if (i, j) == (0, ord - 1) => t.slice(&[1..ord, 0..j]),
+                _ if (i, j) == (ord - 1, 0) => t.slice(&[0..i, 1..ord]),
+                _ if i == 0 => t.slice(&[1..ord, 0..j]).concat(&t.slice(&[1..ord, j + 1..ord]), 1)?,
+                _ if i == ord - 1 => t.slice(&[0..i, 0..j]).concat(&t.slice(&[0..i, j + 1..ord]), 1)?,
+                _ if j == 0 => t.slice(&[0..i, 1..ord]).concat(&t.slice(&[(i+1)..ord, 1..ord]), 0)?,
+                _ if j == ord - 1 => t.slice(&[0..i, 0..j]).concat(&t.slice(&[(i+1)..ord, 0..j]), 0)?,
+                _ => {
+                    let slice_top = t.slice(&[0..i, 0..j]).concat(&t.slice(&[0..i, (j+1)..ord]), 1)?;
+                    let slice_bottom = t.slice(&[(i+1)..ord, 0..j]).concat(&t.slice(&[(i+1)..ord, (j+1)..ord]), 1)?;
+
+                    slice_top.concat(&slice_bottom, 0)?
                 }
-
-                let mut skipped_col = false;
-
-                // l is for which column we are on when filling the rest_of tensor
-                for l in 0..ord {
-                    if j == l {
-                        skipped_col = true;
-                        continue;
-                    }
-
-                    rest_of_tensor[&[
-                        if skipped_row { k - 1 } else { k },
-                        if skipped_col { l - 1 } else { l },
-                    ]] = t[&[k, l]].clone();
-                }
-            }
+            };
 
             res[&[j, i]] = if is_minus {
-                -det(&rest_of_tensor)
+                -det(&slice)
             } else {
-                det(&rest_of_tensor)
+                det(&slice)
             };
         }
     }
