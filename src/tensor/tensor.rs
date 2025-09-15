@@ -152,6 +152,7 @@ pub struct Tensor<T> {
 pub struct TensorSliceMut<'a, T> {
     pub(crate) orig: &'a mut Tensor<T>,
     pub(crate) start: Vec<usize>,
+    pub(crate) end: Vec<usize>,
 }
 impl<T> Index<&[usize]> for TensorSliceMut<'_, T> {
     type Output = T;
@@ -360,9 +361,11 @@ impl<T: Clone> Tensor<T> {
         }
 
         let start = indices.iter().map(|range| range.start).collect::<Vec<usize>>();
+        let end = indices.iter().map(|range| range.end).collect::<Vec<usize>>();
 
         TensorSliceMut {
             start,
+            end,
             orig: self,
         }
     }
@@ -470,6 +473,11 @@ pub trait IntoTensor<T> {
 impl<O, T: From<O>> IntoTensor<T> for Tensor<O> {
     fn into_tensor(self) -> Tensor<T> {
         self.transform_elementwise(|x| T::from(x))
+    }
+}
+impl<T: Clone> IntoTensor<T> for TensorSliceMut<'_, T> {
+    fn into_tensor(self) -> Tensor<T> {
+        self.orig.slice(self.start.iter().zip(self.end.iter()).map(|(x, y)| *x..*y).collect::<Vec<Range<usize>>>().as_slice())
     }
 }
 /// This converts the vector into a 1-d tensor
