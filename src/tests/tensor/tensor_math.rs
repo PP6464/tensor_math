@@ -540,7 +540,7 @@ mod tensor_math_tests {
         ).unwrap();
         let t1_norm_l2_ans = Tensor::<f64>::new(
             &ts![3, 3, 3],
-            (0..27).map(|x| (x as f64) / 6201.0).collect::<Vec<f64>>(),
+            (0..27).map(|x| (x as f64) / 6201.0.sqrt()).collect::<Vec<f64>>(),
         ).unwrap();
         
         assert_eq!(t1_norm_l1, t1_norm_l1_ans);
@@ -560,7 +560,7 @@ mod tensor_math_tests {
         ).unwrap();
         let t2_norm_l2_ans = Tensor::<Complex64>::new(
             &ts![2, 3],
-            (0..6).map(|x| Complex64 { re: (x as f64) / 110.0, im: (x as f64) / 110.0 } ).collect(),
+            (0..6).map(|x| Complex64 { re: (x as f64) / 110.0.sqrt(), im: (x as f64) / 110.0.sqrt() } ).collect(),
         ).unwrap();
         
         assert_approx_eq!(f64, (t2_norm_l1_ans - t2_norm_l1).transform_elementwise(Complex64::abs).sum(), 0.0, epsilon = 1e-15);
