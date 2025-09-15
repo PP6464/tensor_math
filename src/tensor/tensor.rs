@@ -455,6 +455,13 @@ impl<T> From<IntoIter<T>> for Tensor<T> {
         Tensor::new(&ts![elements.len()], elements).unwrap()
     }
 }
+/// Converts an `Iterator<T>` into a `Tensor<T>` of shape (length_of_iter)
+impl<T> FromIterator<T> for Tensor<T> {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        let elements: Vec<T> = iter.into_iter().collect();
+        Tensor::new(&ts![elements.len()], elements).unwrap()
+    }
+}
 impl<T> Deref for Tensor<T> {
     type Target = [T];
 
