@@ -148,6 +148,27 @@ pub struct Tensor<T> {
     pub(crate) strides: Strides,
     pub(crate) elements: Vec<T>,
 }
+#[derive(Debug, Eq, PartialEq)]
+pub struct TensorSliceMut<'a, T> {
+    pub(crate) orig: &'a mut Tensor<T>,
+    pub(crate) start: Vec<usize>,
+}
+impl<T> Index<&[usize]> for TensorSliceMut<'_, T> {
+    type Output = T;
+
+    fn index(&self, index: &[usize]) -> &Self::Output {
+        let actual_index = self.start.iter().zip(index.iter()).map(|(a, b)| a + b).collect::<Vec<usize>>();
+
+        &self.orig[actual_index.as_slice()]
+    }
+}
+impl<T> IndexMut<&[usize]> for TensorSliceMut<'_, T> {
+    fn index_mut(&mut self, index: &[usize]) -> &mut Self::Output {
+        let actual_index = self.start.iter().zip(index.iter()).map(|(a, b)| a + b).collect::<Vec<usize>>();
+
+        &mut self.orig[actual_index.as_slice()]
+    }
+}
 impl<T> Tensor<T> {
     pub fn new(shape: &Shape, elements: Vec<T>) -> Result<Self, TensorErrors> {
         if shape.element_count() != elements.len() {
@@ -310,7 +331,7 @@ impl<T: Clone> Tensor<T> {
     }
 
     /// Gives a cloned immutable slice to a region in the tensor specified
-    /// by a vector of range of indices for each dimension of the tensor
+    /// by an array of range of indices for each dimension of the tensor
     pub fn slice(&self, indices: &[Range<usize>]) -> Tensor<T> {
         assert_eq!(indices.len(), self.rank(), "Slice must have the same number of ranges as the rank of the tensor");
         for (i, range) in indices.iter().enumerate() {
@@ -331,7 +352,20 @@ impl<T: Clone> Tensor<T> {
         res
     }
 
+    /// Gives a mutable slice to a tensor in the specified range of indices.
+    pub fn slice_mut(&'_ mut self, indices: &[Range<usize>]) -> TensorSliceMut<'_, T> {
+        assert_eq!(indices.len(), self.rank(), "Slice must have the same number of ranges as the rank of the tensor");
+        for (i, range) in indices.iter().enumerate() {
+            assert!(range.end <= self.shape[i], "Index range for dimension {i} out of bounds: maximum = {}, range = {}..{}", self.shape[i] - 1, range.start, range.end);
+        }
 
+        let start = indices.iter().map(|range| range.start).collect::<Vec<usize>>();
+
+        TensorSliceMut {
+            start,
+            orig: self,
+        }
+    }
 }
 impl<T: Default + Clone> Tensor<T> {
     pub fn from_shape(shape: &Shape) -> Tensor<T> {

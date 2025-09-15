@@ -211,4 +211,19 @@ mod tensor_util_tests {
         let t1 = Tensor::<i32>::from_shape(&ts![2, 3]);
         t1.slice(&[]);
     }
+
+    #[test]
+    fn slicing_mut() {
+        let mut t1 = Tensor::<i32>::new(
+            &ts![3, 3, 3],
+            (0..27).collect(),
+        ).unwrap();
+        let mut slice = t1.slice_mut(&[1..2, 1..2, 1..2]);
+        slice[&[0, 0, 0]] = 69;
+        let ans = Tensor::<i32>::new(
+            &ts![3, 3, 3],
+            (0..27).map(|x| if x != 13 { x } else { 69 }).collect(),
+        ).unwrap();
+        assert_eq!(t1, ans);
+    }
 }
