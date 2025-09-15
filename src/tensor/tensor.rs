@@ -380,7 +380,7 @@ impl<T: Default + Clone> Tensor<T> {
 /// Generate a `Tensor` full of random values of type `T`
 /// For any type `T` that implements `rand::distr::Distribution`
 impl<T: Default + Clone> Tensor<T> where StandardUniform: Distribution<T>, [T]: Fill {
-    pub(crate) fn rand(shape: &Shape) -> Tensor<T> {
+    pub fn rand(shape: &Shape) -> Tensor<T> {
         let mut elements = vec![T::default(); shape.element_count()];
         let mut rng = rand::rng();
 
@@ -461,6 +461,22 @@ impl<T> Deref for Tensor<T> {
 }
 impl<T> DerefMut for Tensor<T> {
     fn deref_mut(&mut self) -> &mut Self::Target { self.elements.as_mut_slice() }
+}
+/// This trait allows you to specify that something can be converted into a type of `Tensor<T>`.
+/// It has the `into_tensor` method that converts the value into a `Tensor<T>`, consuming it.
+pub trait IntoTensor<T> {
+    fn into_tensor(self) -> Tensor<T>;
+}
+impl<O, T: From<O>> IntoTensor<T> for Tensor<O> {
+    fn into_tensor(self) -> Tensor<T> {
+        self.transform_elementwise(|x| T::from(x))
+    }
+}
+/// This converts the vector into a 1-d tensor
+impl<T: Clone> IntoTensor<T> for Vec<T> {
+    fn into_tensor(self) -> Tensor<T> {
+        self.iter().into()
+    }
 }
 impl<T: Default + Clone> Default for Tensor<T> {
     fn default() -> Self {
