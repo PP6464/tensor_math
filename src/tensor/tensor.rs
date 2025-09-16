@@ -336,7 +336,7 @@ impl<T: Clone> Tensor<T> {
     pub fn slice(&self, indices: &[Range<usize>]) -> Tensor<T> {
         assert_eq!(indices.len(), self.rank(), "Slice must have the same number of ranges as the rank of the tensor");
         for (i, range) in indices.iter().enumerate() {
-            assert!(range.end <= self.shape[i], "Index range for dimension {i} out of bounds: maximum = {}, range = {}..{}", self.shape[i] - 1, range.start, range.end);
+            assert!(range.end <= self.shape[i], "Index range for dimension {i} out of bounds: size = {}, range = {}..{}", self.shape[i], range.start, range.end);
         }
 
         let start = indices.iter().map(|range| range.start).collect::<Vec<usize>>();
@@ -357,7 +357,7 @@ impl<T: Clone> Tensor<T> {
     pub fn slice_mut(&'_ mut self, indices: &[Range<usize>]) -> TensorSliceMut<'_, T> {
         assert_eq!(indices.len(), self.rank(), "Slice must have the same number of ranges as the rank of the tensor");
         for (i, range) in indices.iter().enumerate() {
-            assert!(range.end <= self.shape[i], "Index range for dimension {i} out of bounds: maximum = {}, range = {}..{}", self.shape[i] - 1, range.start, range.end);
+            assert!(range.end <= self.shape[i], "Index range for dimension {i} out of bounds: size = {}, range = {}..{}", self.shape[i], range.start, range.end);
         }
 
         let start = indices.iter().map(|range| range.start).collect::<Vec<usize>>();
