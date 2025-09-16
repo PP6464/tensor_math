@@ -158,14 +158,20 @@ impl<T> Index<&[usize]> for TensorSliceMut<'_, T> {
     type Output = T;
 
     fn index(&self, index: &[usize]) -> &Self::Output {
-        let actual_index = self.start.iter().zip(index.iter()).map(|(a, b)| a + b).collect::<Vec<usize>>();
+        let actual_index = self.start.iter().zip(index.iter()).enumerate().map(|(i, (a, b))| {
+            assert!(a + b < self.end[i]);
+            a + b
+        }).collect::<Vec<usize>>();
 
         &self.orig[actual_index.as_slice()]
     }
 }
 impl<T> IndexMut<&[usize]> for TensorSliceMut<'_, T> {
     fn index_mut(&mut self, index: &[usize]) -> &mut Self::Output {
-        let actual_index = self.start.iter().zip(index.iter()).map(|(a, b)| a + b).collect::<Vec<usize>>();
+        let actual_index = self.start.iter().zip(index.iter()).enumerate().map(|(i, (a, b))| {
+            assert!(a + b < self.end[i]);
+            a + b
+        }).collect::<Vec<usize>>();
 
         &mut self.orig[actual_index.as_slice()]
     }

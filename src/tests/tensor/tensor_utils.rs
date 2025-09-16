@@ -226,4 +226,13 @@ mod tensor_util_tests {
         ).unwrap();
         assert_eq!(t1, ans);
     }
+
+    #[test]
+    #[should_panic]
+    fn slice_mut_out_of_bounds() {
+        let mut t1 = Tensor::<i32>::from_shape(&ts![2, 3]);
+        let mut slice  = t1.slice_mut(&[0..1, 0..1]);
+
+        slice[&[0, 1]] = 69;
+    }
 }
