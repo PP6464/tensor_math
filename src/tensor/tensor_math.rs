@@ -1,13 +1,15 @@
 use crate::tensor::tensor::TensorErrors::DeterminantZero;
-use crate::tensor::tensor::{dot_vectors, Strides, Shape, Tensor};
+use crate::tensor::tensor::{dot_vectors, IntoTensor, Shape, Strides, Tensor};
 use crate::tensor::tensor::{tensor_index, TensorErrors};
 use crate::ts;
+use float_cmp::{approx_eq, ApproxEq, F64Margin};
 use num::complex::{Complex64, ComplexFloat};
 use num::ToPrimitive;
 use rand::distr::weighted::WeightedIndex;
+use rand::distr::Distribution;
+use std::cmp::min;
 use std::f64::consts::PI;
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Rem, Sub};
-use rand::distr::Distribution;
 
 /// Implement an operation elementwise
 /// Also allows you to implement operations with a `Tensor` and a single value
@@ -353,13 +355,13 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T>> Tensor<T> {
                 .cloned(),
         );
         let resultant_shape = Shape::new(resultant_shape_vec).unwrap();
-        let mut resultant_elements = Vec::with_capacity(resultant_shape.element_count());
+        let mut resultant_elements: Vec<T> = Vec::with_capacity(resultant_shape.element_count());
 
         for i in 0..resultant_shape.element_count() {
             let index = tensor_index(i, &resultant_shape);
             let (self_chunk, other_chunk) = index.split_at(self.rank() - 1);
-            let mut self_elements = Vec::with_capacity(*self.shape.0.last().unwrap());
-            let mut other_elements = Vec::with_capacity(*other.shape.0.first().unwrap());
+            let mut self_elements: Vec<T> = Vec::with_capacity(*self.shape.0.last().unwrap());
+            let mut other_elements: Vec<T> = Vec::with_capacity(*other.shape.0.first().unwrap());
 
             for j in 0..*self.shape.0.last().unwrap() {
                 let mut self_index = self_chunk.to_vec();
@@ -375,7 +377,7 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T>> Tensor<T> {
             resultant_elements.push(dot_vectors(&self_elements, &other_elements));
         }
 
-        Ok(Tensor::new(&resultant_shape, resultant_elements.to_vec())?)
+        Ok(resultant_elements.into_tensor().reshape(&resultant_shape)?)
     }
 }
 
@@ -417,7 +419,7 @@ pub fn kronecker_product<T: Clone + Mul<Output = T>>(t1: &Tensor<T>, t2: &Tensor
         new_elements.extend(tensor.elements);
     }
 
-    Tensor::new(&new_shape, new_elements).unwrap()
+    new_elements.into_tensor().reshape(&new_shape).unwrap()
 }
 
 // Define a bunch of convenience mathematical functions for f64
@@ -539,8 +541,20 @@ impl Tensor<f64> {
 
     /// Normalises the tensor so the sum of the squares of the magnitudes is 1
     pub fn norm_l2(self) -> Tensor<f64> {
-        let mag = self.clone().transform_elementwise(|x| x * x).sum();
+        let mag = self.clone().transform_elementwise(|x| x * x).sum().sqrt();
         self / mag
+    }
+}
+
+impl ApproxEq for Tensor<f64> {
+    type Margin = F64Margin;
+
+    fn approx_eq<M: Into<Self::Margin>>(self, other: Self, margin: M) -> bool {
+        let margin = margin.into();
+        
+        self.enumerated_iter().all(|(i, x)| {
+            approx_eq!(f64, x, other[&i], margin.clone())
+        })
     }
 }
 
@@ -647,8 +661,21 @@ impl Tensor<Complex64> {
             .clone()
             .transform_elementwise(|x| (x * x).abs())
             .sum()
+            .sqrt()
             .into();
         self / mag
+    }
+}
+
+impl ApproxEq for Tensor<Complex64> {
+    type Margin = F64Margin;
+
+    fn approx_eq<M: Into<Self::Margin>>(self, other: Self, margin: M) -> bool {
+        let margin = margin.into();
+        
+        self.enumerated_iter().all(|(i, x)| {
+            approx_eq!(f64, x.re, other[&i].re, margin.clone()) && approx_eq!(f64, x.im, other[&i].im, margin.clone())
+        })
     }
 }
 
@@ -720,7 +747,10 @@ pub fn det<T: Add<Output = T> + Mul<Output = T> + Sub<Output = T> + Clone + Defa
             continue;
         }
 
-        let slice = t.slice(&[1..ord, 0..i]).concat(&t.slice(&[1..ord, i+1..ord]), 1).unwrap();
+        let slice = t
+            .slice(&[1..ord, 0..i])
+            .concat(&t.slice(&[1..ord, i + 1..ord]), 1)
+            .unwrap();
 
         if is_minus {
             determinant = determinant - t[&[0, i]].clone() * det(&slice)
@@ -774,23 +804,31 @@ where
                 _ if (i, j) == (ord - 1, ord - 1) => t.slice(&[0..i, 0..j]),
                 _ if (i, j) == (0, ord - 1) => t.slice(&[1..ord, 0..j]),
                 _ if (i, j) == (ord - 1, 0) => t.slice(&[0..i, 1..ord]),
-                _ if i == 0 => t.slice(&[1..ord, 0..j]).concat(&t.slice(&[1..ord, j + 1..ord]), 1)?,
-                _ if i == ord - 1 => t.slice(&[0..i, 0..j]).concat(&t.slice(&[0..i, j + 1..ord]), 1)?,
-                _ if j == 0 => t.slice(&[0..i, 1..ord]).concat(&t.slice(&[(i+1)..ord, 1..ord]), 0)?,
-                _ if j == ord - 1 => t.slice(&[0..i, 0..j]).concat(&t.slice(&[(i+1)..ord, 0..j]), 0)?,
+                _ if i == 0 => t
+                    .slice(&[1..ord, 0..j])
+                    .concat(&t.slice(&[1..ord, j + 1..ord]), 1)?,
+                _ if i == ord - 1 => t
+                    .slice(&[0..i, 0..j])
+                    .concat(&t.slice(&[0..i, j + 1..ord]), 1)?,
+                _ if j == 0 => t
+                    .slice(&[0..i, 1..ord])
+                    .concat(&t.slice(&[(i + 1)..ord, 1..ord]), 0)?,
+                _ if j == ord - 1 => t
+                    .slice(&[0..i, 0..j])
+                    .concat(&t.slice(&[(i + 1)..ord, 0..j]), 0)?,
                 _ => {
-                    let slice_top = t.slice(&[0..i, 0..j]).concat(&t.slice(&[0..i, (j+1)..ord]), 1)?;
-                    let slice_bottom = t.slice(&[(i+1)..ord, 0..j]).concat(&t.slice(&[(i+1)..ord, (j+1)..ord]), 1)?;
+                    let slice_top = t
+                        .slice(&[0..i, 0..j])
+                        .concat(&t.slice(&[0..i, (j + 1)..ord]), 1)?;
+                    let slice_bottom = t
+                        .slice(&[(i + 1)..ord, 0..j])
+                        .concat(&t.slice(&[(i + 1)..ord, (j + 1)..ord]), 1)?;
 
                     slice_top.concat(&slice_bottom, 0)?
                 }
             };
 
-            res[&[j, i]] = if is_minus {
-                -det(&slice)
-            } else {
-                det(&slice)
-            };
+            res[&[j, i]] = if is_minus { -det(&slice) } else { det(&slice) };
         }
     }
 
@@ -930,6 +968,67 @@ pub fn pool_avg<T: Add<Output = T> + Div<f64, Output = T> + Clone>(t: Tensor<T>)
     let elems = t.shape().element_count().to_f64().unwrap();
     let sum = pool_sum(t);
     sum / elems
+}
+
+/// Computes the Householder transformation for the given matrix `t` (of shape (rows, cols)).
+/// Returns (Q, R), where Q is a unitary and Hermitian square matrix of shape (rows, rows)
+/// and R is an upper triangle matrix of shape (rows, cols) such that `Q.contract_mul(R) == t`.
+pub fn householder(t: &Tensor<Complex64>) -> (Tensor<Complex64>, Tensor<Complex64>) {
+    assert_eq!(t.shape().rank(), 2, "Only defined for matrices");
+
+    let (rows, cols) = (t.shape()[0], t.shape()[1]);
+
+    let mut r = t.clone();
+    let mut q = identity(rows).into_tensor();
+
+    for k in 0..min(cols, rows) {
+        let vec_bottom = r.slice(&[k..rows, k..k + 1]);
+        let alpha = -1.0
+            * match vec_bottom[&[0, 0]] {
+                Complex64::ZERO => Complex64::ONE,
+                x => x / Complex64::abs(x),
+            } * vec_bottom.iter().map(|x| <f64 as Into<Complex64>>::into((x * x).abs())).sum::<Complex64>().sqrt();
+        let mut e1 = Tensor::<Complex64>::from_shape(&vec_bottom.shape);
+        e1[&[0, 0]] = Complex64::ONE;
+        let v = vec_bottom - e1 * alpha;
+
+        if v.iter().all(|x| approx_eq!(f64, x.abs(), 0.0)) {
+            continue;
+        }
+
+        let u = v.norm_l2();
+        let u_clone = u.clone();
+        let u_t = u_clone.transpose(
+            &Transpose::new(&vec![1, 0]).unwrap(),
+        ).unwrap();
+        let u_star = u_t.iter().map(|x| x.conj()).collect::<Tensor<Complex64>>().reshape(u_t.shape()).unwrap();
+        let h_sub = <Tensor<f64> as IntoTensor<Complex64>>::into_tensor(identity(
+            u.shape.0.first().unwrap().clone(),
+        )) - u
+            .contract_mul(&u_star)
+            .unwrap()
+            * Complex64 { re: 2.0, im: 0.0 };
+
+        // Update R
+        let r_slice_copy = r.slice(&[k..rows, k..cols]);
+        let mut r_slice_mut = r.slice_mut(&[k..rows, k..cols]);
+        let r_slice_res = h_sub.clone().contract_mul(&r_slice_copy).unwrap();
+
+        for (pos, val) in r_slice_res.enumerated_iter() {
+            r_slice_mut[&pos] = val;
+        }
+
+        // Update Q
+        let q_slice_copy = q.slice(&[0..rows, k..rows]);
+        let mut q_slice_mut = q.slice_mut(&[0..rows, k..rows]);
+        let q_slice_res = q_slice_copy.contract_mul(&h_sub).unwrap();
+        
+        for (pos, val) in q_slice_res.enumerated_iter() {
+            q_slice_mut[&pos] = val;
+        }
+    }
+
+    (q, r)
 }
 
 /// Creates a tensor of values of the Gaussian pdf with a specified standard deviation.
