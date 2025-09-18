@@ -1,6 +1,7 @@
 use std::hint::black_box;
 use criterion::{criterion_group, criterion_main, Criterion};
 use tensor_math::tensor::tensor::{Tensor, Shape};
+use tensor_math::tensor::tensor_math::Transpose;
 use tensor_math::ts;
 
 pub fn bench_concat(c: &mut Criterion) {
@@ -14,6 +15,27 @@ pub fn bench_concat(c: &mut Criterion) {
     });
 }
 
+pub fn bench_transpose(c: &mut Criterion) {
+    let t1: Tensor<f64> = Tensor::rand(&ts![100, 100, 100]);
 
-criterion_group!(benches, bench_concat);
+    c.bench_function("transpose", |b| {
+        b.iter(|| {
+            t1.clone().transpose(&Transpose::new(&vec![2, 0, 1]).unwrap()).unwrap();
+        })
+    });
+}
+
+pub fn bench_concat_mul(c: &mut Criterion) {
+    let t1: Tensor<f64> = Tensor::rand(&ts![100, 100]);
+    let t2: Tensor<f64> = Tensor::rand(&ts![100, 100]);
+
+    c.bench_function("concat_mul", |b| {
+        b.iter(|| {
+            t1.clone().contract_mul(black_box(&t2)).unwrap();
+        })
+    });
+}
+
+
+criterion_group!(benches, bench_concat, bench_transpose, bench_concat_mul);
 criterion_main!(benches);
