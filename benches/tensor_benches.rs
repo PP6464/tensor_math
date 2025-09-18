@@ -4,13 +4,13 @@ use tensor_math::tensor::tensor::{Tensor, Shape};
 use tensor_math::tensor::tensor_math::Transpose;
 use tensor_math::ts;
 
-pub fn bench_concat(c: &mut Criterion) {
+pub fn bench_concat_mt(c: &mut Criterion) {
     let t1: Tensor<f64> = Tensor::rand(&ts![100, 100, 100]);
     let t2: Tensor<f64> = Tensor::rand(&ts![100, 2000, 100]);
 
-    c.bench_function("concat", |b| {
+    c.bench_function("concat_mt", |b| {
         b.iter(|| {
-            t1.concat(black_box(&t2), black_box(1)).unwrap();
+            t1.concat_mt(black_box(&t2), black_box(1)).unwrap();
         })
     });
 }
@@ -29,7 +29,7 @@ pub fn bench_concat_mul(c: &mut Criterion) {
     let t1: Tensor<f64> = Tensor::rand(&ts![100, 100]);
     let t2: Tensor<f64> = Tensor::rand(&ts![100, 100]);
 
-    c.bench_function("concat_mul", |b| {
+    c.bench_function("contract_mul", |b| {
         b.iter(|| {
             t1.clone().contract_mul(black_box(&t2)).unwrap();
         })
@@ -37,5 +37,5 @@ pub fn bench_concat_mul(c: &mut Criterion) {
 }
 
 
-criterion_group!(benches, bench_concat, bench_transpose, bench_concat_mul);
+criterion_group!(benches, bench_concat_mt, bench_transpose, bench_concat_mul);
 criterion_main!(benches);

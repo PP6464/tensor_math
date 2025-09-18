@@ -2,6 +2,7 @@ use rand::distr::{Distribution, StandardUniform};
 use rand::{Fill, Rng};
 use std::ops::{Add, Deref, DerefMut, Index, IndexMut, Mul, Range};
 use std::slice::Iter;
+use std::thread;
 use std::vec::IntoIter;
 use thiserror::Error;
 
@@ -374,6 +375,96 @@ impl<T: Clone> Tensor<T> {
             end,
             orig: self,
         }
+    }
+}
+impl<T: Clone + Send + Sync> Tensor<T> {
+    /// Concatenates a `Tensor` with another `Tensor` along the specified dimension.
+    /// This spawns multiple threads to handle writing to the result at the same time.
+    pub fn concat_mt(&self, other: &Tensor<T>, dim: usize) -> Result<Tensor<T>, TensorErrors> {
+        if self.rank() < other.rank() {
+            return Err(TensorErrors::ShapesIncompatible);
+        }
+        let mut resultant_shape: Vec<usize> = Vec::with_capacity(self.rank());
+
+        // Ensure shapes match on every dim that is not the dim along which to concatenate
+        for i in 0..self.rank() {
+            if i == dim {
+                resultant_shape.push(self.shape[i] + other.shape[i]);
+                continue;
+            }
+
+            if self.shape[i] != other.shape[i] {
+                return Err(TensorErrors::ShapesIncompatible);
+            }
+
+            resultant_shape.push(self.shape[i]);
+        }
+
+        let resultant_shape: Shape = resultant_shape.try_into().unwrap();
+
+        if dim == 0 {
+            // If the dimension is 0 we can just merge the elements one after another
+            let mut res_elems = self.elements.clone();
+            res_elems.extend(other.elements.clone());
+            return Ok(Tensor::new(&resultant_shape, res_elems)?);
+        }
+
+        // let res_elem_mutexes = Arc::new(RwLock::new(vec![Arc::new(Mutex::new(self.first().unwrap().clone())); resultant_shape.element_count()]));
+        //
+        // let self_element_arcs: Arc<Tensor<T>> = Arc::new(self.clone());
+        // let other_element_arcs: Arc<Tensor<T>> = Arc::new(other.clone());
+
+        let mut res_elems = vec![self.first().unwrap().clone(); resultant_shape.element_count()];
+
+        let self_chunk_size = self.strides[dim - 1];
+        let other_chunk_size = other.strides[dim - 1];
+
+        let chunks_per_thread = 2; // The number of chunks a single thread manages
+
+        // Merge together chunks from self and other in the correct manner to get
+        // the result for concatenating self and other (in that order)
+        // Note self_chunks and other_chunks have the same length
+        // Because their shapes are the same in the dimensions to the left of the concatenation dim
+
+        thread::scope(|s| {
+            let thread_chunk_size_self = self_chunk_size * chunks_per_thread;
+            let thread_chunk_size_other = other_chunk_size * chunks_per_thread;
+
+            let thread_chunks_self = self.elements.chunks(thread_chunk_size_self);
+            let thread_chunks_other = other.elements.chunks(thread_chunk_size_other);
+
+            let thread_chunks = thread_chunks_self.zip(thread_chunks_other);
+
+            let mut res_elem_chunks = res_elems.chunks_mut(thread_chunk_size_self + thread_chunk_size_other);
+
+            for (self_thread_chunk, other_thread_chunk) in thread_chunks {
+                let res_chunk = res_elem_chunks.next().unwrap();
+
+                s.spawn(|| {
+                    let mut self_chunks = self_thread_chunk.chunks(self_chunk_size);
+                    let mut other_chunks = other_thread_chunk.chunks(other_chunk_size);
+                    let actual_count = self_chunks.len();  // On the last chunk it may not have as many as chunks_per_thread chunks
+                    
+                    for j in 0..actual_count {
+                        let current_self_chunk = self_chunks.next().unwrap();
+                        let current_other_chunk = other_chunks.next().unwrap();
+
+                        let start = j * (self_chunk_size + other_chunk_size);
+
+                        for (k, self_val) in current_self_chunk.iter().enumerate() {
+                            res_chunk[start + k] = self_val.clone();
+                        }
+
+                        for (k, other_val) in current_other_chunk.iter().enumerate() {
+                            res_chunk[start + self_chunk_size + k] = other_val.clone();
+                        }
+                    }
+                });
+            }
+        });
+
+        let result = Tensor::new(&resultant_shape, res_elems)?;
+        Ok(result)
     }
 }
 impl<T: Default + Clone> Tensor<T> {

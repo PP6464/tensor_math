@@ -2,11 +2,12 @@
 mod tensor_math_tests {
     use crate::tensor::tensor::{Tensor};
     use crate::tensor::tensor::{Shape, TensorErrors};
-    use crate::tensor::tensor_math::{det, gaussian_pdf_multi_sigma, gaussian_pdf_single_sigma, gaussian_sample, householder, identity, inv, kronecker_product, pool, pool_avg, pool_max, pool_min, pool_sum, trace, Transpose};
+    use crate::tensor::tensor_math::{det, gaussian_pdf_multi_sigma, gaussian_pdf_single_sigma, gaussian_sample, householder, identity, inv, kronecker_product, pool, pool_avg, pool_max, pool_min, pool_sum, solve_cubic, solve_quadratic, solve_quartic, trace, Transpose};
     use crate::ts;
     use float_cmp::{approx_eq, assert_approx_eq, ApproxEq, F64Margin, FloatMargin};
     use num::complex::{Complex64, ComplexFloat};
     use std::f64::consts::PI;
+    use std::ops::Add;
     use num::FromPrimitive;
 
     #[test]
@@ -519,5 +520,67 @@ mod tensor_math_tests {
         assert!(q3.contract_mul(&r3).unwrap().approx_eq(t3, F64Margin::default().epsilon(1e-10)));
 
         println!("Passed test 3: wide");
+    }
+
+    #[test]
+    fn solve_quadratic_poly() {
+        let coefficients = [
+            Complex64 { re: 1.0, im: 2.0 },
+            Complex64 { re: 0.0, im: -2.0 },
+            Complex64 { re: 5.0, im: 0.0 },
+        ];
+        let roots = solve_quadratic(&coefficients);
+
+        assert_eq!(roots.len(), 2);
+        assert_approx_eq!(f64, coefficients.iter().enumerate().map(|(i, c)| c * roots[0].powi(i as i32)).reduce(Complex64::add).unwrap().abs(), 0.0, epsilon = 1e-15);
+        assert_approx_eq!(f64, coefficients.iter().enumerate().map(|(i, c)| c * roots[1].powi(i as i32)).reduce(Complex64::add).unwrap().abs(), 0.0, epsilon = 1e-15);
+    }
+
+    #[test]
+    fn solve_cubic_poly() {
+        let coefficients = [
+            Complex64 { re: 4.0, im: 0.0 },
+            Complex64 { re: 3.0, im: 0.0 },
+            Complex64 { re: 2.0, im: 0.0 },
+            Complex64 { re: 1.0, im: 0.0 },
+        ];
+        let roots = solve_cubic(&coefficients);
+
+        assert_eq!(roots.len(), 3);
+        assert_approx_eq!(f64, coefficients.iter().enumerate().map(|(i, c)| c * roots[0].powi(i as i32)).reduce(Complex64::add).unwrap().abs(), 0.0, epsilon = 2e-15);
+        assert_approx_eq!(f64, coefficients.iter().enumerate().map(|(i, c)| c * roots[1].powi(i as i32)).reduce(Complex64::add).unwrap().abs(), 0.0, epsilon = 2e-15);
+        assert_approx_eq!(f64, coefficients.iter().enumerate().map(|(i, c)| c * roots[2].powi(i as i32)).reduce(Complex64::add).unwrap().abs(), 0.0, epsilon = 2e-15);
+
+        let coefficients2 = [
+            Complex64 { re: 45.0, im: -2.0 },
+            Complex64 { re: -3.0, im: 4.0 },
+            Complex64 { re: 2.0, im: 3.0 },
+            Complex64 { re: 1.0, im: 10.0 },
+        ];
+        let roots2 = solve_cubic(&coefficients2);
+
+        assert_eq!(roots2.len(), 3);
+        assert_approx_eq!(f64, coefficients2.iter().enumerate().map(|(i, c)| c * roots2[0].powi(i as i32)).reduce(Complex64::add).unwrap().abs(), 0.0, epsilon = 2e-11);
+        assert_approx_eq!(f64, coefficients2.iter().enumerate().map(|(i, c)| c * roots2[1].powi(i as i32)).reduce(Complex64::add).unwrap().abs(), 0.0, epsilon = 2e-11);
+        assert_approx_eq!(f64, coefficients2.iter().enumerate().map(|(i, c)| c * roots2[2].powi(i as i32)).reduce(Complex64::add).unwrap().abs(), 0.0, epsilon = 2e-11);
+    }
+
+    #[test]
+    fn solve_quartic_poly() {
+        let coefficients = [
+            Complex64 { re: 4.5, im: -2.0 },
+            Complex64 { re: 3.4, im: 5.0 },
+            Complex64 { re: 2.1, im: 3.0 },
+            Complex64 { re: 1.2, im: 2.0 },
+            Complex64 { re: 1.1, im: -10.0 },
+        ];
+
+        let roots = solve_quartic(&coefficients);
+        assert_eq!(roots.len(), 4);
+
+        assert_approx_eq!(f64, coefficients.iter().enumerate().map(|(i, c)| c * roots[0].powi(i as i32)).reduce(Complex64::add).unwrap().abs(), 0.0, epsilon = 2e-10);
+        assert_approx_eq!(f64, coefficients.iter().enumerate().map(|(i, c)| c * roots[1].powi(i as i32)).reduce(Complex64::add).unwrap().abs(), 0.0, epsilon = 2e-10);
+        assert_approx_eq!(f64, coefficients.iter().enumerate().map(|(i, c)| c * roots[2].powi(i as i32)).reduce(Complex64::add).unwrap().abs(), 0.0, epsilon = 2e-10);
+        assert_approx_eq!(f64, coefficients.iter().enumerate().map(|(i, c)| c * roots[3].powi(i as i32)).reduce(Complex64::add).unwrap().abs(), 0.0, epsilon = 2e-10);
     }
 }
