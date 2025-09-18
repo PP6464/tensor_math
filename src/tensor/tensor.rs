@@ -419,7 +419,7 @@ impl<T: Clone + Send + Sync> Tensor<T> {
         let self_chunk_size = self.strides[dim - 1];
         let other_chunk_size = other.strides[dim - 1];
 
-        let chunks_per_thread = 2; // The number of chunks a single thread manages
+        let chunks_per_thread = 5; // The number of chunks a single thread manages
 
         // Merge together chunks from self and other in the correct manner to get
         // the result for concatenating self and other (in that order)
