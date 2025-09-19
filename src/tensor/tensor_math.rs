@@ -9,7 +9,9 @@ use rand::distr::weighted::WeightedIndex;
 use rand::distr::Distribution;
 use std::cmp::min;
 use std::f64::consts::PI;
-use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Rem, Sub};
+use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Range, Rem, Sub};
+use std::sync::{Arc, Mutex, RwLock};
+use std::thread::scope;
 
 /// Implement an operation elementwise
 /// Also allows you to implement operations with a `Tensor` and a single value
@@ -330,7 +332,6 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T>> Tensor<T> {
     /// A `Tensor` of shape (a,b,c) multiplied in this way by a `Tensor` of shape (c, d, e, f)
     /// will produce a resultant `Tensor` of shape (a, b, d, e, f) by the following formula:
     /// result(a, b, d, e, f) = sum(x=0, x=c) { first(a, b, x) * second(x, d, e, f) }
-    /// This method consumes the original `Tensor` (but not the other one) and returns the result
     pub fn contract_mul(self, other: &Tensor<T>) -> Result<Tensor<T>, TensorErrors> {
         if self.shape.0.last().unwrap() != other.shape.0.first().unwrap() {
             return Err(TensorErrors::ShapesIncompatible);
@@ -378,6 +379,147 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T>> Tensor<T> {
         }
 
         Ok(resultant_elements.into_tensor().reshape(&resultant_shape)?)
+    }
+
+    /// Perform tensor-contraction multiplication, which is a more general form of matrix multiplication
+    /// A `Tensor` of shape (a,b,c) multiplied in this way by a `Tensor` of shape (c, d, e, f)
+    /// will produce a resultant `Tensor` of shape (a, b, d, e, f) by the following formula:
+    /// result(a, b, d, e, f) = sum(x=0, x=c) { first(a, b, x) * second(x, d, e, f) }
+    pub fn contract_mul_borrowed(&self, other: &Tensor<T>) -> Result<Tensor<T>, TensorErrors> {
+        if self.shape.0.last().unwrap() != other.shape.0.first().unwrap() {
+            return Err(TensorErrors::ShapesIncompatible);
+        }
+
+        let mut resultant_shape_vec = self
+            .shape
+            .0
+            .iter()
+            .take(self.rank() - 1)
+            .cloned()
+            .collect::<Vec<usize>>();
+
+        resultant_shape_vec.extend(
+            other
+                .shape
+                .0
+                .iter()
+                .rev()
+                .take(other.rank() - 1)
+                .rev()
+                .cloned(),
+        );
+        let resultant_shape = Shape::new(resultant_shape_vec).unwrap();
+        let mut resultant_elements: Vec<T> = Vec::with_capacity(resultant_shape.element_count());
+
+        for i in 0..resultant_shape.element_count() {
+            let index = tensor_index(i, &resultant_shape);
+            let (self_chunk, other_chunk) = index.split_at(self.rank() - 1);
+            let mut self_elements: Vec<T> = Vec::with_capacity(*self.shape.0.last().unwrap());
+            let mut other_elements: Vec<T> = Vec::with_capacity(*other.shape.0.first().unwrap());
+
+            for j in 0..*self.shape.0.last().unwrap() {
+                let mut self_index = self_chunk.to_vec();
+                self_index.push(j);
+
+                self_elements.push(self[&self_index].clone());
+
+                let mut other_index = other_chunk.to_vec();
+                other_index.insert(0, j);
+                other_elements.push(other[&other_index].clone());
+            }
+
+            resultant_elements.push(dot_vectors(&self_elements, &other_elements));
+        }
+
+        Ok(resultant_elements.into_tensor().reshape(&resultant_shape)?)
+    }
+
+    /// Computes the dot product of two tensors, i.e. the element-wise product, then the sum of the result
+    pub fn dot(&self, other: &Tensor<T>) -> T {
+        (self * other).sum()
+    }
+}
+impl<T: Clone + Add<Output = T> + Mul<Output = T> + Send + Sync> Tensor<T> {
+    pub fn contract_mul_mt(&self, other: &Tensor<T>) -> Result<Tensor<T>, TensorErrors> {
+        if self.shape.0.last().unwrap() != other.shape.0.first().unwrap() {
+            return Err(TensorErrors::ShapesIncompatible);
+        }
+
+        let mut resultant_shape_vec = self
+            .shape
+            .0
+            .iter()
+            .take(self.rank() - 1)
+            .cloned()
+            .collect::<Vec<usize>>();
+
+        resultant_shape_vec.extend(
+            other
+                .shape
+                .0
+                .iter()
+                .rev()
+                .take(other.rank() - 1)
+                .rev()
+                .cloned(),
+        );
+        let res_shape = Shape::new(resultant_shape_vec).unwrap();
+
+        let res_mutexes = Arc::new(
+            RwLock::new(
+                Tensor::new(
+                    &res_shape,
+                    (0..res_shape.element_count())
+                        .map(|_| Mutex::new(self.first().unwrap().clone()))
+                        .collect(),
+                )?,
+            ),
+        );
+
+        let self_arc = Arc::new(self);
+        let res_shape_arc = Arc::new(res_shape);
+        let elems_per_thread = 10;  // The number of elements each thread is responsible for
+
+        scope(|s| {
+            for i in 0..res_shape_arc.clone().element_count() / elems_per_thread {
+                let res_shape_arc_clone = res_shape_arc.clone();
+                let res_arc_clone = res_mutexes.clone();
+
+                let self_arc_clone = self_arc.clone();
+
+                let start = i * elems_per_thread;
+                let end = min((i + 1) * elems_per_thread, res_shape_arc.element_count());
+
+
+                s.spawn(move || {
+                    let res_read = res_arc_clone.read().unwrap();
+
+                    for j in start..end {
+                        let t_index = tensor_index(j, &res_shape_arc_clone);
+
+                        let (self_part, other_part) = t_index.split_at(self_arc_clone.rank() - 1);
+
+                        let mut self_indices = self_part.iter().map(|&x| x..x+1).collect::<Vec<Range<usize>>>();
+                        self_indices.push(0..self_arc_clone.shape.0.last().unwrap().clone());
+
+                        let mut other_indices = other_part.iter().map(|&x| x..x+1).collect::<Vec<Range<usize>>>();
+                        other_indices.insert(0, 0..other.shape.0.first().unwrap().clone());
+
+                        let self_elems = self_arc_clone.slice(&self_indices).reshape(&ts![self_arc_clone.shape.0.last().unwrap().clone()]).unwrap();
+                        let other_elems = other.slice(&other_indices).reshape(&ts![other.shape.0.first().unwrap().clone()]).unwrap();
+
+                        let elem_res = self_elems.dot(&other_elems);
+
+                        let mut write_lock = res_read[&t_index].lock().unwrap();
+
+                        *write_lock = elem_res;
+                    }
+                });
+            }
+        });
+
+        let res_read = res_mutexes.read().unwrap();
+        Ok(res_read.iter().map(|x| x.lock().unwrap().clone()).collect::<Tensor<T>>().reshape(&res_shape_arc.clone())?)
     }
 }
 

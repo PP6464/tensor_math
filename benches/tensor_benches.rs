@@ -25,17 +25,17 @@ pub fn bench_transpose(c: &mut Criterion) {
     });
 }
 
-pub fn bench_concat_mul(c: &mut Criterion) {
+pub fn bench_contract_mul_mt(c: &mut Criterion) {
     let t1: Tensor<f64> = Tensor::rand(&ts![100, 100]);
     let t2: Tensor<f64> = Tensor::rand(&ts![100, 100]);
 
-    c.bench_function("contract_mul", |b| {
+    c.bench_function("contract_mul_mt", |b| {
         b.iter(|| {
-            t1.clone().contract_mul(black_box(&t2)).unwrap();
+            t1.contract_mul_mt(black_box(&t2)).unwrap();
         })
     });
 }
 
 
-criterion_group!(benches, bench_concat_mt, bench_transpose, bench_concat_mul);
+criterion_group!(benches, bench_concat_mt, bench_transpose, bench_contract_mul_mt);
 criterion_main!(benches);

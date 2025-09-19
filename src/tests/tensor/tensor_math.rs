@@ -583,4 +583,21 @@ mod tensor_math_tests {
         assert_approx_eq!(f64, coefficients.iter().enumerate().map(|(i, c)| c * roots[2].powi(i as i32)).reduce(Complex64::add).unwrap().abs(), 0.0, epsilon = 2e-10);
         assert_approx_eq!(f64, coefficients.iter().enumerate().map(|(i, c)| c * roots[3].powi(i as i32)).reduce(Complex64::add).unwrap().abs(), 0.0, epsilon = 2e-10);
     }
+
+    #[test]
+    fn contract_mul_mt() {
+        let t1 = Tensor::<Complex64>::new(
+            &ts![10, 30, 20],
+            (0..6000).map(|i| Complex64::new(i as f64, i as f64)).collect(),
+        ).unwrap();
+        let t2 = Tensor::<Complex64>::new(
+            &ts![20, 100],
+            (0..2000).map(|i| Complex64::new(i as f64, i as f64)).collect(),
+        ).unwrap();
+
+        let ans = t1.clone().contract_mul(&t2).unwrap();
+        let mt_ans = t1.contract_mul_mt(&t2).unwrap();
+
+        assert_eq!(ans, mt_ans);
+    }
 }
