@@ -241,7 +241,7 @@ mod tensor_util_tests {
         let t1 = Tensor::<i32>::from_shape(&ts![200, 300]);
         let t2 = Tensor::<i32>::from_value(&ts![200, 200], 2);
 
-        let ans = t1.clone().concat(&t2, 1).unwrap();
+        let ans = t1.concat(&t2, 1).unwrap();
         let mt_ans = t1.concat_mt(&t2, 1).unwrap();
 
         assert_eq!(ans, mt_ans);

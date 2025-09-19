@@ -20,7 +20,7 @@ pub fn bench_transpose(c: &mut Criterion) {
 
     c.bench_function("transpose", |b| {
         b.iter(|| {
-            t1.clone().transpose(&Transpose::new(&vec![2, 0, 1]).unwrap()).unwrap();
+            t1.transpose(&Transpose::new(&vec![2, 0, 1]).unwrap()).unwrap();
         })
     });
 }

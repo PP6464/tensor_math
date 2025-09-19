@@ -235,6 +235,21 @@ mod tensor_math_tests {
     }
 
     #[test]
+    fn clipping() {
+        let t1 = Tensor::<i32>::new(
+            &ts![3, 3, 3],
+            (0..27).collect(),
+        ).unwrap();
+        let t1 = t1.clip(5, 10);
+        let ans = Tensor::<i32>::new(
+            &ts![3, 3, 3],
+            vec![5, 5, 5, 5, 5, 5, 6, 7, 8, 9, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
+        ).unwrap();
+
+        assert_eq!(t1, ans);
+    }
+
+    #[test]
     fn pool_tensor() {
         let t1: Tensor<f64> = Tensor::<i32>::new(
             &ts![3, 3, 3],

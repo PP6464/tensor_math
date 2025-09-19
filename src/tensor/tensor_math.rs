@@ -214,13 +214,13 @@ impl Transpose {
         Transpose::new((0..n).collect::<Vec<usize>>().as_ref()).unwrap()
     }
 
-    /// Swap two axes, consuming the original and returning the new one
-    pub fn swap_axes(self, axis1: usize, axis2: usize) -> Result<Self, TensorErrors> {
+    /// Swap two axes
+    pub fn swap_axes(&self, axis1: usize, axis2: usize) -> Result<Self, TensorErrors> {
         if axis1 >= self.permutation.len() || axis2 >= self.permutation.len() {
             return Err(TensorErrors::TransposePermutationInvalid);
         }
 
-        let mut new_perm = self.permutation;
+        let mut new_perm = self.permutation.clone();
         new_perm.swap(axis1, axis2);
 
         Transpose::new(&new_perm)
@@ -267,8 +267,8 @@ impl Transpose {
 }
 
 impl<T: Clone> Tensor<T> {
-    /// Transposes a `Tensor`, consuming it and returning the new one
-    pub fn transpose(self, transpose: &Transpose) -> Result<Tensor<T>, TensorErrors> {
+    /// Transposes a `Tensor`
+    pub fn transpose(&self, transpose: &Transpose) -> Result<Tensor<T>, TensorErrors> {
         if transpose.permutation.len() != self.shape().rank() {
             return Err(TensorErrors::ShapesIncompatible);
         }
@@ -307,7 +307,7 @@ impl<T: Add<Output = T> + Clone> Tensor<T> {
 impl<T: PartialOrd + Clone> Tensor<T> {
     /// Bounds the values between `min` and `max`
     /// consuming the original and returning the result
-    pub fn clip(self, min: T, max: T) -> Tensor<T> {
+    pub fn clip(&self, min: T, max: T) -> Tensor<T> {
         let shape = self.shape();
         Tensor::new(
             shape,
@@ -332,7 +332,7 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T>> Tensor<T> {
     /// A `Tensor` of shape (a,b,c) multiplied in this way by a `Tensor` of shape (c, d, e, f)
     /// will produce a resultant `Tensor` of shape (a, b, d, e, f) by the following formula:
     /// result(a, b, d, e, f) = sum(x=0, x=c) { first(a, b, x) * second(x, d, e, f) }
-    pub fn contract_mul(self, other: &Tensor<T>) -> Result<Tensor<T>, TensorErrors> {
+    pub fn contract_mul(&self, other: &Tensor<T>) -> Result<Tensor<T>, TensorErrors> {
         if self.shape.0.last().unwrap() != other.shape.0.first().unwrap() {
             return Err(TensorErrors::ShapesIncompatible);
         }
