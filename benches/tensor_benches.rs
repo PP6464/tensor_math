@@ -2,11 +2,11 @@ use std::hint::black_box;
 use criterion::{criterion_group, criterion_main, Criterion};
 use tensor_math::tensor::tensor::{Tensor, Shape};
 use tensor_math::tensor::tensor_math::Transpose;
-use tensor_math::ts;
+use tensor_math::shape;
 
 pub fn bench_concat_mt(c: &mut Criterion) {
-    let t1: Tensor<f64> = Tensor::rand(&ts![100, 100, 100]);
-    let t2: Tensor<f64> = Tensor::rand(&ts![100, 2000, 100]);
+    let t1: Tensor<f64> = Tensor::rand(&shape![100, 100, 100]);
+    let t2: Tensor<f64> = Tensor::rand(&shape![100, 2000, 100]);
 
     c.bench_function("concat_mt", |b| {
         b.iter(|| {
@@ -16,7 +16,7 @@ pub fn bench_concat_mt(c: &mut Criterion) {
 }
 
 pub fn bench_transpose(c: &mut Criterion) {
-    let t1: Tensor<f64> = Tensor::rand(&ts![100, 100, 100]);
+    let t1: Tensor<f64> = Tensor::rand(&shape![100, 100, 100]);
 
     c.bench_function("transpose", |b| {
         b.iter(|| {
@@ -26,8 +26,8 @@ pub fn bench_transpose(c: &mut Criterion) {
 }
 
 pub fn bench_contract_mul_mt(c: &mut Criterion) {
-    let t1: Tensor<f64> = Tensor::rand(&ts![100, 100]);
-    let t2: Tensor<f64> = Tensor::rand(&ts![100, 100]);
+    let t1: Tensor<f64> = Tensor::rand(&shape![100, 100]);
+    let t2: Tensor<f64> = Tensor::rand(&shape![100, 100]);
 
     c.bench_function("contract_mul_mt", |b| {
         b.iter(|| {

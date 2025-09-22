@@ -4,15 +4,8 @@ use std::ops::{Add, Deref, DerefMut, Index, IndexMut, Mul, Range};
 use std::slice::Iter;
 use std::thread;
 use std::vec::IntoIter;
+use num::Zero;
 use thiserror::Error;
-
-#[derive(Debug, Error)]
-pub enum ShapeValidationError {
-    #[error("Shape vector contains 0")]
-    ShapeContainsZero,
-    #[error("Shape vector has no dimensions")]
-    ShapeNoDimensions,
-}
 
 #[derive(Debug, Error)]
 pub enum TensorErrors {
@@ -28,6 +21,10 @@ pub enum TensorErrors {
     TransposePermutationInvalid,
     #[error("Determinant is zero")]
     DeterminantZero,
+    #[error("Shape vector contains 0")]
+    ShapeContainsZero,
+    #[error("Shape vector has no dimensions")]
+    ShapeNoDimensions,
 }
 
 pub(crate) fn dot_vectors<T: Add<Output = T> + Mul<Output = T> + Clone>(
@@ -62,13 +59,13 @@ pub fn tensor_index(address: usize, shape: &Shape) -> Vec<usize> {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Shape(pub(crate) Vec<usize>);
 impl Shape {
-    pub fn new(shape: Vec<usize>) -> Result<Self, ShapeValidationError> {
+    pub fn new(shape: Vec<usize>) -> Result<Self, TensorErrors> {
         if shape.is_empty() {
-            return Err(ShapeValidationError::ShapeNoDimensions);
+            return Err(TensorErrors::ShapeNoDimensions);
         }
 
         if shape.contains(&0) {
-            return Err(ShapeValidationError::ShapeContainsZero);
+            return Err(TensorErrors::ShapeContainsZero);
         }
 
         Ok(Shape(shape))
@@ -96,7 +93,7 @@ impl IndexMut<usize> for Shape {
     }
 }
 impl TryFrom<Vec<usize>> for Shape {
-    type Error = ShapeValidationError;
+    type Error = TensorErrors;
 
     fn try_from(shape: Vec<usize>) -> Result<Self, Self::Error> {
         Shape::new(shape)
@@ -108,7 +105,7 @@ impl TryFrom<Vec<usize>> for Shape {
 /// Assumes the arguments form a valid shape so
 /// will panic! if the arguments are valid instead
 /// of returning a `Result` type
-macro_rules! ts {
+macro_rules! shape {
     ($($shape_dimensions:expr),*$(,)?) => {
         Shape::new(vec![$($shape_dimensions),*]).unwrap()
     };
@@ -268,6 +265,7 @@ impl<T> Tensor<T> {
     }
 }
 impl<T: Clone> Tensor<T> {
+    /// Creates a tensor from a single value with specified shape
     pub fn from_value(shape: &Shape, value: T) -> Self {
         let elements = vec![value; shape.element_count()];
         Tensor::new(shape, elements).unwrap()
@@ -294,7 +292,7 @@ impl<T: Clone> Tensor<T> {
             resultant_shape.push(self.shape[i]);
         }
 
-        let resultant_shape: Shape = resultant_shape.try_into().unwrap();
+        let resultant_shape: Shape = resultant_shape.try_into()?;
         let mut resultant_elements: Vec<T> = Vec::with_capacity(resultant_shape.element_count());
 
         if dim == 0 {
@@ -400,7 +398,7 @@ impl<T: Clone + Send + Sync> Tensor<T> {
             resultant_shape.push(self.shape[i]);
         }
 
-        let resultant_shape: Shape = resultant_shape.try_into().unwrap();
+        let resultant_shape: Shape = resultant_shape.try_into()?;
 
         if dim == 0 {
             // If the dimension is 0 we can just merge the elements one after another
@@ -408,11 +406,6 @@ impl<T: Clone + Send + Sync> Tensor<T> {
             res_elems.extend(other.elements.clone());
             return Ok(Tensor::new(&resultant_shape, res_elems)?);
         }
-
-        // let res_elem_mutexes = Arc::new(RwLock::new(vec![Arc::new(Mutex::new(self.first().unwrap().clone())); resultant_shape.element_count()]));
-        //
-        // let self_element_arcs: Arc<Tensor<T>> = Arc::new(self.clone());
-        // let other_element_arcs: Arc<Tensor<T>> = Arc::new(other.clone());
 
         let mut res_elems = vec![self.first().unwrap().clone(); resultant_shape.element_count()];
 
@@ -542,21 +535,26 @@ impl<T> IntoIterator for Tensor<T> {
 impl<'a, T: Clone> From<Iter<'a, T>> for Tensor<T> {
     fn from(value: Iter<'a, T>) -> Self {
         let elements: Vec<T> = value.map(|x| x.clone()).collect();
-        Tensor::new(&ts![elements.len()], elements).unwrap()
+        Tensor::new(&shape![elements.len()], elements).unwrap()
     }
 }
 /// Converts an `IntoIter<T>` into a `Tensor<T>` of shape (length_of_iter)
 impl<T> From<IntoIter<T>> for Tensor<T> {
     fn from(value: IntoIter<T>) -> Self {
         let elements: Vec<T> = value.collect();
-        Tensor::new(&ts![elements.len()], elements).unwrap()
+        Tensor::new(&shape![elements.len()], elements).unwrap()
     }
 }
 /// Converts an `Iterator<T>` into a `Tensor<T>` of shape (length_of_iter)
 impl<T> FromIterator<T> for Tensor<T> {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
         let elements: Vec<T> = iter.into_iter().collect();
-        Tensor::new(&ts![elements.len()], elements).unwrap()
+        Tensor::new(&shape![elements.len()], elements).unwrap()
+    }
+}
+impl<T> From<Matrix<T>> for Tensor<T> {
+    fn from(value: Matrix<T>) -> Self {
+        value.tensor
     }
 }
 impl<T> Deref for Tensor<T> {
@@ -569,14 +567,25 @@ impl<T> Deref for Tensor<T> {
 impl<T> DerefMut for Tensor<T> {
     fn deref_mut(&mut self) -> &mut Self::Target { self.elements.as_mut_slice() }
 }
-/// This trait allows you to specify that something can be converted into a type of `Tensor<T>`.
-/// It has the `into_tensor` method that converts the value into a `Tensor<T>`, consuming it.
+/// This trait allows you to specify that something can be infallibly converted into a type of `Tensor<T>`.
+/// It has the `into_tensor` method that converts the value into a `Tensor<T>`, consuming it. Bear in mind
+/// that this does then automatically derive an implementation for `TryIntoTensor`.
 pub trait IntoTensor<T> {
     fn into_tensor(self) -> Tensor<T>;
 }
-impl<O, T: From<O>> IntoTensor<T> for Tensor<O> {
-    fn into_tensor(self) -> Tensor<T> {
-        self.transform_elementwise(|x| T::from(x))
+/// This trait allows you to specify that something can be fallibly converted into a type of `Tensor<T>`.
+/// It has the `try_into_tensor` method that attempts to convert the value into a `Tensor<T>`, consuming it
+/// and returning an error value if not possible.
+pub trait TryIntoTensor<T> {
+    type Error;
+
+    fn try_into_tensor(self) -> Result<Tensor<T>, Self::Error>;
+}
+impl<T, O: IntoTensor<T>> TryIntoTensor<T> for O {
+    type Error = ();
+
+    fn try_into_tensor(self) -> Result<Tensor<T>, Self::Error> {
+        Ok(self.into_tensor())
     }
 }
 impl<T: Clone> IntoTensor<T> for TensorSliceMut<'_, T> {
@@ -592,6 +601,329 @@ impl<T: Clone> IntoTensor<T> for Vec<T> {
 }
 impl<T: Default + Clone> Default for Tensor<T> {
     fn default() -> Self {
-        Tensor::from_shape(&ts![1])
+        Tensor::from_shape(&shape![1])
+    }
+}
+impl<T: Zero + Clone> Tensor<T> {
+    pub fn zeros(shape: &Shape) -> Tensor<T> {
+        Tensor::from_value(shape, T::zero())
+    }
+}
+
+/// This struct represents a matrix, i.e. a rank 2 tensor.
+/// The underlying tensor is just `matrix.tensor`
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct Matrix<T> {
+    pub(crate) tensor: Tensor<T>,
+    pub(crate) rows: usize,
+    pub(crate) cols: usize,
+}
+impl<T> IntoTensor<T> for Matrix<T> {
+    fn into_tensor(self) -> Tensor<T> {
+        self.tensor
+    }
+}
+impl<T> TryFrom<Tensor<T>> for Matrix<T> {
+    type Error = TensorErrors;
+    fn try_from(tensor: Tensor<T>) -> Result<Self, Self::Error> {
+        if tensor.rank() != 2 {
+            return Err(TensorErrors::ShapesIncompatible);
+        }
+
+        Ok(Matrix {
+            rows: tensor.shape[0],
+            cols: tensor.shape[1],
+            tensor,
+        })
+    }
+}
+impl<T> Matrix<T> {
+    pub fn new(rows: usize, cols: usize, elements: Vec<T>) -> Result<Matrix<T>, TensorErrors> {
+        Ok(Matrix {
+            tensor: Tensor::new(&Shape::new(vec![rows, cols])?, elements)?,
+            rows,
+            cols,
+        })
+    }
+
+    pub fn is_square(&self) -> bool {
+        self.rows == self.cols
+    }
+
+    pub fn shape(&self) -> Shape {
+        shape![self.rows, self.cols]
+    }
+
+    pub fn rows(&self) -> usize {
+        self.rows
+    }
+
+    pub fn cols(&self) -> usize {
+        self.cols
+    }
+
+    pub fn reshape(self, new_rows: usize, new_cols: usize) -> Result<Matrix<T>, TensorErrors> {
+        Ok(Matrix {
+            tensor: self.tensor.reshape(&shape![new_rows, new_cols])?,
+            rows: new_rows,
+            cols: new_cols,
+        })
+    }
+
+    pub fn reshape_in_place(&mut self, new_rows: usize, new_cols: usize) -> Result<(), TensorErrors> {
+        self.tensor.reshape_in_place(&shape![new_rows, new_cols])?;
+        self.rows = new_rows;
+        self.cols = new_cols;
+
+        Ok(())
+    }
+
+    pub fn transform_elementwise<F>(self, f: impl FnMut(T) -> F) -> Matrix<F> {
+        let rows = self.rows;
+        let cols = self.cols;
+
+        Matrix {
+            tensor: self.tensor.transform_elementwise(f),
+            rows,
+            cols,
+        }
+    }
+}
+impl<T: Clone> Matrix<T> {
+    /// Creates a matrix from a single value with specified shape.
+    /// Will panic if one of rows or cols is 0
+    pub fn from_value(rows: usize, cols: usize, value: T) -> Matrix<T> {
+        Matrix {
+            tensor: Tensor::from_value(&shape![rows, cols], value),
+            rows,
+            cols,
+        }
+    }
+
+    /// Concatenates two matrices along the specified dim (0 or 1)
+    pub fn concat(&self, other: &Matrix<T>, dim: usize) -> Result<Matrix<T>, TensorErrors> {
+        let res = self.tensor.concat(&other.tensor, dim)?;
+        let res_shape = res.shape.clone();
+
+        Ok(Matrix {
+            tensor: res,
+            rows: res_shape[0],
+            cols: res_shape[1],
+        })
+    }
+
+    /// Gives an enumerated iter with matrix indices
+    pub fn enumerated_iter(&self) -> impl Iterator<Item = ((usize, usize), T)> + use<'_, T> {
+        self.tensor.enumerated_iter().map(|(i, x)| ((i[0], i[1]), x))
+    }
+
+    /// Gives a mutable enumerated iter with matrix indices
+    pub fn enumerated_iter_mut(&mut self) -> impl Iterator<Item = ((usize, usize), &mut T)> + use<'_, T> {
+        self.tensor.enumerated_iter_mut().map(|(i, x)| ((i[0], i[1]), x))
+    }
+
+    /// Gives an immutable cloned slice to a certain part of the matrix
+    pub fn slice(&self, rows_range: Range<usize>, cols_range: Range<usize>) -> Matrix<T> {
+        Matrix {
+            tensor: self.tensor.slice(&[rows_range.clone(), cols_range.clone()]),
+            rows: rows_range.len(),
+            cols: cols_range.len(),
+        }
+    }
+
+    /// Gives a mutable slic to a certain part of the matrix
+    pub fn slice_mut(&mut self, rows_range: Range<usize>, cols_range: Range<usize>) -> MatrixSliceMut<'_, T> {
+        MatrixSliceMut {
+            orig: self,
+            start: (rows_range.start, cols_range.start),
+            end: (rows_range.end, cols_range.end),
+        }
+    }
+}
+impl<T: Clone + Send + Sync> Matrix<T> {
+    pub fn concat_mt(&self, other: &Matrix<T>, dim: usize) -> Result<Matrix<T>, TensorErrors> {
+        let res_tensor = self.tensor.concat_mt(&other.tensor, dim)?;
+
+        res_tensor.try_into()
+    }
+}
+impl<T: Default + Clone> Matrix<T> {
+    pub fn from_shape(rows: usize, cols: usize) -> Matrix<T> {
+        Matrix {
+            tensor: Tensor::<T>::from_shape(&shape![rows, cols]),
+            rows,
+            cols,
+        }
+    }
+}
+impl<T: Default + Clone> Matrix<T> where StandardUniform: Distribution<T>, [T]: Fill {
+    pub fn rand(rows: usize, cols: usize) -> Matrix<T> {
+        Matrix {
+            tensor: Tensor::<T>::rand(&shape![rows, cols]),
+            rows,
+            cols,
+        }
+    }
+}
+impl<T> Index<&[usize; 2]> for Matrix<T> {
+    type Output = T;
+
+    fn index(&self, index: &[usize; 2]) -> &Self::Output {
+        &self.tensor[index]
+    }
+}
+impl<T> Index<(usize, usize)> for Matrix<T> {
+    type Output = T;
+
+    fn index(&self, index: (usize, usize)) -> &Self::Output {
+        &self.tensor[&[index.0, index.1]]
+    }
+}
+impl<T> IndexMut<&[usize; 2]> for Matrix<T> {
+    fn index_mut(&mut self, index: &[usize; 2]) -> &mut Self::Output {
+        &mut self.tensor[index]
+    }
+}
+impl<T> IndexMut<(usize, usize)> for Matrix<T> {
+    fn index_mut(&mut self, index: (usize, usize)) -> &mut Self::Output {
+        &mut self.tensor[&[index.0, index.1]]
+    }
+}
+impl<T: Zero + Clone> Matrix<T> {
+    pub fn zeros(rows: usize, cols: usize) -> Matrix<T> {
+        Matrix::from_value(rows, cols, T::zero())
+    }
+}
+pub struct MatrixSliceMut<'a, T> {
+    pub(crate) orig: &'a mut Matrix<T>,
+    pub(crate) start: (usize, usize),
+    pub(crate) end: (usize, usize),
+}
+impl<T> Index<(usize, usize)> for MatrixSliceMut<'_, T> {
+    type Output = T;
+
+    fn index(&self, index: (usize, usize)) -> &Self::Output {
+        assert!(index.0 + self.start.0 < self.end.0);
+        assert!(index.1 + self.start.1 < self.end.1);
+
+        &self.orig[(self.start.0 + index.0, self.start.1 + index.1)]
+    }
+}
+impl<T> Index<&[usize; 2]> for MatrixSliceMut<'_, T> {
+    type Output = T;
+
+    fn index(&self, index: &[usize; 2]) -> &Self::Output {
+        assert!(self.start.0 + index[0] < self.end.0);
+        assert!(self.start.1 + index[1] < self.end.1);
+
+        &self.orig[(self.start.0 + index[0], self.start.1 + index[1])]
+    }
+}
+impl<T> IndexMut<(usize, usize)> for MatrixSliceMut<'_, T> {
+    fn index_mut(&mut self, index: (usize, usize)) -> &mut Self::Output {
+        assert!(index.0 + self.start.0 < self.end.0);
+        assert!(index.1 + self.start.1 < self.end.1);
+
+        &mut self.orig[(self.start.0 + index.0, self.start.1 + index.1)]
+    }
+}
+impl<T> IndexMut<&[usize; 2]> for MatrixSliceMut<'_, T> {
+    fn index_mut(&mut self, index: &[usize; 2]) -> &mut Self::Output {
+        assert!(self.start.0 + index[0] < self.end.0);
+        assert!(self.start.1 + index[1] < self.end.1);
+
+        &mut self.orig[(self.start.0 + index[0], self.start.1 + index[1])]
+    }
+}
+impl<T> Deref for Matrix<T> {
+    type Target = Tensor<T>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.tensor
+    }
+}
+impl<T> DerefMut for Matrix<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.tensor
+    }
+}
+impl<T: Default + Clone> Default for Matrix<T> {
+    fn default() -> Self {
+        Matrix {
+            tensor: Tensor::<T>::default().reshape(&shape![1, 1]).unwrap(),
+            rows: 1,
+            cols: 1,
+        }
+    }
+}
+impl<T> IntoIterator for Matrix<T> {
+    type Item = T;
+    type IntoIter = IntoIter<Self::Item>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.tensor.into_iter()
+    }
+}
+/// Converts an `IntoIter<T>` into a `Matrix<T>` of shape (1, length_of_iter)
+impl<T> From<IntoIter<T>> for Matrix<T> {
+    fn from(value: IntoIter<T>) -> Self {
+        let l = value.len();
+
+        Matrix {
+            tensor: value.into(),
+            rows: 1,
+            cols: l,
+        }
+    }
+}
+/// Converts an `IntoIter<T>` into a `Matrix<T>` of shape (1, length_of_iter)
+impl<T> FromIterator<T> for Matrix<T> {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        let elems = iter.into_iter().collect::<Vec<_>>();
+
+        Matrix {
+            rows: 1,
+            cols: elems.len(),
+            tensor: Tensor::new(&shape![1, elems.len()], elems).unwrap(),
+        }
+    }
+}
+/// Converts an iterator into a `Matrix<T>` of shape (1, length_of_iter)
+impl<'a, T: Clone> From<Iter<'a, T>> for Matrix<T> {
+    fn from(value: Iter<'a, T>) -> Self {
+        let elements: Vec<T> = value.map(|x| x.clone()).collect();
+        Matrix {
+            rows: 1,
+            cols: elements.len(),
+            tensor: Tensor::new(&shape![elements.len()], elements).unwrap(),
+        }
+    }
+}
+/// This trait allows you to specify that something can be infallibly converted into a `Matrix<T>`.
+/// Bear in mind that this does automatically derive an implementation for `TryIntoMatrix<T>`.
+pub trait IntoMatrix<T> {
+    fn into_matrix(self) -> Matrix<T>;
+}
+/// This trait allows you to specify that something can be fallibly converted into a `Matrix<T>`,
+/// returning an error value if it is not possible.
+pub trait TryIntoMatrix<T> {
+    type Error;
+
+    fn try_into_matrix(self) -> Result<Matrix<T>, Self::Error>;
+}
+impl<T, O: IntoMatrix<T>> TryIntoMatrix<T> for O {
+    type Error = ();
+
+    fn try_into_matrix(self) -> Result<Matrix<T>, Self::Error> {
+        Ok(self.into_matrix())
+    }
+}
+impl<T: Clone> IntoMatrix<T> for Vec<T> {
+    fn into_matrix(self) -> Matrix<T> {
+        Matrix::new(1, self.len(), self).unwrap()
+    }
+}
+impl<T: Clone> IntoMatrix<T> for MatrixSliceMut<'_, T> {
+    fn into_matrix(self) -> Matrix<T> {
+        self.orig.slice(self.start.0..self.end.0, self.start.1..self.end.1)
     }
 }

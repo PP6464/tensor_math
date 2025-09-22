@@ -1,10 +1,10 @@
 use crate::tensor::tensor::TensorErrors::DeterminantZero;
-use crate::tensor::tensor::{dot_vectors, IntoTensor, Shape, Strides, Tensor};
+use crate::tensor::tensor::{dot_vectors, IntoTensor, Matrix, Shape, Strides, Tensor};
 use crate::tensor::tensor::{tensor_index, TensorErrors};
-use crate::ts;
+use crate::shape;
 use float_cmp::{approx_eq, ApproxEq, F64Margin};
 use num::complex::{Complex64, ComplexFloat};
-use num::{ToPrimitive};
+use num::{One, ToPrimitive, Zero};
 use rand::distr::weighted::WeightedIndex;
 use rand::distr::Distribution;
 use std::cmp::min;
@@ -13,9 +13,9 @@ use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Range, Rem, Sub};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread::scope;
 
-/// Implement an operation elementwise
-/// Also allows you to implement operations with a `Tensor` and a single value
-/// By applying the operation between it and each element of the `Tensor` in turn
+/// Implement an operation elementwise for `Tensor` and `Matrix`
+/// Also allows you to implement operations with a `Tensor`/`Matrix` and a single value
+/// By applying the operation between it and each element of the `Tensor`/`Matrix` in turn
 macro_rules! impl_bin_op {
     ($op:ident, $op_fn:ident) => {
         impl<T: $op<Output = T> + Clone> $op<Tensor<T>> for Tensor<T> {
@@ -162,6 +162,150 @@ macro_rules! impl_bin_op {
                 Tensor::new(self.shape(), elements).unwrap()
             }
         }
+        impl<T: $op<Output = T> + Clone> $op<Matrix<T>> for Matrix<T> {
+            type Output = Matrix<T>;
+
+            fn $op_fn(self, rhs: Matrix<T>) -> Matrix<T> {
+                assert_eq!(
+                    self.shape(),
+                    rhs.shape(),
+                    "{}",
+                    TensorErrors::ShapesIncompatible
+                );
+
+                let elements = self
+                    .elements()
+                    .into_iter()
+                    .cloned()
+                    .zip(rhs.elements().into_iter().cloned())
+                    .map(|(a, b)| a.$op_fn(b))
+                    .collect();
+
+                Matrix::new(self.rows, self.cols, elements).unwrap()
+            }
+        }
+        impl<T: $op<Output = T> + Clone> $op<Matrix<T>> for &Matrix<T> {
+            type Output = Matrix<T>;
+
+            fn $op_fn(self, rhs: Matrix<T>) -> Matrix<T> {
+                assert_eq!(
+                    self.shape(),
+                    rhs.shape(),
+                    "{}",
+                    TensorErrors::ShapesIncompatible
+                );
+
+                let elements = self
+                    .elements()
+                    .into_iter()
+                    .cloned()
+                    .zip(rhs.elements().into_iter().cloned())
+                    .map(|(a, b)| a.$op_fn(b))
+                    .collect();
+
+                Matrix::new(self.rows, self.cols, elements).unwrap()
+            }
+        }
+        impl<T: $op<Output = T> + Clone> $op<&Matrix<T>> for &Matrix<T> {
+            type Output = Matrix<T>;
+
+            fn $op_fn(self, rhs: &Matrix<T>) -> Matrix<T> {
+                assert_eq!(
+                    self.shape(),
+                    rhs.shape(),
+                    "{}",
+                    TensorErrors::ShapesIncompatible
+                );
+
+                let elements = self
+                    .elements()
+                    .into_iter()
+                    .cloned()
+                    .zip(rhs.elements().into_iter().cloned())
+                    .map(|(a, b)| a.$op_fn(b))
+                    .collect();
+
+                Matrix::new(self.rows, self.cols, elements).unwrap()
+            }
+        }
+        impl<T: $op<Output = T> + Clone> $op<&Matrix<T>> for Matrix<T> {
+            type Output = Matrix<T>;
+
+            fn $op_fn(self, rhs: &Matrix<T>) -> Matrix<T> {
+                assert_eq!(
+                    self.shape(),
+                    rhs.shape(),
+                    "{}",
+                    TensorErrors::ShapesIncompatible
+                );
+
+                let elements = self
+                    .elements()
+                    .into_iter()
+                    .cloned()
+                    .zip(rhs.elements().into_iter().cloned())
+                    .map(|(a, b)| a.$op_fn(b))
+                    .collect();
+
+                Matrix::new(self.rows, self.cols, elements).unwrap()
+            }
+        }
+        impl<T: $op<Output = T> + Clone> $op<T> for &Matrix<T> {
+            type Output = Matrix<T>;
+
+            fn $op_fn(self, rhs: T) -> Matrix<T> {
+                let elements = self
+                    .elements()
+                    .into_iter()
+                    .cloned()
+                    .map(|a| a.$op_fn(rhs.clone()))
+                    .collect();
+
+                Matrix::new(self.rows, self.cols, elements).unwrap()
+            }
+        }
+        impl<T: $op<Output = T> + Clone> $op<T> for Matrix<T> {
+            type Output = Matrix<T>;
+
+            fn $op_fn(self, rhs: T) -> Matrix<T> {
+                let elements = self
+                    .elements()
+                    .into_iter()
+                    .cloned()
+                    .map(|a| a.$op_fn(rhs.clone()))
+                    .collect();
+
+                Matrix::new(self.rows, self.cols, elements).unwrap()
+            }
+        }
+        impl<T: $op<Output = T> + Clone> $op<&T> for Matrix<T> {
+            type Output = Matrix<T>;
+
+            fn $op_fn(self, rhs: &T) -> Matrix<T> {
+                let elements = self
+                    .elements()
+                    .into_iter()
+                    .cloned()
+                    .map(|a| a.$op_fn(rhs.clone()))
+                    .collect();
+
+                Matrix::new(self.rows, self.cols, elements).unwrap()
+            }
+        }
+        impl<T: $op<Output = T> + Clone> $op<&T> for &Matrix<T> {
+            type Output = Matrix<T>;
+
+            fn $op_fn(self, rhs: &T) -> Matrix<T> {
+                let elements = self
+                    .elements()
+                    .into_iter()
+                    .cloned()
+                    .map(|a| a.$op_fn(rhs.clone()))
+                    .collect();
+
+                Matrix::new(self.rows, self.cols, elements).unwrap()
+            }
+        }
     };
 }
 
@@ -178,9 +322,14 @@ impl<T: Neg<Output = T> + Clone> Neg for Tensor<T> {
     type Output = Tensor<T>;
 
     fn neg(self) -> Self::Output {
-        let elements = self.elements().into_iter().cloned().map(|a| -a).collect();
+        self.transform_elementwise(|x| -x)
+    }
+}
+impl<T: Neg<Output = T> + Clone> Neg for Matrix<T> {
+    type Output = Matrix<T>;
 
-        Tensor::new(self.shape(), elements).unwrap()
+    fn neg(self) -> Self::Output {
+        self.transform_elementwise(|x| -x)
     }
 }
 
@@ -266,6 +415,15 @@ impl Transpose {
     }
 }
 
+#[macro_export]
+/// Creates an instance of `Transpose` using the specified permutation.
+/// Assumes the permutation is valid so will panic if it is not.
+macro_rules! transpose {
+    ($($x:expr),*$(,)?) => {
+        Transpose::new(&vec![$($x),*]).unwrap()
+    };
+}
+
 impl<T: Clone> Tensor<T> {
     /// Transposes a `Tensor`
     pub fn transpose(&self, transpose: &Transpose) -> Result<Tensor<T>, TensorErrors> {
@@ -298,10 +456,27 @@ impl<T: Clone> Tensor<T> {
         Ok(())
     }
 }
+impl<T: Clone> Matrix<T> {
+    /// Transpose a `Matrix`
+    pub fn transpose(&self) -> Matrix<T> {
+        self.tensor.transpose(&transpose![1, 0]).unwrap().try_into().unwrap()
+    }
+
+    /// Transpose a `Matrix` in-place
+    pub fn transpose_in_place(&mut self) {
+        self.tensor = self.tensor.transpose(&transpose![1, 0]).unwrap();
+    }
+}
 impl<T: Add<Output = T> + Clone> Tensor<T> {
     /// Compute the sum of the tensor
     pub fn sum(&self) -> T {
         self.iter().cloned().reduce(T::add).unwrap()
+    }
+}
+impl<T: Add<Output = T> + Clone> Matrix<T> {
+    /// Compute the sum of a `Matrix`
+    pub fn sum(&self) -> T {
+        self.tensor.sum()
     }
 }
 impl<T: PartialOrd + Clone> Tensor<T> {
@@ -325,6 +500,71 @@ impl<T: PartialOrd + Clone> Tensor<T> {
                 .collect(),
         )
         .unwrap()
+    }
+}
+impl<T: PartialOrd + Clone> Matrix<T> {
+    /// Clips the values in the `Matrix` between [min, max\]
+    pub fn clip(&self, min: T, max: T) -> Matrix<T> {
+        let mut res = self.clone();
+
+        for val in res.iter_mut() {
+            if *val <= min {
+                *val = min.clone();
+            } else if *val >= max {
+                *val = max.clone();
+            }
+        }
+
+        res
+    }
+}
+impl<T: Clone + Mul<Output = T>> Tensor<T> {
+    /// Implements the Kronecker product for any two things that can be converted to tensors.
+    /// The Kronecker product scales the second tensor by each element of the first tensor,
+    /// giving a `Tensor` of type `Tensor<T>`. This is then simplified into just `Tensor<T>`
+    /// with the result having a shape that is the element-wise product of the two input
+    /// tensors' shapes (if one has a lower rank than the other, then the rest of the larger rank
+    /// tensor's shape values are inserted afterward).
+    pub fn kronecker(&self, other: &Tensor<T>) -> Tensor<T> {
+        let mut new_shape_vec = Vec::new();
+
+        if self.rank() > other.rank() {
+            for i in 0..other.rank() {
+                new_shape_vec.push(self.shape[i] * other.shape[i]);
+            }
+
+            for i in other.rank()..self.rank() {
+                new_shape_vec.push(self.shape[i]);
+            }
+        } else {
+            for i in 0..self.rank() {
+                new_shape_vec.push(self.shape[i] * other.shape[i]);
+            }
+
+            for i in self.rank()..other.rank() {
+                new_shape_vec.push(other.shape[i]);
+            }
+        }
+
+        let new_shape = Shape::new(new_shape_vec).unwrap();
+        let mut new_elements = Vec::with_capacity(new_shape.element_count());
+
+        for i in self.elements.iter().cloned() {
+            let tensor = other * i;
+            new_elements.extend(tensor.elements);
+        }
+
+        new_elements.into_tensor().reshape(&new_shape).unwrap()
+    }
+}
+impl<T: Clone + Mul<Output = T>> Matrix<T> {
+    pub fn kronecker(&self, other: &Matrix<T>) -> Matrix<T> {
+        let res_tensor = self.tensor.kronecker(&other.tensor);
+        Matrix {
+            rows: res_tensor.shape[0],
+            cols: res_tensor.shape[1],
+            tensor: res_tensor,
+        }
     }
 }
 impl<T: Clone + Add<Output = T> + Mul<Output = T>> Tensor<T> {
@@ -381,65 +621,24 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T>> Tensor<T> {
         Ok(resultant_elements.into_tensor().reshape(&resultant_shape)?)
     }
 
-    /// Perform tensor-contraction multiplication, which is a more general form of matrix multiplication
-    /// A `Tensor` of shape (a,b,c) multiplied in this way by a `Tensor` of shape (c, d, e, f)
-    /// will produce a resultant `Tensor` of shape (a, b, d, e, f) by the following formula:
-    /// result(a, b, d, e, f) = sum(x=0, x=c) { first(a, b, x) * second(x, d, e, f) }
-    pub fn contract_mul_borrowed(&self, other: &Tensor<T>) -> Result<Tensor<T>, TensorErrors> {
-        if self.shape.0.last().unwrap() != other.shape.0.first().unwrap() {
-            return Err(TensorErrors::ShapesIncompatible);
-        }
-
-        let mut resultant_shape_vec = self
-            .shape
-            .0
-            .iter()
-            .take(self.rank() - 1)
-            .cloned()
-            .collect::<Vec<usize>>();
-
-        resultant_shape_vec.extend(
-            other
-                .shape
-                .0
-                .iter()
-                .rev()
-                .take(other.rank() - 1)
-                .rev()
-                .cloned(),
-        );
-        let resultant_shape = Shape::new(resultant_shape_vec).unwrap();
-        let mut resultant_elements: Vec<T> = Vec::with_capacity(resultant_shape.element_count());
-
-        for i in 0..resultant_shape.element_count() {
-            let index = tensor_index(i, &resultant_shape);
-            let (self_chunk, other_chunk) = index.split_at(self.rank() - 1);
-            let mut self_elements: Vec<T> = Vec::with_capacity(*self.shape.0.last().unwrap());
-            let mut other_elements: Vec<T> = Vec::with_capacity(*other.shape.0.first().unwrap());
-
-            for j in 0..*self.shape.0.last().unwrap() {
-                let mut self_index = self_chunk.to_vec();
-                self_index.push(j);
-
-                self_elements.push(self[&self_index].clone());
-
-                let mut other_index = other_chunk.to_vec();
-                other_index.insert(0, j);
-                other_elements.push(other[&other_index].clone());
-            }
-
-            resultant_elements.push(dot_vectors(&self_elements, &other_elements));
-        }
-
-        Ok(resultant_elements.into_tensor().reshape(&resultant_shape)?)
-    }
-
     /// Computes the dot product of two tensors, i.e. the element-wise product, then the sum of the result
     pub fn dot(&self, other: &Tensor<T>) -> T {
         (self * other).sum()
     }
 }
+impl<T: Clone + Add<Output = T> + Mul<Output = T>> Matrix<T> {
+    /// Does matrix multiplication with another `Matrix`
+    pub fn contract_mul(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
+        self.tensor.contract_mul(&other.tensor)?.try_into()
+    }
+
+    /// Does matrix multiplication with another matrix. This is just an alternate name for the method
+    pub fn mat_mul(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
+        self.contract_mul(other)
+    }
+}
 impl<T: Clone + Add<Output = T> + Mul<Output = T> + Send + Sync> Tensor<T> {
+    /// Does tensor contraction multiplication on multiple threads
     pub fn contract_mul_mt(&self, other: &Tensor<T>) -> Result<Tensor<T>, TensorErrors> {
         if self.shape.0.last().unwrap() != other.shape.0.first().unwrap() {
             return Err(TensorErrors::ShapesIncompatible);
@@ -505,8 +704,8 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Send + Sync> Tensor<T> {
                         let mut other_indices = other_part.iter().map(|&x| x..x+1).collect::<Vec<Range<usize>>>();
                         other_indices.insert(0, 0..other.shape.0.first().unwrap().clone());
 
-                        let self_elems = self_arc_clone.slice(&self_indices).reshape(&ts![self_arc_clone.shape.0.last().unwrap().clone()]).unwrap();
-                        let other_elems = other.slice(&other_indices).reshape(&ts![other.shape.0.first().unwrap().clone()]).unwrap();
+                        let self_elems = self_arc_clone.slice(&self_indices).reshape(&shape![self_arc_clone.shape.0.last().unwrap().clone()]).unwrap();
+                        let other_elems = other.slice(&other_indices).reshape(&shape![other.shape.0.first().unwrap().clone()]).unwrap();
 
                         let elem_res = self_elems.dot(&other_elems);
 
@@ -522,49 +721,21 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Send + Sync> Tensor<T> {
         Ok(res_read.iter().map(|x| x.lock().unwrap().clone()).collect::<Tensor<T>>().reshape(&res_shape_arc.clone())?)
     }
 }
+impl<T: Clone + Add<Output = T> + Mul<Output = T> + Send + Sync> Matrix<T> {
+    /// Does tensor contraction multiplication on multiple threads
+    pub fn contract_mul_mt(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
+        self.tensor.contract_mul_mt(&other.tensor)?.try_into()
+    }
+
+    /// Does tensor contraction multiplication on multiple threads. This is just an alternate name for the method
+    pub fn mat_mul_mt(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
+        self.contract_mul_mt(other)
+    }
+}
 
 // More complex mathematical functions
 
-/// Implements the Kronecker product for two tensors.
-/// The Kronecker product scales the second tensor by each element of the first tensor,
-/// giving a `Tensor` of type `Tensor<T>`. This is then simplified into just `Tensor<T>`
-/// with the result having a shape that is the element-wise product of the two input
-/// tensors' shapes (if one has a lower rank than the other, then the rest of the larger rank
-/// tensor's shape values are inserted afterward).
-/// Borrows both immutably and returns the result.
-pub fn kronecker_product<T: Clone + Mul<Output = T>>(t1: &Tensor<T>, t2: &Tensor<T>) -> Tensor<T> {
-    let mut new_shape_vec = Vec::new();
-
-    if t1.rank() > t2.rank() {
-        for i in 0..t2.rank() {
-            new_shape_vec.push(t1.shape[i] * t2.shape[i]);
-        }
-
-        for i in t2.rank()..t1.rank() {
-            new_shape_vec.push(t1.shape[i]);
-        }
-    } else {
-        for i in 0..t1.rank() {
-            new_shape_vec.push(t1.shape[i] * t2.shape[i]);
-        }
-
-        for i in t1.rank()..t2.rank() {
-            new_shape_vec.push(t2.shape[i]);
-        }
-    }
-
-    let new_shape = Shape::new(new_shape_vec).unwrap();
-    let mut new_elements = Vec::with_capacity(new_shape.element_count());
-
-    for i in t1.elements.iter().cloned() {
-        let tensor = t2 * i;
-        new_elements.extend(tensor.elements);
-    }
-
-    new_elements.into_tensor().reshape(&new_shape).unwrap()
-}
-
-// Define a bunch of convenience mathematical functions for f64
+// Define a bunch of convenience mathematical functions for Tensor<f64> and Matrix<f64>
 // They will consume the original tensor and return the result
 impl Tensor<f64> {
     /// Exponentiates each element in the tensor
@@ -687,6 +858,127 @@ impl Tensor<f64> {
         self / mag
     }
 }
+impl Matrix<f64> {
+    /// Exponentiates each element in the tensor
+    pub fn exp(self) -> Matrix<f64> {
+        self.transform_elementwise(f64::exp)
+    }
+
+    /// Raises n to the power of each element.
+    /// This method uses `f64::powf` so beware of `f64::NaN` values
+    /// if you have a negative value raised to the power of 0.5 for example
+    pub fn exp_base_n(self, n: f64) -> Matrix<f64> {
+        self.transform_elementwise(|x| f64::powf(n, x))
+    }
+
+    /// Raises each element to the power of n
+    /// Like `exp_base_n` this can give `NaN` values if you aren't careful
+    /// with what you are raising to which power
+    pub fn pow(self, n: f64) -> Matrix<f64> {
+        self.transform_elementwise(|x| f64::powf(x, n))
+    }
+
+    /// Computes the sin of each element
+    pub fn sin(self) -> Matrix<f64> {
+        self.transform_elementwise(f64::sin)
+    }
+
+    /// Computes the cos of each element
+    pub fn cos(self) -> Matrix<f64> {
+        self.transform_elementwise(f64::cos)
+    }
+
+    /// Computes the tan of each element
+    pub fn tan(self) -> Matrix<f64> {
+        self.transform_elementwise(f64::tan)
+    }
+
+    /// Computes the arcsin of each element
+    pub fn asin(self) -> Matrix<f64> {
+        self.transform_elementwise(f64::asin)
+    }
+
+    /// Computes the arccos of each element
+    pub fn acos(self) -> Matrix<f64> {
+        self.transform_elementwise(f64::acos)
+    }
+
+    /// Computes the atan of each element
+    pub fn atan(self) -> Matrix<f64> {
+        self.transform_elementwise(f64::atan)
+    }
+
+    /// Computes the reciprocal of each element.
+    /// Use in conjunction with trigonometric functions to get sec(x), coth(x) etc.
+    pub fn recip(self) -> Matrix<f64> {
+        self.transform_elementwise(f64::recip)
+    }
+
+    /// Computes the sinh of each element
+    pub fn sinh(self) -> Matrix<f64> {
+        self.transform_elementwise(f64::sinh)
+    }
+
+    /// Computes the cosh of each element
+    pub fn cosh(self) -> Matrix<f64> {
+        self.transform_elementwise(f64::cosh)
+    }
+
+    /// Computes the tanh of each element
+    pub fn tanh(self) -> Matrix<f64> {
+        self.transform_elementwise(f64::tanh)
+    }
+
+    /// Computes the arsinh of each element
+    pub fn asinh(self) -> Matrix<f64> {
+        self.transform_elementwise(f64::asinh)
+    }
+
+    /// Computes the arcosh of each element
+    pub fn acosh(self) -> Matrix<f64> {
+        self.transform_elementwise(f64::acosh)
+    }
+
+    /// Computes the artanh of each element
+    pub fn atanh(self) -> Matrix<f64> {
+        self.transform_elementwise(f64::atanh)
+    }
+
+    /// Computes the sigmoid function for each element.
+    /// Sigmoid(x) = 1 / (1 + exp(-x))
+    pub fn sigmoid(self) -> Matrix<f64> {
+        ((-self).exp() + 1.0).recip()
+    }
+
+    /// Computes the ReLU function for each element
+    pub fn relu(self) -> Matrix<f64> {
+        self.transform_elementwise(|x| if x > 0.0 { x } else { 0.0 })
+    }
+
+    /// Computes the leaky ReLU function for each element
+    pub fn leaky_relu(self, alpha: f64) -> Matrix<f64> {
+        self.transform_elementwise(|x| if x > 0.0 { x } else { alpha * x })
+    }
+
+    /// Applies softmax to the tensor
+    pub fn softmax(self) -> Matrix<f64> {
+        let new = self.exp();
+        let sum = new.sum();
+        new / sum
+    }
+
+    /// Normalises the tensor so the sum of magnitudes is 1
+    pub fn norm_l1(self) -> Matrix<f64> {
+        let mag = self.clone().transform_elementwise(|x| x.abs()).sum();
+        self / mag
+    }
+
+    /// Normalises the tensor so the sum of the squares of the magnitudes is 1
+    pub fn norm_l2(self) -> Matrix<f64> {
+        let mag = self.clone().transform_elementwise(|x| x * x).sum().sqrt();
+        self / mag
+    }
+}
 
 impl ApproxEq for Tensor<f64> {
     type Margin = F64Margin;
@@ -699,8 +991,15 @@ impl ApproxEq for Tensor<f64> {
         })
     }
 }
+impl ApproxEq for Matrix<f64> {
+    type Margin = F64Margin;
 
-// Define a bunch of convenience mathematical functions for Tensor<Complex64>
+    fn approx_eq<M: Into<Self::Margin>>(self, other: Self, margin: M) -> bool {
+        self.tensor.approx_eq(other.tensor, margin)
+    }
+}
+
+// Define a bunch of convenience mathematical functions for Tensor<Complex64> and Matrix<f64>
 // They will consume the original tensor and return the result
 impl Tensor<Complex64> {
     /// Computes the exponential of each element
@@ -808,6 +1107,112 @@ impl Tensor<Complex64> {
         self / mag
     }
 }
+impl Matrix<Complex64> {
+    /// Computes the exponential of each element
+    pub fn exp(self) -> Matrix<Complex64> {
+        self.transform_elementwise(Complex64::exp)
+    }
+
+    /// Raises n to the power of each element
+    pub fn exp_base_n(self, n: Complex64) -> Matrix<Complex64> {
+        self.transform_elementwise(|x| n.powc(x))
+    }
+
+    /// Raises each element to the power of n
+    pub fn pow(self, n: Complex64) -> Matrix<Complex64> {
+        self.transform_elementwise(|x| x.powc(n))
+    }
+
+    /// Computes the sin of each element
+    pub fn sin(self) -> Matrix<Complex64> {
+        self.transform_elementwise(Complex64::sin)
+    }
+
+    /// Computes the cos of each element
+    pub fn cos(self) -> Matrix<Complex64> {
+        self.transform_elementwise(Complex64::cos)
+    }
+
+    /// Computes the tan of each element
+    pub fn tan(self) -> Matrix<Complex64> {
+        self.transform_elementwise(Complex64::tan)
+    }
+
+    /// Computes the arcsin of each element
+    pub fn asin(self) -> Matrix<Complex64> {
+        self.transform_elementwise(Complex64::asin)
+    }
+
+    /// Computes the arccos of each element
+    pub fn acos(self) -> Matrix<Complex64> {
+        self.transform_elementwise(Complex64::acos)
+    }
+
+    /// Computes the arctan of each element
+    pub fn atan(self) -> Matrix<Complex64> {
+        self.transform_elementwise(Complex64::atan)
+    }
+
+    /// Computes the sinh of each element
+    pub fn sinh(self) -> Matrix<Complex64> {
+        self.transform_elementwise(Complex64::sinh)
+    }
+
+    /// Computes the cosh of each element
+    pub fn cosh(self) -> Matrix<Complex64> {
+        self.transform_elementwise(Complex64::cosh)
+    }
+
+    /// Computes the tanh of each element
+    pub fn tanh(self) -> Matrix<Complex64> {
+        self.transform_elementwise(Complex64::tanh)
+    }
+
+    /// Computes the arsinh of each element
+    pub fn asinh(self) -> Matrix<Complex64> {
+        self.transform_elementwise(Complex64::asinh)
+    }
+
+    /// Computes the arcosh of each element
+    pub fn acosh(self) -> Matrix<Complex64> {
+        self.transform_elementwise(Complex64::acosh)
+    }
+
+    /// Computes the artanh of each element
+    pub fn atanh(self) -> Matrix<Complex64> {
+        self.transform_elementwise(Complex64::atanh)
+    }
+
+    /// Computes the reciprocal of each element.
+    /// Use in conjunction with trigonometric functions to get sec(x), coth(x) etc.
+    pub fn recip(self) -> Matrix<Complex64> {
+        self.transform_elementwise(Complex64::recip)
+    }
+
+    /// Applies softmax to the tensor
+    pub fn softmax(self) -> Matrix<Complex64> {
+        let new = self.exp();
+        let sum = new.sum();
+        new / sum
+    }
+
+    /// Normalises the tensor so the sum of magnitudes is 1
+    pub fn norm_l1(self) -> Matrix<Complex64> {
+        let mag: Complex64 = self.clone().transform_elementwise(|x| x.abs()).sum().into();
+        self / mag
+    }
+
+    /// Normalises the tensor so the sum of the squares of the magnitudes is 1
+    pub fn norm_l2(self) -> Matrix<Complex64> {
+        let mag: Complex64 = self
+            .clone()
+            .transform_elementwise(|x| (x * x).abs())
+            .sum()
+            .sqrt()
+            .into();
+        self / mag
+    }
+}
 
 impl ApproxEq for Tensor<Complex64> {
     type Margin = F64Margin;
@@ -819,173 +1224,6 @@ impl ApproxEq for Tensor<Complex64> {
             approx_eq!(f64, x.re, other[&i].re, margin.clone()) && approx_eq!(f64, x.im, other[&i].im, margin.clone())
         })
     }
-}
-
-// Matrix specific functions
-/// Computes the trace of a matrix
-pub fn trace<T: Add<Output = T> + Clone>(t: &Tensor<T>) -> T {
-    assert_eq!(
-        t.rank(),
-        2,
-        "This implementation of trace is only for matrices"
-    );
-    assert_eq!(
-        t.shape.0[0], t.shape.0[1],
-        "Trace is only defined for square matrices"
-    );
-
-    let mut sum = t.elements.first().unwrap().clone();
-
-    for i in 1..t.shape.0.iter().min().unwrap().clone() {
-        sum = sum.add(t[&[i, i]].clone());
-    }
-
-    sum
-}
-
-/// Calculates the determinant for a matrix of values of type `T`.
-/// This assumes that `T::default()` returns a 0-value of type `T`,
-/// which is the case for all common number types, and Complex64 as well.
-pub fn det<T: Add<Output = T> + Mul<Output = T> + Sub<Output = T> + Clone + Default>(
-    t: &Tensor<T>,
-) -> T {
-    assert_eq!(t.rank(), 2, "Determinant is only for matrices");
-    assert_eq!(
-        t.shape[0], t.shape[1],
-        "Determinant is only defined for square matrices"
-    );
-
-    let ord = t.shape[0];
-
-    if ord == 2 {
-        return t[&[0, 0]].clone() * t[&[1, 1]].clone() - t[&[0, 1]].clone() * t[&[1, 0]].clone();
-    }
-
-    if ord == 1 {
-        return t[&[0, 0]].clone();
-    }
-
-    let mut determinant = T::default();
-
-    for i in 0..ord {
-        let is_minus = i % 2 != 0;
-
-        if i == 0 {
-            let slice = t.slice(&[1..ord, 1..ord]);
-            determinant = determinant + t[&[0, i]].clone() * det(&slice);
-
-            continue;
-        }
-
-        if i == ord - 1 {
-            let slice = t.slice(&[1..ord, 0..(ord - 1)]);
-
-            if is_minus {
-                determinant = determinant - t[&[0, i]].clone() * det(&slice);
-            } else {
-                determinant = determinant + t[&[0, i]].clone() * det(&slice);
-            }
-
-            continue;
-        }
-
-        let slice = t
-            .slice(&[1..ord, 0..i])
-            .concat(&t.slice(&[1..ord, i + 1..ord]), 1)
-            .unwrap();
-
-        if is_minus {
-            determinant = determinant - t[&[0, i]].clone() * det(&slice)
-        } else {
-            determinant = determinant + t[&[0, i]].clone() * det(&slice)
-        }
-    }
-
-    determinant
-}
-
-/// Calculates the inverse for a matrix of values of type `T`.
-/// This assumes that `T::default()` returns a 0-value of type `T`,
-/// which is the case for all common number types, and Complex64 as well.
-/// If the determinant is 0 you will receive `TensorErrors::DeterminantZero`
-pub fn inv<T>(t: &Tensor<T>) -> Result<Tensor<T>, TensorErrors>
-where
-    T: Add<Output = T>
-        + Mul<Output = T>
-        + Sub<Output = T>
-        + Div<Output = T>
-        + Neg<Output = T>
-        + Clone
-        + Default
-        + PartialEq,
-{
-    assert_eq!(t.rank(), 2, "Inversion is only defined for matrices");
-    assert_eq!(
-        t.shape[0], t.shape[1],
-        "Inversion is only defined for square matrices"
-    );
-
-    let ord = t.shape[0];
-    let mut res = Tensor::<T>::from_shape(t.shape());
-    let d = det(&t);
-
-    if d == T::default() {
-        return Err(DeterminantZero);
-    }
-
-    // Construct adjoint matrix
-
-    // i is for which row we are on
-    for i in 0..ord {
-        // j is for which column we are on
-        for j in 0..ord {
-            let is_minus = (i + j) % 2 != 0;
-
-            let slice = match (i, j) {
-                (0, 0) => t.slice(&[1..ord, 1..ord]),
-                _ if (i, j) == (ord - 1, ord - 1) => t.slice(&[0..i, 0..j]),
-                _ if (i, j) == (0, ord - 1) => t.slice(&[1..ord, 0..j]),
-                _ if (i, j) == (ord - 1, 0) => t.slice(&[0..i, 1..ord]),
-                _ if i == 0 => t
-                    .slice(&[1..ord, 0..j])
-                    .concat(&t.slice(&[1..ord, j + 1..ord]), 1)?,
-                _ if i == ord - 1 => t
-                    .slice(&[0..i, 0..j])
-                    .concat(&t.slice(&[0..i, j + 1..ord]), 1)?,
-                _ if j == 0 => t
-                    .slice(&[0..i, 1..ord])
-                    .concat(&t.slice(&[(i + 1)..ord, 1..ord]), 0)?,
-                _ if j == ord - 1 => t
-                    .slice(&[0..i, 0..j])
-                    .concat(&t.slice(&[(i + 1)..ord, 0..j]), 0)?,
-                _ => {
-                    let slice_top = t
-                        .slice(&[0..i, 0..j])
-                        .concat(&t.slice(&[0..i, (j + 1)..ord]), 1)?;
-                    let slice_bottom = t
-                        .slice(&[(i + 1)..ord, 0..j])
-                        .concat(&t.slice(&[(i + 1)..ord, (j + 1)..ord]), 1)?;
-
-                    slice_top.concat(&slice_bottom, 0)?
-                }
-            };
-
-            res[&[j, i]] = if is_minus { -det(&slice) } else { det(&slice) };
-        }
-    }
-
-    Ok(res / d)
-}
-
-/// Constructs an identity matrix of `f64` values of the given size
-pub fn identity(n: usize) -> Tensor<f64> {
-    let mut t = Tensor::from_shape(&ts![n, n]);
-
-    for i in 0..n {
-        t[&[i, i]] = 1.0;
-    }
-
-    t
 }
 
 /// Pools a `Tensor<T>` into a `Tensor<O>` using a custom pooling function.
@@ -1019,7 +1257,7 @@ pub fn pool<T: Clone + Default, O: Clone + Default>(
             .map(|(x, y)| x.div_ceil(y))
             .collect::<Vec<usize>>(),
     )
-    .unwrap();
+        .unwrap();
 
     let mut result = Tensor::from_value(res_shape, O::default());
 
@@ -1052,7 +1290,7 @@ pub fn pool<T: Clone + Default, O: Clone + Default>(
                     .map(|(x, y)| x - y + 1)
                     .collect::<Vec<usize>>(),
             )
-            .unwrap(),
+                .unwrap(),
         );
 
         for (input_pos, input_val) in input.enumerated_iter_mut() {
@@ -1209,25 +1447,172 @@ pub fn solve_quartic(coefficients: &[Complex64]) -> Vec<Complex64> {
     ]
 }
 
+// Matrix specific functions
+/// Computes the trace of a matrix
+pub fn trace<T: Add<Output = T> + Clone>(m: &Matrix<T>) -> T {
+    assert!(m.is_square(), "Trace only defined for square matrices");
+
+    let mut sum = m.elements.first().unwrap().clone();
+
+    for i in 1..m.shape.0.iter().min().unwrap().clone() {
+        sum = sum.add(m[&[i, i]].clone());
+    }
+
+    sum
+}
+
+/// Calculates the determinant for a matrix of values of type `T`.
+pub fn det<T: Add<Output = T> + Mul<Output = T> + Sub<Output = T> + Clone + Zero>(
+    m: &Matrix<T>,
+) -> T {
+    assert!(m.is_square(), "Determinant is only defined for square matrices");
+
+    let ord = m.shape[0];
+
+    if ord == 2 {
+        return m[&[0, 0]].clone() * m[&[1, 1]].clone() - m[&[0, 1]].clone() * m[&[1, 0]].clone();
+    }
+
+    if ord == 1 {
+        return m[&[0, 0]].clone();
+    }
+
+    let mut determinant = T::zero();
+
+    for i in 0..ord {
+        let is_minus = i % 2 != 0;
+
+        if i == 0 {
+            let slice = m.slice(1..ord, 1..ord);
+            determinant = determinant + m[&[0, i]].clone() * det(&slice);
+
+            continue;
+        }
+
+        if i == ord - 1 {
+            let slice = m.slice(1..ord, 0..(ord - 1));
+
+            if is_minus {
+                determinant = determinant - m[&[0, i]].clone() * det(&slice);
+            } else {
+                determinant = determinant + m[&[0, i]].clone() * det(&slice);
+            }
+
+            continue;
+        }
+
+        let slice = m
+            .slice(1..ord, 0..i)
+            .concat(&m.slice(1..ord, i + 1..ord), 1)
+            .unwrap();
+
+        if is_minus {
+            determinant = determinant - m[&[0, i]].clone() * det(&slice)
+        } else {
+            determinant = determinant + m[&[0, i]].clone() * det(&slice)
+        }
+    }
+
+    determinant
+}
+
+/// Calculates the inverse for a matrix of values of type `T`.
+/// If the determinant is 0 you will receive `TensorErrors::DeterminantZero`
+pub fn inv<T>(m: &Matrix<T>) -> Result<Matrix<T>, TensorErrors>
+where
+    T: Add<Output = T>
+        + Mul<Output = T>
+        + Sub<Output = T>
+        + Div<Output = T>
+        + Neg<Output = T>
+        + Clone
+        + Zero
+        + PartialEq,
+{
+    assert!(m.is_square(), "Inversion is only defined for square matrices");
+
+    let ord = m.shape[0];
+    let mut res = Matrix::<T>::from_value(m.rows, m.cols, T::zero());
+    let d = det(&m);
+
+    if d == T::zero() {
+        return Err(DeterminantZero);
+    }
+
+    // Construct adjoint matrix
+
+    // i is for which row we are on
+    for i in 0..ord {
+        // j is for which column we are on
+        for j in 0..ord {
+            let is_minus = (i + j) % 2 != 0;
+
+            let slice = match (i, j) {
+                (0, 0) => m.slice(1..ord, 1..ord),
+                _ if (i, j) == (ord - 1, ord - 1) => m.slice(0..i, 0..j),
+                _ if (i, j) == (0, ord - 1) => m.slice(1..ord, 0..j),
+                _ if (i, j) == (ord - 1, 0) => m.slice(0..i, 1..ord),
+                _ if i == 0 => m
+                    .slice(1..ord, 0..j)
+                    .concat(&m.slice(1..ord, j + 1..ord), 1)?,
+                _ if i == ord - 1 => m
+                    .slice(0..i, 0..j)
+                    .concat(&m.slice(0..i, j + 1..ord), 1)?,
+                _ if j == 0 => m
+                    .slice(0..i, 1..ord)
+                    .concat(&m.slice((i + 1)..ord, 1..ord), 0)?,
+                _ if j == ord - 1 => m
+                    .slice(0..i, 0..j)
+                    .concat(&m.slice((i + 1)..ord, 0..j), 0)?,
+                _ => {
+                    let slice_top = m
+                        .slice(0..i, 0..j)
+                        .concat(&m.slice(0..i, (j + 1)..ord), 1)?;
+                    let slice_bottom = m
+                        .slice((i + 1)..ord, 0..j)
+                        .concat(&m.slice((i + 1)..ord, (j + 1)..ord), 1)?;
+
+                    slice_top.concat(&slice_bottom, 0)?
+                }
+            };
+
+            res[&[j, i]] = if is_minus { -det(&slice) } else { det(&slice) };
+        }
+    }
+
+    Ok(res / d)
+}
+
+/// Constructs an identity matrix of `T` values of the given size
+pub fn identity<T: Zero + One + Clone>(n: usize) -> Matrix<T> {
+    let mut t = Matrix::zeros(n, n);
+
+    for i in 0..n {
+        t[&[i, i]] = T::one();
+    }
+
+    t
+}
+
 /// Computes the Householder transformation for the given matrix `t` (of shape (rows, cols)).
 /// Returns (Q, R), where Q is a unitary and Hermitian square matrix of shape (rows, rows)
 /// and R is an upper triangle matrix of shape (rows, cols) such that `Q.contract_mul(R) == t`.
-pub fn householder(t: &Tensor<Complex64>) -> (Tensor<Complex64>, Tensor<Complex64>) {
+pub fn householder(t: &Matrix<Complex64>) -> (Matrix<Complex64>, Matrix<Complex64>) {
     assert_eq!(t.shape().rank(), 2, "Only defined for matrices");
 
     let (rows, cols) = (t.shape()[0], t.shape()[1]);
 
     let mut r = t.clone();
-    let mut q = identity(rows).into_tensor();
+    let mut q = identity::<Complex64>(rows);
 
     for k in 0..min(cols, rows) {
-        let vec_bottom = r.slice(&[k..rows, k..k + 1]);
+        let vec_bottom = r.slice(k..rows, k..k + 1);
         let alpha = -1.0
             * match vec_bottom[&[0, 0]] {
                 Complex64::ZERO => Complex64::ONE,
                 x => x / Complex64::abs(x),
             } * vec_bottom.iter().map(|x| <f64 as Into<Complex64>>::into((x * x).abs())).sum::<Complex64>().sqrt();
-        let mut e1 = Tensor::<Complex64>::from_shape(&vec_bottom.shape);
+        let mut e1 = Matrix::<Complex64>::from_shape(vec_bottom.rows, vec_bottom.cols);
         e1[&[0, 0]] = Complex64::ONE;
         let v = vec_bottom - e1 * alpha;
 
@@ -1237,33 +1622,29 @@ pub fn householder(t: &Tensor<Complex64>) -> (Tensor<Complex64>, Tensor<Complex6
 
         let u = v.norm_l2();
         let u_clone = u.clone();
-        let u_t = u_clone.transpose(
-            &Transpose::new(&vec![1, 0]).unwrap(),
-        ).unwrap();
-        let u_star = u_t.iter().map(|x| x.conj()).collect::<Tensor<Complex64>>().reshape(u_t.shape()).unwrap();
-        let h_sub = <Tensor<f64> as IntoTensor<Complex64>>::into_tensor(identity(
-            u.shape.0.first().unwrap().clone(),
-        )) - u
+        let u_t = u_clone.transpose();
+        let u_star = u_t.iter().map(|x| x.conj()).collect::<Matrix<Complex64>>().reshape(u_t.rows, u_t.cols).unwrap();
+        let h_sub = identity::<Complex64>(u.shape.0.first().unwrap().clone()) - u
             .contract_mul(&u_star)
             .unwrap()
             * Complex64 { re: 2.0, im: 0.0 };
 
         // Update R
-        let r_slice_copy = r.slice(&[k..rows, k..cols]);
-        let mut r_slice_mut = r.slice_mut(&[k..rows, k..cols]);
+        let r_slice_copy = r.slice(k..rows, k..cols);
+        let mut r_slice_mut = r.slice_mut(k..rows, k..cols);
         let r_slice_res = h_sub.clone().contract_mul(&r_slice_copy).unwrap();
 
         for (pos, val) in r_slice_res.enumerated_iter() {
-            r_slice_mut[&pos] = val;
+            r_slice_mut[pos] = val;
         }
 
         // Update Q
-        let q_slice_copy = q.slice(&[0..rows, k..rows]);
-        let mut q_slice_mut = q.slice_mut(&[0..rows, k..rows]);
+        let q_slice_copy = q.slice(0..rows, k..rows);
+        let mut q_slice_mut = q.slice_mut(0..rows, k..rows);
         let q_slice_res = q_slice_copy.contract_mul(&h_sub).unwrap();
         
         for (pos, val) in q_slice_res.enumerated_iter() {
-            q_slice_mut[&pos] = val;
+            q_slice_mut[pos] = val;
         }
     }
 
