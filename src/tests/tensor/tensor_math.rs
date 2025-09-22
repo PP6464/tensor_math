@@ -2,7 +2,7 @@
 mod tensor_math_tests {
     use crate::tensor::tensor::{Matrix, Tensor};
     use crate::tensor::tensor::{Shape, TensorErrors};
-    use crate::tensor::tensor_math::{det, gaussian_pdf_multi_sigma, gaussian_pdf_single_sigma, gaussian_sample, householder, identity, inv, pool, pool_avg, pool_max, pool_min, pool_sum, solve_cubic, solve_quadratic, solve_quartic, trace, Transpose};
+    use crate::tensor::tensor_math::{det, gaussian_pdf_multi_sigma, gaussian_pdf_single_sigma, gaussian_sample, identity, inv, pool_avg, pool_max, pool_min, pool_sum, solve_cubic, solve_quadratic, solve_quartic, trace, Transpose};
     use crate::{shape, transpose};
     use float_cmp::{approx_eq, assert_approx_eq, ApproxEq, F64Margin, FloatMargin};
     use num::complex::{Complex64, ComplexFloat};
@@ -195,14 +195,36 @@ mod tensor_math_tests {
     }
 
     #[test]
+    fn kronecker_mt() {
+        let t1 = Tensor::<i32>::new(&shape![2, 3], (0..6).collect()).unwrap();
+        let t2 = Tensor::<i32>::new(&shape![5, 2, 2], (0..20).collect()).unwrap();
+
+        let ans = t1.kronecker(&t2);
+        let mt_ans = t1.kronecker_mt(&t2);
+
+        assert_eq!(mt_ans, ans);
+    }
+
+    #[test]
     fn test_mat_kronecker_product() {
-        let m1 = Matrix::<i32>::new(3, 3, (0..9).collect()).unwrap();
-        let m2 = Matrix::<i32>::new(3, 2, (0..6).collect()).unwrap();
+        let m1 = Matrix::<i32>::new(30, 30, (0..900).collect()).unwrap();
+        let m2 = Matrix::<i32>::new(30, 20, (0..600).collect()).unwrap();
 
         let ans = m1.tensor.kronecker(&m2.tensor).try_into().unwrap();
         let res = m1.kronecker(&m2);
 
         assert_eq!(res, ans);
+    }
+
+    #[test]
+    fn kronecker_mt_mat() {
+        let m1 = Matrix::<i32>::rand(30, 30).clip(-10, 10);
+        let m2 = Matrix::<i32>::rand(30, 30).clip(-10, 10);
+
+        let ans = m1.kronecker(&m2);
+        let mt_ans = m1.kronecker_mt(&m2);
+
+        assert_eq!(mt_ans, ans);
     }
 
     #[test]
@@ -318,10 +340,10 @@ mod tensor_math_tests {
         .unwrap()
         .transform_elementwise(|x| x.into());
 
-        let avg_pool = pool(&t1, pool_avg, &shape![2, 2, 2], &shape![2, 2, 2]);
-        let sum_pool = pool(&t1, pool_sum, &shape![2, 2, 2], &shape![2, 2, 2]);
-        let max_pool = pool(&t1, pool_max, &shape![2, 2, 2], &shape![1, 1, 1]);
-        let min_pool = pool(&t1, pool_min, &shape![3, 1, 1], &shape![3, 1, 1]);
+        let avg_pool = t1.pool(pool_avg, &shape![2, 2, 2], &shape![2, 2, 2]);
+        let sum_pool = t1.pool(pool_sum, &shape![2, 2, 2], &shape![2, 2, 2]);
+        let max_pool = t1.pool(pool_max, &shape![2, 2, 2], &shape![1, 1, 1]);
+        let min_pool = t1.pool(pool_min, &shape![3, 1, 1], &shape![3, 1, 1]);
 
         let sum_ans = Tensor::<f64>::new(
             &shape![2, 2, 2],
@@ -543,7 +565,7 @@ mod tensor_math_tests {
             .try_into()
             .unwrap();
 
-        let (q1, r1) = householder(&m1);
+        let (q1, r1) = m1.householder();
 
         for i in 0..r1.shape[0] {
             if i >= r1.shape[1] - 1 {
@@ -556,7 +578,7 @@ mod tensor_math_tests {
 
         println!("Passed test 1: square");
 
-        let m2 = Tensor::<Complex64>::new(
+        let m2: Matrix<Complex64> = Tensor::<Complex64>::new(
             &shape![3, 2],
             vec![
                 Complex64 { re: 4.0, im: 1.0 }, Complex64 { re: -5.0, im: -2.0 },
@@ -564,7 +586,7 @@ mod tensor_math_tests {
                 Complex64 { re: 0.0, im: 0.0 }, Complex64 { re: 1.0, im: -1.0 },
             ],
         ).unwrap().try_into().unwrap();
-        let (q2, r2) = householder(&m2);
+        let (q2, r2) = m2.householder();
 
         for i in 0..r2.shape[0] {
             if i >= r2.shape[1] - 1 {
@@ -578,14 +600,14 @@ mod tensor_math_tests {
 
         println!("Passed test 2: tall");
 
-        let m3 = Tensor::<Complex64>::new(
+        let m3: Matrix<Complex64> = Tensor::<Complex64>::new(
             &shape![2, 3],
             vec![
                 Complex64 { re: -4.0, im: -1.0 }, Complex64 { re: 5.0, im: -3.0 }, Complex64 { re: 2.0, im: -4.0 },
                 Complex64 { re: -5.0, im: 2.0 }, Complex64 { re: 2.0, im: -1.0 }, Complex64 { re: 4.0, im: -1.0 },
             ],
         ).unwrap().try_into().unwrap();
-        let (q3, r3) = householder(&m3);
+        let (q3, r3) = m3.householder();
 
         for i in 0..(r3.shape[0] - 1) {
             if i >= r3.shape[1] - 1 {

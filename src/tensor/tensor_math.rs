@@ -1,5 +1,5 @@
 use crate::tensor::tensor::TensorErrors::DeterminantZero;
-use crate::tensor::tensor::{dot_vectors, IntoTensor, Matrix, Shape, Strides, Tensor};
+use crate::tensor::tensor::{dot_vectors, IntoMatrix, IntoTensor, Matrix, Shape, Strides, Tensor};
 use crate::tensor::tensor::{tensor_index, TensorErrors};
 use crate::shape;
 use float_cmp::{approx_eq, ApproxEq, F64Margin};
@@ -467,6 +467,95 @@ impl<T: Clone> Matrix<T> {
         self.tensor = self.tensor.transpose(&transpose![1, 0]).unwrap();
     }
 }
+impl<T: Default + Clone> Tensor<T> {
+    /// Pools a `Tensor<T>` into a `Tensor<O>` using a custom pooling function.
+    /// The custom function will take a `Tensor<T>` that corresponds to the slice that the kernel covers.
+    /// If the kernel is hanging over the edge of the tensor, then only the bits of the tensor that fit are included.
+    /// This is reflected in the shape of the input tensor.
+    /// Default functions for `max` and `avg` are given as well.
+    pub fn pool<O: Default + Clone>(&self, pool_fn: impl Fn(Tensor<T>) -> O, kernel_shape: &Shape, stride_shape: &Shape) -> Tensor<O> {
+        assert_eq!(
+            kernel_shape.rank(),
+            self.rank(),
+            "Kernel shape rank and tensor shape rank are not the same"
+        );
+        assert_eq!(
+            stride_shape.rank(),
+            self.rank(),
+            "Stride shape rank and tensor shape rank are not the same"
+        );
+
+        let res_shape = &Shape::new(
+            self.shape()
+                .0
+                .iter()
+                .cloned()
+                .zip(stride_shape.0.iter().cloned())
+                .map(|(x, y)| x.div_ceil(y))
+                .collect::<Vec<usize>>(),
+        )
+            .unwrap();
+
+        let mut result = Tensor::<O>::from_shape(res_shape);
+
+        for (pos, val) in result.enumerated_iter_mut() {
+            let start_pos = pos
+                .iter()
+                .zip(stride_shape.0.iter())
+                .map(|(x, y)| x * y)
+                .collect::<Vec<usize>>();
+            let end_pos = start_pos
+                .iter()
+                .zip(kernel_shape.0.iter())
+                .enumerate()
+                .map(|(i, (x, y))| {
+                    let shape_val = self.shape[i];
+
+                    if x + y < shape_val {
+                        x + y
+                    } else {
+                        shape_val
+                    }
+                })
+                .collect::<Vec<usize>>();
+
+            let indices = end_pos
+                .iter()
+                .zip(start_pos.iter())
+                .map(|(x, y)| *y..*x)
+                .collect::<Vec<_>>();
+
+            *val = pool_fn(self.slice(indices.as_slice()));
+        }
+
+        result
+    }
+}
+impl<T: Default + Clone> Matrix<T> {
+    /// Pools a `Matrix<T>` into a `Matrix<O>` using a custom pooling function.
+    /// The custom function will take a `Matrix<T>` that corresponds to the slice that the kernel covers.
+    /// If the kernel is hanging over the edge of the tensor, then only the bits of the tensor that fit are included.
+    /// This is reflected in the shape of the input tensor.
+    /// Default functions for `max` and `avg` are given as well.
+    pub fn pool<O: Default + Clone>(&self, pool_fn: impl Fn(Matrix<T>) -> O, kernel_shape: (usize, usize), stride_shape: (usize, usize)) -> Matrix<O> {
+        assert!(kernel_shape.0 != 0 || kernel_shape.1 != 0, "Invalid kernel shape");
+        assert!(stride_shape.0 != 0 || stride_shape.1 != 0, "Invalid stride shape");
+
+        let res_shape = (kernel_shape.0.div_ceil(stride_shape.0), kernel_shape.1.div_ceil(stride_shape.1));
+        let mut res = Matrix::<O>::from_shape(res_shape.0, res_shape.1);
+
+        for (pos, val) in res.enumerated_iter_mut() {
+            let start_pos = (pos.0 * stride_shape.0, pos.1 * stride_shape.1);
+            let end_pos = (min(start_pos.0 + stride_shape.0, self.rows), min(start_pos.1 + stride_shape.1, self.cols));
+
+            let indices = (start_pos.0..end_pos.0, start_pos.1..end_pos.1);
+
+            *val = pool_fn(self.slice(indices.0, indices.1));
+        }
+
+        res
+    }
+}
 impl<T: Add<Output = T> + Clone> Tensor<T> {
     /// Compute the sum of the tensor
     pub fn sum(&self) -> T {
@@ -565,6 +654,96 @@ impl<T: Clone + Mul<Output = T>> Matrix<T> {
             cols: res_tensor.shape[1],
             tensor: res_tensor,
         }
+    }
+}
+impl<T: Clone + Mul<Output = T> + Send + Sync> Tensor<T> {
+    /// Computes the Kronecker product using multiple threads
+    pub fn kronecker_mt(&self, other: &Tensor<T>) -> Tensor<T> {
+        let mut new_shape_vec = Vec::new();
+
+        if self.rank() > other.rank() {
+            for i in 0..other.rank() {
+                new_shape_vec.push(self.shape[i] * other.shape[i]);
+            }
+
+            for i in other.rank()..self.rank() {
+                new_shape_vec.push(self.shape[i]);
+            }
+        } else {
+            for i in 0..self.rank() {
+                new_shape_vec.push(self.shape[i] * other.shape[i]);
+            }
+
+            for i in self.rank()..other.rank() {
+                new_shape_vec.push(other.shape[i]);
+            }
+        }
+
+        let new_shape = Shape::new(new_shape_vec).unwrap();
+        let mut new_elements = (0..new_shape.element_count()).map(|_| self.first().unwrap().clone()).collect::<Vec<T>>();
+
+        scope(|s| {
+            let mut new_elements_chunks = new_elements.chunks_mut(other.shape.element_count());
+
+            for elem in self.iter() {
+                let new_elements_chunk = new_elements_chunks.next().unwrap();
+
+                s.spawn(move || {
+                    let res = other * elem;
+
+                    for (j, e) in res.iter().enumerate() {
+                        new_elements_chunk[j] = e.clone();
+                    }
+                });
+            }
+        });
+
+        new_elements.into_tensor().reshape(&new_shape).unwrap()
+    }
+}
+impl<T: Clone + Mul<Output = T> + Send + Sync> Matrix<T> {
+    /// Computes the Kronecker product using multiple threads
+    pub fn kronecker_mt(&self, other: &Matrix<T>) -> Matrix<T> {
+        let mut new_shape_vec = Vec::new();
+
+        if self.rank() > other.rank() {
+            for i in 0..other.rank() {
+                new_shape_vec.push(self.shape[i] * other.shape[i]);
+            }
+
+            for i in other.rank()..self.rank() {
+                new_shape_vec.push(self.shape[i]);
+            }
+        } else {
+            for i in 0..self.rank() {
+                new_shape_vec.push(self.shape[i] * other.shape[i]);
+            }
+
+            for i in self.rank()..other.rank() {
+                new_shape_vec.push(other.shape[i]);
+            }
+        }
+
+        let new_shape = Shape::new(new_shape_vec).unwrap();
+        let mut new_elements = (0..new_shape.element_count()).map(|_| self.first().unwrap().clone()).collect::<Vec<T>>();
+
+        scope(|s| {
+            let mut new_elements_chunks = new_elements.chunks_mut(other.shape.element_count());
+
+            for elem in self.iter() {
+                let new_elements_chunk = new_elements_chunks.next().unwrap();
+
+                s.spawn(move || {
+                    let res = other * elem;
+
+                    for (j, e) in res.iter().enumerate() {
+                        new_elements_chunk[j] = e.clone();
+                    }
+                });
+            }
+        });
+
+        new_elements.into_matrix().reshape(new_shape[0], new_shape[1]).unwrap()
     }
 }
 impl<T: Clone + Add<Output = T> + Mul<Output = T>> Tensor<T> {
@@ -732,8 +911,6 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Send + Sync> Matrix<T> {
         self.contract_mul_mt(other)
     }
 }
-
-// More complex mathematical functions
 
 // Define a bunch of convenience mathematical functions for Tensor<f64> and Matrix<f64>
 // They will consume the original tensor and return the result
@@ -1212,6 +1389,63 @@ impl Matrix<Complex64> {
             .into();
         self / mag
     }
+
+    /// Computes the Householder transformation for the given matrix `t` (of shape (rows, cols)).
+    /// Returns (Q, R), where Q is a unitary and Hermitian square matrix of shape (rows, rows)
+    /// and R is an upper triangle matrix of shape (rows, cols) such that `Q.contract_mul(R) == t`.
+    pub fn householder(&self) -> (Matrix<Complex64>, Matrix<Complex64>) {
+        assert_eq!(self.shape().rank(), 2, "Only defined for matrices");
+
+        let (rows, cols) = (self.shape()[0], self.shape()[1]);
+
+        let mut r = self.clone();
+        let mut q = identity::<Complex64>(rows);
+
+        for k in 0..min(cols, rows) {
+            let vec_bottom = r.slice(k..rows, k..k + 1);
+            let alpha = -1.0
+                * match vec_bottom[&[0, 0]] {
+                Complex64::ZERO => Complex64::ONE,
+                x => x / Complex64::abs(x),
+            } * vec_bottom.iter().map(|x| <f64 as Into<Complex64>>::into((x * x).abs())).sum::<Complex64>().sqrt();
+            let mut e1 = Matrix::<Complex64>::from_shape(vec_bottom.rows, vec_bottom.cols);
+            e1[&[0, 0]] = Complex64::ONE;
+            let v = vec_bottom - e1 * alpha;
+
+            if v.iter().all(|x| approx_eq!(f64, x.abs(), 0.0)) {
+                continue;
+            }
+
+            let u = v.norm_l2();
+            let u_clone = u.clone();
+            let u_t = u_clone.transpose();
+            let u_star = u_t.iter().map(|x| x.conj()).collect::<Matrix<Complex64>>().reshape(u_t.rows, u_t.cols).unwrap();
+            let h_sub = identity::<Complex64>(u.shape.0.first().unwrap().clone()) - u
+                .contract_mul(&u_star)
+                .unwrap()
+                * Complex64 { re: 2.0, im: 0.0 };
+
+            // Update R
+            let r_slice_copy = r.slice(k..rows, k..cols);
+            let mut r_slice_mut = r.slice_mut(k..rows, k..cols);
+            let r_slice_res = h_sub.clone().contract_mul(&r_slice_copy).unwrap();
+
+            for (pos, val) in r_slice_res.enumerated_iter() {
+                r_slice_mut[pos] = val;
+            }
+
+            // Update Q
+            let q_slice_copy = q.slice(0..rows, k..rows);
+            let mut q_slice_mut = q.slice_mut(0..rows, k..rows);
+            let q_slice_res = q_slice_copy.contract_mul(&h_sub).unwrap();
+
+            for (pos, val) in q_slice_res.enumerated_iter() {
+                q_slice_mut[pos] = val;
+            }
+        }
+
+        (q, r)
+    }
 }
 
 impl ApproxEq for Tensor<Complex64> {
@@ -1224,89 +1458,6 @@ impl ApproxEq for Tensor<Complex64> {
             approx_eq!(f64, x.re, other[&i].re, margin.clone()) && approx_eq!(f64, x.im, other[&i].im, margin.clone())
         })
     }
-}
-
-/// Pools a `Tensor<T>` into a `Tensor<O>` using a custom pooling function.
-/// The custom function will take a `Tensor<T>` that corresponds to the slice that the kernel covers.
-/// If the kernel is hanging over the edge of the tensor, then only the bits of the tensor that fit are included.
-/// This is reflected in the shape of the input tensor.
-/// Default functions for `max` and `avg` are given as well.
-pub fn pool<T: Clone + Default, O: Clone + Default>(
-    t: &Tensor<T>,
-    pool_fn: impl Fn(Tensor<T>) -> O,
-    kernel_shape: &Shape,
-    stride_shape: &Shape,
-) -> Tensor<O> {
-    assert_eq!(
-        kernel_shape.rank(),
-        t.rank(),
-        "Kernel shape rank and tensor shape rank are not the same"
-    );
-    assert_eq!(
-        stride_shape.rank(),
-        t.rank(),
-        "Stride shape rank and tensor shape rank are not the same"
-    );
-
-    let res_shape = &Shape::new(
-        t.shape()
-            .0
-            .iter()
-            .cloned()
-            .zip(stride_shape.0.iter().cloned())
-            .map(|(x, y)| x.div_ceil(y))
-            .collect::<Vec<usize>>(),
-    )
-        .unwrap();
-
-    let mut result = Tensor::from_value(res_shape, O::default());
-
-    for (pos, val) in result.enumerated_iter_mut() {
-        let start_pos = pos
-            .iter()
-            .zip(stride_shape.0.iter())
-            .map(|(x, y)| x * y)
-            .collect::<Vec<usize>>();
-        let end_pos = start_pos
-            .iter()
-            .zip(kernel_shape.0.iter())
-            .enumerate()
-            .map(|(i, (x, y))| {
-                let shape_val = t.shape[i];
-
-                if x + y < shape_val {
-                    x + y - 1
-                } else {
-                    shape_val - 1
-                }
-            })
-            .collect::<Vec<usize>>();
-
-        let mut input = Tensor::<T>::from_shape(
-            &Shape::new(
-                end_pos
-                    .iter()
-                    .zip(start_pos.iter())
-                    .map(|(x, y)| x - y + 1)
-                    .collect::<Vec<usize>>(),
-            )
-                .unwrap(),
-        );
-
-        for (input_pos, input_val) in input.enumerated_iter_mut() {
-            let elem_pos = input_pos
-                .iter()
-                .zip(start_pos.iter())
-                .map(|(x, y)| x + y)
-                .collect::<Vec<usize>>();
-
-            *input_val = t[elem_pos.as_slice()].clone();
-        }
-
-        *val = pool_fn(input);
-    }
-
-    result
 }
 
 /// Default pooling function to sum the values
@@ -1347,6 +1498,48 @@ pub fn pool_min<T: PartialOrd + Clone>(t: Tensor<T>) -> T {
 pub fn pool_avg<T: Add<Output = T> + Div<f64, Output = T> + Clone>(t: Tensor<T>) -> T {
     let elems = t.shape().element_count().to_f64().unwrap();
     let sum = pool_sum(t);
+    sum / elems
+}
+
+/// Default pooling function to sum the values
+pub fn pool_sum_mat<T: Add<Output = T> + Clone>(m: Matrix<T>) -> T {
+    m.iter().cloned().reduce(T::add).unwrap()
+}
+
+/// Default pooling function to find the minimum
+pub fn pool_min_mat<T: PartialOrd + Clone>(m: Matrix<T>) -> T {
+    let mut min = m.first().unwrap().clone();
+
+    for i in m.iter() {
+        if *i < min {
+            min = i.clone();
+        }
+    }
+
+    min
+}
+
+/// Default pooling function to find the minimum
+pub fn pool_max_mat<T: PartialOrd + Clone>(m: Matrix<T>) -> T {
+    let mut max = m.first().unwrap().clone();
+
+    for i in m.iter() {
+        if *i > max {
+            max = i.clone();
+        }
+    }
+
+    max
+}
+
+/// Default pooling function to find the average.
+/// Bear in mind the total number of elements is the total number of elements in the input,
+/// so if you want the total number of elements to stay the same even for overhanging
+///  input tensors then you will need to write your own version.
+pub fn pool_avg_mat<T: Add<Output = T> + Div<f64, Output = T> + Clone>(m: Matrix<T>) -> T {
+    let sum = pool_sum_mat(m.clone());
+    let elems = m.shape().element_count().to_f64().unwrap();
+
     sum / elems
 }
 
@@ -1592,63 +1785,6 @@ pub fn identity<T: Zero + One + Clone>(n: usize) -> Matrix<T> {
     }
 
     t
-}
-
-/// Computes the Householder transformation for the given matrix `t` (of shape (rows, cols)).
-/// Returns (Q, R), where Q is a unitary and Hermitian square matrix of shape (rows, rows)
-/// and R is an upper triangle matrix of shape (rows, cols) such that `Q.contract_mul(R) == t`.
-pub fn householder(t: &Matrix<Complex64>) -> (Matrix<Complex64>, Matrix<Complex64>) {
-    assert_eq!(t.shape().rank(), 2, "Only defined for matrices");
-
-    let (rows, cols) = (t.shape()[0], t.shape()[1]);
-
-    let mut r = t.clone();
-    let mut q = identity::<Complex64>(rows);
-
-    for k in 0..min(cols, rows) {
-        let vec_bottom = r.slice(k..rows, k..k + 1);
-        let alpha = -1.0
-            * match vec_bottom[&[0, 0]] {
-                Complex64::ZERO => Complex64::ONE,
-                x => x / Complex64::abs(x),
-            } * vec_bottom.iter().map(|x| <f64 as Into<Complex64>>::into((x * x).abs())).sum::<Complex64>().sqrt();
-        let mut e1 = Matrix::<Complex64>::from_shape(vec_bottom.rows, vec_bottom.cols);
-        e1[&[0, 0]] = Complex64::ONE;
-        let v = vec_bottom - e1 * alpha;
-
-        if v.iter().all(|x| approx_eq!(f64, x.abs(), 0.0)) {
-            continue;
-        }
-
-        let u = v.norm_l2();
-        let u_clone = u.clone();
-        let u_t = u_clone.transpose();
-        let u_star = u_t.iter().map(|x| x.conj()).collect::<Matrix<Complex64>>().reshape(u_t.rows, u_t.cols).unwrap();
-        let h_sub = identity::<Complex64>(u.shape.0.first().unwrap().clone()) - u
-            .contract_mul(&u_star)
-            .unwrap()
-            * Complex64 { re: 2.0, im: 0.0 };
-
-        // Update R
-        let r_slice_copy = r.slice(k..rows, k..cols);
-        let mut r_slice_mut = r.slice_mut(k..rows, k..cols);
-        let r_slice_res = h_sub.clone().contract_mul(&r_slice_copy).unwrap();
-
-        for (pos, val) in r_slice_res.enumerated_iter() {
-            r_slice_mut[pos] = val;
-        }
-
-        // Update Q
-        let q_slice_copy = q.slice(0..rows, k..rows);
-        let mut q_slice_mut = q.slice_mut(0..rows, k..rows);
-        let q_slice_res = q_slice_copy.contract_mul(&h_sub).unwrap();
-        
-        for (pos, val) in q_slice_res.enumerated_iter() {
-            q_slice_mut[pos] = val;
-        }
-    }
-
-    (q, r)
 }
 
 /// Creates a tensor of values of the Gaussian pdf with a specified standard deviation.

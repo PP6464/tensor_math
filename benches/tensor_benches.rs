@@ -36,6 +36,16 @@ pub fn bench_contract_mul_mt(c: &mut Criterion) {
     });
 }
 
+pub fn bench_kronecker_mt(c: &mut Criterion) {
+    let t1: Tensor<f64> = Tensor::rand(&shape![10, 15]);
+    let t2: Tensor<f64> = Tensor::rand(&shape![10, 20, 10]);
 
-criterion_group!(benches, bench_concat_mt, bench_transpose, bench_contract_mul_mt);
+    c.bench_function("kronecker_mt", |b| {
+        b.iter(|| {
+            t1.kronecker_mt(&t2);
+        })
+    });
+}
+
+criterion_group!(benches, bench_concat_mt, bench_transpose, bench_contract_mul_mt, bench_kronecker_mt);
 criterion_main!(benches);
