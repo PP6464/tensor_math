@@ -72,7 +72,7 @@ mod tensor_math_tests {
     #[test]
     #[should_panic]
     fn divide_by_zero() {
-        let t1 = Tensor::<i32>::rand(&shape![2, 3]);
+        let t1 = Tensor::<i32>::rand(&shape![2, 2]);
         let mut t2 = Tensor::<i32>::rand(&shape![2, 2]);
         t2[&[1, 1]] = 0;
         let _ = t1 / t2;
@@ -134,12 +134,73 @@ mod tensor_math_tests {
     }
 
     #[test]
+    fn transpose_mt() {
+        let t1 = Tensor::<i32>::rand(&shape![10, 60, 5]);
+        let transpose = transpose![1, 2, 0];
+
+        let ans = t1.transpose(&transpose).unwrap();
+        let mt_ans = t1.transpose_mt(&transpose).unwrap();
+
+        assert_eq!(mt_ans, ans);
+    }
+
+    #[test]
+    fn transpose_in_place() {
+        let mut t1 = Tensor::<i32>::rand(&shape![10, 20, 5]);
+        let transpose = transpose![2, 0, 1];
+
+        let ans = t1.clone().transpose(&transpose).unwrap();
+        t1.transpose_in_place(&transpose).unwrap();
+
+        assert_eq!(ans, t1);
+    }
+
+    #[test]
+    fn transpose_in_place_mt() {
+        let mut t1 = Tensor::<i32>::rand(&shape![10, 20, 5]);
+        let transpose = transpose![2, 0, 1];
+
+        let ans = t1.clone().transpose(&transpose).unwrap();
+        t1.transpose_in_place_mt(&transpose).unwrap();
+
+        assert_eq!(ans, t1);
+    }
+
+    #[test]
     fn transpose_mat() {
         let m1 = Matrix::<i32>::new(3, 3, (0..9).collect()).unwrap();
         let t = m1.transpose();
         let ans = Matrix::<i32>::new(3, 3, vec![0, 3, 6, 1, 4, 7, 2, 5, 8]).unwrap();
 
         assert_eq!(ans, t);
+    }
+
+    #[test]
+    fn transpose_mat_mt() {
+        let m1 = Matrix::<i32>::rand(10, 5);
+
+        let ans = m1.transpose();
+        let mt_ans = m1.transpose_mt();
+
+        assert_eq!(mt_ans, ans);
+    }
+
+    #[test]
+    fn transpose_in_place_mat() {
+        let mut m1 = Matrix::<i32>::rand(10, 5);
+
+        let ans = m1.clone().transpose();
+        m1.transpose_in_place();
+
+        assert_eq!(ans, m1);
+    }
+
+    #[test]
+    fn transpose_in_place_mat_mt() {
+        let mut m1 = Matrix::<i32>::rand(10, 5);
+        let ans = m1.transpose();
+        m1.transpose_in_place_mt();
+        assert_eq!(ans, m1);
     }
 
     #[test]
@@ -376,6 +437,16 @@ mod tensor_math_tests {
     }
 
     #[test]
+    fn pool_tensor_mt() {
+        let t1 = Tensor::<i32>::rand(&shape![200, 10, 10]);
+
+        let ans = t1.pool(pool_min, &shape![10, 30, 1], &shape![10, 10, 10]);
+        let mt_ans = t1.pool_mt(&pool_min, &shape![10, 30, 1], &shape![10, 10, 10]);
+
+        assert_eq!(ans, mt_ans);
+    }
+
+    #[test]
     fn pool_mat() {
         let m1 = Matrix::<f64>::new(3, 3, (0..9).map(f64::from).collect()).unwrap();
         let sum = m1.pool(pool_sum_mat, (2, 2), (2, 2));
@@ -386,12 +457,22 @@ mod tensor_math_tests {
         let sum_ans = Matrix::<f64>::new(2, 2, vec![8.0, 7.0, 13.0, 8.0]).unwrap();
         let min_ans = Matrix::<f64>::new(3, 2, vec![0.0, 2.0, 3.0, 5.0, 6.0, 8.0]).unwrap();
         let avg_ans = m1.clone();
-        let max_ans = Matrix::<f64>::new(2, 2, vec![4.0, 5.0, 7.0, 8.0]).unwrap();
+        let max_ans = Matrix::<f64>::new(2, 2, vec![0.0, 2.0, 6.0, 8.0]).unwrap();
 
         assert_eq!(sum, sum_ans);
         assert_eq!(min, min_ans);
         assert_eq!(avg, avg_ans);
         assert_eq!(max, max_ans);
+    }
+
+    #[test]
+    fn pool_mat_mt() {
+        let m1 = Matrix::<f64>::rand(20, 20);
+
+        let ans = m1.pool(pool_avg_mat, (5, 4), (2, 3));
+        let mt_ans = m1.pool_mt(&pool_avg_mat, (5, 4), (2, 3));
+
+        assert_eq!(ans, mt_ans);
     }
 
     #[test]

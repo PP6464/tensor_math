@@ -386,6 +386,7 @@ impl Transpose {
         Ok(())
     }
 
+    /// Returns the new shape that the `old_shape` would be transformed to after applying the transpose
     pub fn new_shape(&self, old_shape: &Shape) -> Result<Shape, TensorErrors> {
         if old_shape.rank() != self.permutation.len() {
             return Err(TensorErrors::ShapesIncompatible);
@@ -400,6 +401,7 @@ impl Transpose {
         Ok(Shape::new(new_shape_vec).unwrap())
     }
 
+    /// Returns the new tensor index for an old tensor index after the transposition
     pub fn new_index(&self, old_index: &[usize]) -> Result<Vec<usize>, TensorErrors> {
         if old_index.len() != self.permutation.len() {
             return Err(TensorErrors::ShapesIncompatible);
@@ -413,6 +415,23 @@ impl Transpose {
 
         Ok(new_index_vec)
     }
+
+    /// Returns the old index for a new index before the transposition
+    pub fn old_index(&self, new_index: &[usize]) -> Result<Vec<usize>, TensorErrors> {
+        if new_index.len() != self.permutation.len() {
+            return Err(TensorErrors::ShapesIncompatible);
+        }
+
+        let mut old_index_vec = vec![0; new_index.len()];
+        let mut count = 0;
+
+        for old_pos in self.permutation.iter() {
+            old_index_vec[*old_pos] = new_index[count];
+            count += 1;
+        }
+
+        Ok(old_index_vec)
+    }
 }
 
 #[macro_export]
@@ -425,7 +444,7 @@ macro_rules! transpose {
 }
 
 impl<T: Clone> Tensor<T> {
-    /// Transposes a `Tensor`
+    /// Transposes a `Tensor` and returns the result
     pub fn transpose(&self, transpose: &Transpose) -> Result<Tensor<T>, TensorErrors> {
         if transpose.permutation.len() != self.shape().rank() {
             return Err(TensorErrors::ShapesIncompatible);
@@ -457,7 +476,7 @@ impl<T: Clone> Tensor<T> {
     }
 }
 impl<T: Clone> Matrix<T> {
-    /// Transpose a `Matrix`
+    /// Transpose a `Matrix` and returns the result
     pub fn transpose(&self) -> Matrix<T> {
         self.tensor.transpose(&transpose![1, 0]).unwrap().try_into().unwrap()
     }
@@ -465,6 +484,92 @@ impl<T: Clone> Matrix<T> {
     /// Transpose a `Matrix` in-place
     pub fn transpose_in_place(&mut self) {
         self.tensor = self.tensor.transpose(&transpose![1, 0]).unwrap();
+        self.rows = self.tensor.shape()[0];
+        self.cols = self.tensor.shape()[1];
+    }
+}
+impl<T: Clone + Send + Sync> Tensor<T> {
+    /// Transposes a `Tensor` using a multithreaded implementation and returns the result
+    pub fn transpose_mt(&self, transpose: &Transpose) -> Result<Tensor<T>, TensorErrors> {
+        if transpose.permutation.len() != self.shape().rank() {
+            return Err(TensorErrors::ShapesIncompatible);
+        }
+
+        let new_shape = transpose.new_shape(self.shape())?;
+        let mut new_tensor = self.clone().reshape(&new_shape)?;
+
+        let elems_per_thread = 20;  // Number of elements a single thread handles
+
+        scope(|s| {
+            for (i, elem) in new_tensor.chunks_mut(elems_per_thread).enumerate() {
+                let new_shape_clone = new_shape.clone();
+
+                s.spawn(move || {
+                    for j in 0..elems_per_thread {
+                        let k = i * elems_per_thread + j;
+                        let new_index = tensor_index(k, &new_shape_clone);
+                        let old_index = transpose.old_index(&new_index).unwrap();
+                        
+                        if old_index.iter().enumerate().any(|(i, x)| x >= &self.shape[i]) {
+                            continue;
+                        }
+                        
+                        elem[j] = self[&old_index].clone();
+                    }
+                });
+            }
+        });
+
+        Ok(new_tensor)
+    }
+
+    /// Transpose a `Tensor` in-place using a multithreaded implementation
+    pub fn transpose_in_place_mt(&mut self, transpose: &Transpose) -> Result<(), TensorErrors> {
+        let res = self.clone().transpose_mt(transpose)?;
+
+        self.strides = res.strides;
+        self.shape = res.shape;
+        self.elements = res.elements.clone();
+
+        Ok(())
+    }
+}
+impl<T: Clone + Send + Sync> Matrix<T> {
+    /// Transposes a `Matrix` using a multithreaded implementation and returns the result
+    pub fn transpose_mt(&self) -> Matrix<T> {
+        let new_shape = (self.cols, self.rows);
+        let mut new_matrix = self.clone().reshape(new_shape.0, new_shape.1).unwrap();
+
+        let elems_per_thread = 20;  // Number of elements a single thread handles
+
+        scope(|s| {
+            for (i, elem) in new_matrix.chunks_mut(elems_per_thread).enumerate() {
+                s.spawn(move || {
+                    for j in 0..elems_per_thread {
+                        let k = i * elems_per_thread + j;
+                        let new_index = tensor_index(k, &shape![new_shape.0, new_shape.1]);
+                        let old_index = (new_index[1], new_index[0]);
+                        
+                        if old_index.0 >= self.rows || old_index.1 >= self.cols {
+                            continue
+                        }
+
+                        elem[j] = self[old_index].clone();
+                    }
+                });
+            }
+        });
+
+        new_matrix
+    }
+
+    /// Transposes a `Matrix` in-place using a multithreaded implementation
+    pub fn transpose_in_place_mt(&mut self) {
+        let res = self.clone().transpose_mt();
+
+        self.rows = res.rows;
+        self.cols = res.cols;
+        self.tensor = res.tensor.clone();
     }
 }
 impl<T: Default + Clone> Tensor<T> {
@@ -546,14 +651,99 @@ impl<T: Default + Clone> Matrix<T> {
 
         for (pos, val) in res.enumerated_iter_mut() {
             let start_pos = (pos.0 * stride_shape.0, pos.1 * stride_shape.1);
-            let end_pos = (min(start_pos.0 + stride_shape.0, self.rows), min(start_pos.1 + stride_shape.1, self.cols));
+            let end_pos = (min(start_pos.0 + kernel_shape.0, self.rows), min(start_pos.1 + kernel_shape.1, self.cols));
 
             let indices = (start_pos.0..end_pos.0, start_pos.1..end_pos.1);
+            let value = pool_fn(self.slice(indices.0, indices.1));
 
-            *val = pool_fn(self.slice(indices.0, indices.1));
+            *val = value;
         }
 
         res
+    }
+}
+impl<T: Default + Clone + Send + Sync> Tensor<T> {
+    /// Pools a `Tensor<T>` into a `Tensor<O>` using a custom pooling function.
+    /// The custom function will take a `Tensor<T>` that corresponds to the slice that the kernel covers.
+    /// If the kernel is hanging over the edge of the tensor, then only the bits of the tensor that fit are included.
+    /// This is reflected in the shape of the input tensor.
+    /// Default functions for `max` and `avg` are given as well.
+    /// This is a multithreaded implementation.
+    pub fn pool_mt<O: Default + Clone + Send + Sync>(&self, pool_fn: &(impl Fn(Tensor<T>) -> O + Sync), kernel_shape: &Shape, stride_shape: &Shape) -> Tensor<O> {
+        assert_eq!(self.rank(), kernel_shape.rank(), "Kernel shape rank and tensor shape rank are not the same");
+        assert_eq!(self.rank(), stride_shape.rank(), "Stride shape rank and tensor shape rank are not the same");
+
+        let res_shape = &Shape::new(
+            self.shape()
+                .0
+                .iter()
+                .cloned()
+                .zip(stride_shape.0.iter().cloned())
+                .map(|(x, y)| x.div_ceil(y))
+                .collect::<Vec<usize>>(),
+        )
+            .unwrap();
+
+        let mut result = Tensor::<O>::from_shape(res_shape);
+
+        scope(|s| {
+            let res_chunks = result.chunks_mut(1);
+
+            for (i, chunk) in res_chunks.enumerate() {
+                s.spawn(move || {
+                    let res_pos = tensor_index(i, &res_shape);
+                    let self_pos = res_pos.into_tensor() * stride_shape.clone().0.into_tensor();
+                    let self_end_pos = (&self_pos + &kernel_shape.clone().0.into_tensor()).iter().enumerate().map(|(i, x)| if x > &self.shape()[i] { self.shape()[i] } else { *x }).collect::<Vec<usize>>();
+
+                    let indices = self_pos
+                        .iter()
+                        .zip(self_end_pos.iter())
+                        .map(|(x, y)| *x..*y)
+                        .collect::<Vec<Range<usize>>>();
+
+                    chunk[0] = pool_fn(self.slice(indices.as_slice()));
+                });
+            }
+        });
+
+        result
+    }
+}
+impl<T: Default + Clone + Send + Sync> Matrix<T> {
+    /// Pools a `Matrix<T>` into a `Matrix<O>` using a custom pooling function.
+    /// The custom function will take a `Matrix<T>` that corresponds to the slice that the kernel covers.
+    /// If the kernel is hanging over the edge of the tensor, then only the bits of the tensor that fit are included.
+    /// This is reflected in the shape of the input tensor.
+    /// Default functions for `max` and `avg` are given as well.
+    /// This is a multithreaded implementation.
+    pub fn pool_mt<O: Default + Clone + Send + Sync>(&self, pool_fn: &(impl Fn(Matrix<T>) -> O + Sync), kernel_shape: (usize, usize), stride_shape: (usize, usize)) -> Matrix<O> {
+        assert!(kernel_shape.0 != 0 || kernel_shape.1 != 0, "Invalid kernel shape");
+        assert!(stride_shape.0 != 0 || stride_shape.1 != 0, "Invalid stride shape");
+
+        let res_shape = (self.rows.div_ceil(stride_shape.0), self.cols.div_ceil(stride_shape.1));
+
+        let mut result = Matrix::<O>::from_shape(res_shape.0, res_shape.1);
+
+        scope(|s| {
+            let res_chunks = result.chunks_mut(1);
+
+            for (i, chunk) in res_chunks.enumerate() {
+                s.spawn(move || {
+                    let res_pos = tensor_index(i, &shape![res_shape.0, res_shape.1]);
+                    let self_pos = (res_pos[0] * stride_shape.0, res_pos[1] * stride_shape.1);
+                    let self_end_pos = (
+                        min(self_pos.0 + kernel_shape.0, self.rows),
+                        min(self_pos.1 + kernel_shape.1, self.cols),
+                    );
+
+                    let indices = (self_pos.0..self_end_pos.0, self_pos.1..self_end_pos.1);
+
+                    chunk[0] = pool_fn(self.slice(indices.0, indices.1));
+                });
+            }
+        });
+
+        result
     }
 }
 impl<T: Add<Output = T> + Clone> Tensor<T> {
@@ -1519,7 +1709,7 @@ pub fn pool_min_mat<T: PartialOrd + Clone>(m: Matrix<T>) -> T {
     min
 }
 
-/// Default pooling function to find the minimum
+/// Default pooling function to find the maximum
 pub fn pool_max_mat<T: PartialOrd + Clone>(m: Matrix<T>) -> T {
     let mut max = m.first().unwrap().clone();
 
