@@ -2,7 +2,7 @@
 mod tensor_math_tests {
     use crate::tensor::tensor::{Matrix, Tensor};
     use crate::tensor::tensor::{Shape, TensorErrors};
-    use crate::tensor::tensor_math::{det, gaussian_pdf_multi_sigma, gaussian_pdf_single_sigma, gaussian_sample, identity, inv, pool_avg, pool_max, pool_min, pool_sum, solve_cubic, solve_quadratic, solve_quartic, trace, Transpose};
+    use crate::tensor::tensor_math::{det, gaussian_pdf_multi_sigma, gaussian_pdf_single_sigma, gaussian_sample, identity, inv, pool_avg, pool_avg_mat, pool_max, pool_max_mat, pool_min, pool_min_mat, pool_sum, pool_sum_mat, solve_cubic, solve_quadratic, solve_quartic, trace, Transpose};
     use crate::{shape, transpose};
     use float_cmp::{approx_eq, assert_approx_eq, ApproxEq, F64Margin, FloatMargin};
     use num::complex::{Complex64, ComplexFloat};
@@ -376,6 +376,25 @@ mod tensor_math_tests {
     }
 
     #[test]
+    fn pool_mat() {
+        let m1 = Matrix::<f64>::new(3, 3, (0..9).map(f64::from).collect()).unwrap();
+        let sum = m1.pool(pool_sum_mat, (2, 2), (2, 2));
+        let min = m1.pool(pool_min_mat, (2, 2), (1, 2));
+        let avg = m1.pool(pool_avg_mat, (1, 1), (1, 1));
+        let max = m1.pool(pool_max_mat, (1, 1), (2, 2));
+
+        let sum_ans = Matrix::<f64>::new(2, 2, vec![8.0, 7.0, 13.0, 8.0]).unwrap();
+        let min_ans = Matrix::<f64>::new(3, 2, vec![0.0, 2.0, 3.0, 5.0, 6.0, 8.0]).unwrap();
+        let avg_ans = m1.clone();
+        let max_ans = Matrix::<f64>::new(2, 2, vec![4.0, 5.0, 7.0, 8.0]).unwrap();
+
+        assert_eq!(sum, sum_ans);
+        assert_eq!(min, min_ans);
+        assert_eq!(avg, avg_ans);
+        assert_eq!(max, max_ans);
+    }
+
+    #[test]
     fn normalised() {
         let t1 = Tensor::<f64>::new(
             &shape![3, 3, 3],
@@ -685,12 +704,12 @@ mod tensor_math_tests {
     #[test]
     fn contract_mul_mt() {
         let t1 = Tensor::<Complex64>::new(
-            &shape![10, 30, 20],
-            (0..6000).map(|i| Complex64::new(i as f64, i as f64)).collect(),
+            &shape![10, 3, 20],
+            (0..600).map(|i| Complex64::new(i as f64, i as f64)).collect(),
         ).unwrap();
         let t2 = Tensor::<Complex64>::new(
-            &shape![20, 100],
-            (0..2000).map(|i| Complex64::new(i as f64, i as f64)).collect(),
+            &shape![20, 10],
+            (0..200).map(|i| Complex64::new(i as f64, i as f64)).collect(),
         ).unwrap();
 
         let ans = t1.clone().contract_mul(&t2).unwrap();

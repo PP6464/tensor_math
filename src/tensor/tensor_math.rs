@@ -541,7 +541,7 @@ impl<T: Default + Clone> Matrix<T> {
         assert!(kernel_shape.0 != 0 || kernel_shape.1 != 0, "Invalid kernel shape");
         assert!(stride_shape.0 != 0 || stride_shape.1 != 0, "Invalid stride shape");
 
-        let res_shape = (kernel_shape.0.div_ceil(stride_shape.0), kernel_shape.1.div_ceil(stride_shape.1));
+        let res_shape = (self.rows.div_ceil(stride_shape.0), self.cols.div_ceil(stride_shape.1));
         let mut res = Matrix::<O>::from_shape(res_shape.0, res_shape.1);
 
         for (pos, val) in res.enumerated_iter_mut() {
