@@ -63,7 +63,7 @@ pub fn bench_contract_mul_mat_mt(c: &mut Criterion) {
 
     c.bench_function("contract_mul_mt_mat", |b| {
         b.iter(|| {
-            m1.contract_mul(black_box(&m2)).unwrap();
+            m1.contract_mul_mt(black_box(&m2)).unwrap();
         });
     });
 }

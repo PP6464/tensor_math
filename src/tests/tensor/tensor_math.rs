@@ -672,7 +672,11 @@ mod tensor_math_tests {
                 continue
             }
 
-            assert!(r1.slice(i+1..r1.shape[0], i..i+1).iter().all(|x| x.abs() <= 1e-10));
+            assert!(r1.slice(i+1..r1.shape[0], i..i+1).iter().all(|x| {
+                if x.abs() > 1e-10 {
+                    println!("Failed for: {:?}", x.abs());
+                }
+                x.abs() <= 1e-10 }));
         }
         assert!(q1.contract_mul(&r1).unwrap().tensor.approx_eq(m1.clone().tensor, F64Margin::default().epsilon(1e-10)));
 
@@ -784,14 +788,8 @@ mod tensor_math_tests {
 
     #[test]
     fn contract_mul_mt() {
-        let t1 = Tensor::<Complex64>::new(
-            &shape![10, 3, 20],
-            (0..600).map(|i| Complex64::new(i as f64, i as f64)).collect(),
-        ).unwrap();
-        let t2 = Tensor::<Complex64>::new(
-            &shape![20, 10],
-            (0..200).map(|i| Complex64::new(i as f64, i as f64)).collect(),
-        ).unwrap();
+        let t1 = Tensor::<f64>::rand(&shape![10, 3, 20]);
+        let t2 = Tensor::<f64>::rand(&shape![20, 10]);
 
         let ans = t1.clone().contract_mul(&t2).unwrap();
         let mt_ans = t1.contract_mul_mt(&t2).unwrap();
@@ -808,5 +806,250 @@ mod tensor_math_tests {
         let mt_ans = m1.mat_mul_mt(&m2).unwrap();
 
         assert_eq!(ans, mt_ans);
+    }
+
+    #[test]
+    fn ref_test() {
+        let m1 = Matrix::<f64>::new(
+            3, 5,
+            vec![
+                0.5, -5.0, 1.2, -3.4, 1.2,
+                0.2, -2.0, 0.0, 0.2, 1.7,
+                0.0, -1.0, 0.0, -3.6, 1.1,
+            ],
+        ).unwrap();
+
+        let m1_ref = m1.row_echelon();
+        assert!(m1_ref.is_row_echelon());
+        assert!(approx_eq!(Matrix<f64>, m1_ref.reduced_row_echelon(), m1.reduced_row_echelon()));
+
+        let m2 = Matrix::<Complex64>::new(
+            4, 3,
+            vec![
+                Complex64::new(1.0, -2.0), Complex64::ZERO, Complex64::new(1.8, -3.1),
+                Complex64::new(2.3, -1.0), Complex64::ZERO, Complex64::new(1.9, -2.1),
+                Complex64::new(4.2, 3.0), Complex64::ZERO, Complex64::new(9.0, -2.2),
+                Complex64::new(-1.5, 2.5), Complex64::ZERO, Complex64::new(8.0, -8.6),
+            ],
+        ).unwrap();
+
+        let m2_ref = m2.row_echelon();
+        println!("m2 ref: {m2_ref:?}");
+        assert!(approx_eq!(Matrix<Complex64>, m2_ref.reduced_row_echelon(), m2.reduced_row_echelon(), epsilon = 1e-14));
+
+        let m3 = Matrix::<f64>::new(
+            2, 2,
+            vec![
+                1.0, 2.0,
+                3.0, 4.0,
+            ],
+        ).unwrap();
+
+        let m3_ref = m3.row_echelon();
+        assert!(m3_ref.is_row_echelon());
+        assert!(approx_eq!(Matrix<f64>, m3_ref.reduced_row_echelon(), m3.reduced_row_echelon()));
+
+        let m4 = Matrix::<Complex64>::new(
+            3, 3,
+            vec![
+                Complex64::new(1.0, 2.0), Complex64::new(-4.0, 0.0), Complex64::new(3.0, 1.0),
+                Complex64::new(1.0, 2.0), Complex64::new(-4.0, 0.0), Complex64::new(3.0, 1.0),
+                Complex64::new(2.0, -5.0), Complex64::new(0.1, -3.5), Complex64::new(0.0, 1.0),
+            ],
+        ).unwrap();
+
+        let m4_ref = m4.row_echelon();
+        assert!(m4_ref.is_row_echelon());
+        assert!(approx_eq!(Matrix<Complex64>, m4_ref.reduced_row_echelon(), m4.reduced_row_echelon()));
+    }
+
+    #[test]
+    fn is_ref_test() {
+        let m1 = Matrix::<f64>::new(
+            3, 5,
+            vec![
+                0.5, -5.0, 1.2, -3.4, 1.2,
+                0.2, -2.0, 0.0, 0.2, 1.7,
+                0.0, -1.0, 0.0, -3.6, 1.1,
+            ],
+        ).unwrap();
+
+        assert!(!m1.is_row_echelon());
+
+        let m2 = Matrix::<Complex64>::new(
+            4, 3,
+            vec![
+                Complex64::new(1.0, -2.0), Complex64::ZERO, Complex64::new(1.8, -3.1),
+                Complex64::new(0.0, -0.0), Complex64::ZERO, Complex64::new(1.9, -2.1),
+                Complex64::new(4.2, 3.0), Complex64::ZERO, Complex64::new(9.0, -2.2),
+                Complex64::new(-1.5, 2.5), Complex64::ZERO, Complex64::new(8.0, -8.6),
+            ],
+        ).unwrap();
+
+        assert!(!m2.is_row_echelon());
+
+        let m3 = Matrix::<f64>::new(
+            3, 4,
+            vec![
+                1.0, 2.0, 3.0, 4.0,
+                0.0, 0.0, 1.0, 3.0,
+                0.0, 0.0, 0.0, 1.0,
+            ],
+        ).unwrap();
+
+        assert!(m3.is_row_echelon());
+
+        let m4 = Matrix::<Complex64>::new(
+            5, 3,
+            vec![
+                Complex64::new(1.0, 2.0), Complex64::new(-4.0, 0.0), Complex64::new(3.0, 1.0),
+                Complex64::new(0.0, 0.0), Complex64::new(-0.0, 0.0), Complex64::new(3.0, 1.0),
+                Complex64::new(0.0, 0.0), Complex64::new(-0.0, 0.0), Complex64::new(0.0, 0.0),
+                Complex64::new(0.0, -0.0), Complex64::new(0.0, -0.0), Complex64::new(0.0, 0.0),
+                Complex64::new(0.0, -0.0), Complex64::new(0.0, -0.0), Complex64::new(0.0, 0.0),
+            ],
+        ).unwrap();
+
+        assert!(m4.is_row_echelon());
+    }
+
+    #[test]
+    fn is_rref_test() {
+        let m1 = Matrix::<f64>::new(
+            3, 5,
+            vec![
+                0.5, -5.0, 1.2, -3.4, 1.2,
+                0.0, 0.0, 0.0, 0.0, 0.0,
+                0.0, -1.0, 0.0, -3.6, 1.1,
+            ],
+        ).unwrap();
+
+        let m1_rref = m1.reduced_row_echelon();
+
+        assert!(!m1.is_reduced_row_echelon());
+        assert!(m1_rref.is_reduced_row_echelon());
+
+        let m2 = Matrix::<Complex64>::new(
+            4, 3,
+            vec![
+                Complex64::new(1.0, -2.0), Complex64::ZERO, Complex64::new(1.8, -3.1),
+                Complex64::new(2.3, -1.0), Complex64::ZERO, Complex64::new(1.9, -2.1),
+                Complex64::new(4.2, 3.0), Complex64::ZERO, Complex64::new(9.0, -2.2),
+                Complex64::new(-1.5, 2.5), Complex64::ZERO, Complex64::new(8.0, -8.6),
+            ],
+        ).unwrap();
+
+        let m2_rref = m2.reduced_row_echelon();
+
+        assert!(!m2.is_reduced_row_echelon());
+        assert!(m2_rref.is_reduced_row_echelon());
+
+        let m3 = Matrix::<f64>::new(
+            2, 2,
+            vec![
+                1.0, 2.0,
+                3.0, 4.0,
+            ],
+        ).unwrap();
+
+        let m3_rref = m3.reduced_row_echelon();
+
+        assert!(!m3.is_reduced_row_echelon());
+        assert!(m3_rref.is_reduced_row_echelon());
+
+        let m4 = Matrix::<Complex64>::new(
+            3, 3,
+            vec![
+                Complex64::new(1.0, 2.0), Complex64::new(-4.0, 0.0), Complex64::new(3.0, 1.0),
+                Complex64::new(1.0, 2.0), Complex64::new(-4.0, 0.0), Complex64::new(3.0, 1.0),
+                Complex64::new(2.0, -5.0), Complex64::new(0.1, -3.5), Complex64::new(0.0, 1.0),
+            ],
+        ).unwrap();
+
+        let m4_rref = m4.reduced_row_echelon();
+
+        assert!(!m4.is_reduced_row_echelon());
+        assert!(m4_rref.is_reduced_row_echelon());
+    }
+
+    #[test]
+    fn rref_test() {
+        let m1 = Matrix::<f64>::new(
+            3, 5,
+            vec![
+                0.5, -5.0, 1.2, -3.4, 1.2,
+                0.2, -2.0, 0.0, 0.2, 1.7,
+                0.0, -1.0, 0.0, -3.6, 1.1,
+            ],
+        ).unwrap();
+
+        let m1_rref = m1.reduced_row_echelon();
+        let m1_rref_ans = identity(3).concat_mt(&Matrix::<f64>::new(
+            3, 2,
+            vec![
+                37.0, -2.5,
+                3.6, -1.1,
+                -3.25, -61.0/24.0,
+            ],
+        ).unwrap(), 1).unwrap();
+
+        assert!(approx_eq!(Matrix<f64>, m1_rref, m1_rref_ans, epsilon = 1e-15));
+
+        let m2 = Matrix::<Complex64>::new(
+            4, 3,
+            vec![
+                Complex64::new(1.0, -2.0), Complex64::ZERO, Complex64::new(1.8, -3.1),
+                Complex64::new(2.3, -1.0), Complex64::ZERO, Complex64::new(1.9, -2.1),
+                Complex64::new(4.2, 3.0), Complex64::ZERO, Complex64::new(9.0, -2.2),
+                Complex64::new(-1.5, 2.5), Complex64::ZERO, Complex64::new(8.0, -8.6),
+            ],
+        ).unwrap();
+
+        let m2_rref = m2.reduced_row_echelon();
+        let m2_rref_ans = Matrix::<Complex64>::new(
+            4, 3,
+            vec![
+                Complex64::ONE, Complex64::ZERO, Complex64::ZERO,
+                Complex64::ZERO, Complex64::ZERO, Complex64::ONE,
+                Complex64::ZERO, Complex64::ZERO, Complex64::ZERO,
+                Complex64::ZERO, Complex64::ZERO, Complex64::ZERO,
+            ],
+        ).unwrap();
+
+        assert!(approx_eq!(Matrix<Complex64>, m2_rref, m2_rref_ans, epsilon = 1e-15));
+
+        let m3 = Matrix::<f64>::new(
+            2, 2,
+            vec![
+                1.0, 2.0,
+                3.0, 4.0,
+            ],
+        ).unwrap();
+
+        let m3_rref = m3.reduced_row_echelon();
+        let m3_rref_ans = identity(2);
+
+        assert!(approx_eq!(Matrix<f64>, m3_rref, m3_rref_ans, epsilon = 1e-15));
+
+        let m4 = Matrix::<Complex64>::new(
+            3, 3,
+            vec![
+                Complex64::new(1.0, 2.0), Complex64::new(-4.0, 0.0), Complex64::new(3.0, 1.0),
+                Complex64::new(1.0, 2.0), Complex64::new(-4.0, 0.0), Complex64::new(3.0, 1.0),
+                Complex64::new(2.0, -5.0), Complex64::new(0.1, -3.5), Complex64::new(0.0, 1.0),
+            ],
+        ).unwrap();
+
+        let m4_rref = m4.reduced_row_echelon();
+        let m4_rref_ans = Matrix::<Complex64>::new(
+            3, 3,
+            vec![
+                Complex64::ONE, Complex64::ZERO, Complex64 { re: 0.2678687248670384, im: -0.01050719937735134 },
+                Complex64::ZERO, Complex64::ONE, Complex64 { re: -0.6777792190945647, im: -0.1186924374108186 },
+                Complex64::ZERO, Complex64::ZERO, Complex64::ZERO,
+            ],
+        ).unwrap();
+
+        assert!(approx_eq!(Matrix<Complex64>, m4_rref, m4_rref_ans, epsilon = 1e-15));
     }
 }

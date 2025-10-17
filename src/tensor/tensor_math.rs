@@ -1031,7 +1031,7 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Send + Sync> Tensor<T> {
                 .rev()
                 .cloned(),
         );
-        let res_shape = Shape::new(resultant_shape_vec).unwrap();
+        let res_shape = Shape::new(resultant_shape_vec)?;
 
         let res_mutexes = Arc::new(
             RwLock::new(
@@ -1046,7 +1046,7 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Send + Sync> Tensor<T> {
 
         let self_arc = Arc::new(self);
         let res_shape_arc = Arc::new(res_shape);
-        let elems_per_thread = 10;  // The number of elements each thread is responsible for
+        let elems_per_thread = 1;  // The number of elements each thread is responsible for
 
         scope(|s| {
             for i in 0..res_shape_arc.clone().element_count() / elems_per_thread {
@@ -1057,7 +1057,6 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Send + Sync> Tensor<T> {
 
                 let start = i * elems_per_thread;
                 let end = min((i + 1) * elems_per_thread, res_shape_arc.element_count());
-
 
                 s.spawn(move || {
                     let res_read = res_arc_clone.read().unwrap();
@@ -1091,19 +1090,18 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Send + Sync> Tensor<T> {
     }
 }
 impl<T: Clone + Add<Output = T> + Mul<Output = T> + Send + Sync> Matrix<T> {
-    /// Does tensor contraction multiplication on multiple threads
+    /// Does matrix multiplication on multiple threads
     pub fn contract_mul_mt(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
         self.tensor.contract_mul_mt(&other.tensor)?.try_into()
     }
 
-    /// Does tensor contraction multiplication on multiple threads. This is just an alternate name for the method
+    /// Does matrix multiplication on multiple threads. This is just an alternate name for the method
     pub fn mat_mul_mt(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
         self.contract_mul_mt(other)
     }
 }
 
 // Define a bunch of convenience mathematical functions for Tensor<f64> and Matrix<f64>
-// They will consume the original tensor and return the result
 impl Tensor<f64> {
     /// Exponentiates each element in the tensor
     pub fn exp(self) -> Tensor<f64> {
@@ -1345,29 +1343,253 @@ impl Matrix<f64> {
         let mag = self.clone().transform_elementwise(|x| x * x).sum().sqrt();
         self / mag
     }
-}
 
-impl ApproxEq for Tensor<f64> {
-    type Margin = F64Margin;
+    /// Gives whether the matrix is in row echelon form or not
+    pub fn is_row_echelon(&self) -> bool {
+        let mut all_zero_rows = false;
+        let mut prev_pivot_col: i32 = -1;
 
-    fn approx_eq<M: Into<Self::Margin>>(self, other: Self, margin: M) -> bool {
-        let margin = margin.into();
-        
-        self.enumerated_iter().all(|(i, x)| {
-            approx_eq!(f64, x, other[&i], margin.clone())
-        })
+        for i in 0..self.rows {
+            let current_row = self.slice(i..i+1, 0..self.cols);
+
+            if all_zero_rows && !current_row.iter().all(|x| approx_eq!(f64, *x, 0.0)) {
+                return false; // There is a row below a row of all 0 that is not itself all 0
+            }
+
+            if current_row.iter().all(|x| approx_eq!(f64, *x, 0.0)) {
+                all_zero_rows = true;
+                continue
+            }
+
+            let (current_pivot_col, _) = current_row.iter().enumerate().find(|(_, &x)| !approx_eq!(f64, x, 0.0)).unwrap();
+
+            if (current_pivot_col as i32) <= prev_pivot_col {
+                return false;
+            }
+
+            prev_pivot_col = current_pivot_col as i32;
+        }
+
+        true
     }
-}
-impl ApproxEq for Matrix<f64> {
-    type Margin = F64Margin;
 
-    fn approx_eq<M: Into<Self::Margin>>(self, other: Self, margin: M) -> bool {
-        self.tensor.approx_eq(other.tensor, margin)
+    /// Gives whether the matrix is in reduced row echelon form or not
+    pub fn is_reduced_row_echelon(&self) -> bool {
+        let mut pivot = (0, 0);
+
+        while pivot.0 < self.rows && pivot.1 < self.cols {
+            let pivot_val = self[pivot];
+            let mut normal_pivot = false;
+
+            // Note everything below must be 0
+            if pivot.0 < self.rows - 1 {
+                let below_slice = self.slice(pivot.0 + 1..self.rows, pivot.1..pivot.1 + 1);
+
+                if below_slice.iter().any(|x| !approx_eq!(f64, *x, 0.0)) {
+                    return false;
+                }
+            }
+
+            if approx_eq!(f64, pivot_val, 0.0) {
+                // If this is the last element in the row then there are no suitable other pivots
+                if pivot.1 == self.cols - 1 {
+                    // If this is the last row then return true because we are done checking everything else
+                    if pivot.0 == self.rows - 1 {
+                        return true
+                    }
+
+                    // This row is all 0 otherwise, so just check everything below is all 0 as well
+                    return self.slice(pivot.1 + 1..self.rows, 0..self.cols).iter().all(|x| approx_eq!(f64, *x, 0.0));
+                }
+
+                // Check for all 0, otherwise just move to the first non-zero element
+                let right_slice = self.slice(pivot.0..pivot.0 + 1, pivot.1 + 1..self.cols);
+                let option_pivot = right_slice.iter().enumerate().find(|(_, &x)| approx_eq!(f64, x, 0.0));
+
+                match option_pivot {
+                    Some((index, _)) => {
+                        pivot = (pivot.0, pivot.1 + 1 + index);
+                        continue
+                    }
+                    None => {
+                        // This row is all 0, check rows below
+                        return self.slice(pivot.1 + 1..self.rows, 0..self.cols).iter().all(|x| approx_eq!(f64, *x, 0.0));
+                    }
+                }
+            } else {
+                normal_pivot = true;
+            }
+
+            // Note everything to the left should be 0
+            if pivot.1 > 0 {
+                let left_slice = self.slice(pivot.0..pivot.0 + 1, 0..pivot.1);
+
+                if left_slice.iter().any(|x| !approx_eq!(f64, *x, 0.0)) {
+                    return false;
+                }
+            }
+
+            // Similarly everything above must be 0
+            if pivot.0 > 0 {
+                let above_slice = self.slice(0..pivot.0, pivot.1..pivot.1 + 1);
+
+                if above_slice.iter().any(|x| !approx_eq!(f64, *x, 0.0)) {
+                    return false;
+                }
+            }
+
+            if normal_pivot {
+                // Move pivot by 1 diagonally
+                pivot = (pivot.0 + 1, pivot.1 + 1);
+            }
+        }
+
+        true
+    }
+
+    /// Computes the REF form of a matrix.
+    /// This does not require that the leading entries of the rows are normalised.
+    pub fn row_echelon(&self) -> Matrix<f64> {
+        let mut res = self.clone();
+
+        let mut pivot = (0usize, 0usize);
+
+        while pivot.0 < res.rows - 1 && pivot.1 < res.cols {
+            // Identify if we can use this position as a pivot value
+            let pivot_val = res[pivot];
+
+            if approx_eq!(f64, pivot_val, 0.0) {
+                // The pivot value is 0
+
+                // Check if any of the other rows below have a non-zero value
+                // at this pivot column and if so then use that row's value instead
+                let slice_below = res.slice(pivot.0 + 1..res.rows, pivot.1..pivot.1 + 1);
+
+                let (index, max_abs) = slice_below.iter().enumerate().max_by(|(_, &x), (_, &y)| { x.abs().total_cmp(&y.abs()) }).unwrap();
+
+                if approx_eq!(f64, max_abs.abs(), 0.0) {
+                    // There is no suitable pivot on this row
+                    pivot = (pivot.0, pivot.1 + 1);
+                    continue
+                }
+
+                // There is a suitable pivot on this column in another row, so need to swap those rows
+                let chosen_copy = res.slice(index + pivot.0 + 1..index + pivot.0 + 2, pivot.1..res.cols);
+                let current_copy = res.slice(pivot.0..pivot.0 + 1, pivot.1..res.cols);
+
+                res.slice_mut(pivot.0..pivot.0 + 1, pivot.1..res.cols).set_all(&chosen_copy);
+                res.slice_mut(index + pivot.0 + 1..index + pivot.0 + 2, pivot.1..res.cols).set_all(&current_copy);
+
+                // Now we can resume with normal Gauss-Jordan elimination
+                continue
+            } else {
+                // Eliminate all rows below
+                for i in pivot.0 + 1..res.rows {
+                    if i == pivot.0 {
+                        continue
+                    }
+
+                    let val_for_row = res[(i, pivot.1)];
+                    let new_row = res.slice(i..i+1, pivot.1..res.cols) - res.slice(pivot.0..pivot.0 + 1, pivot.1..res.cols) * (val_for_row) / pivot_val;
+                    res.slice_mut(i..i+1, pivot.1..res.cols).set_all(&new_row);
+                }
+
+                // We slide the pivot one down and to the right in the normal case
+                pivot = (pivot.0 + 1, pivot.1 + 1);
+            }
+        }
+
+        res
+    }
+
+    /// Computes the reduced row echelon form of a matrix
+    pub fn reduced_row_echelon(&self) -> Matrix<f64> {
+        let mut res = self.clone();
+
+        let mut pivot = (0usize, 0usize);
+
+        while pivot.0 < res.rows && pivot.1 < res.cols {
+            // Identify if we can use this position as a pivot value
+            let pivot_val = res[pivot];
+            let mut normal_pivot = false;
+
+            if approx_eq!(f64, pivot_val, 0.0) {
+                // The pivot value is 0
+
+                // If this is the last row then there are no other rows to swap with,
+                // so we must see directly where the first usable pivot is in the last row.
+                // If such a pivot does not exist then we stop here.
+                if pivot.0 == res.rows - 1 {
+                    if pivot.1 == res.rows - 1 {
+                        // There is nothing to check
+                        break
+                    }
+
+                    let rest_of_row = res.slice(pivot.0..res.rows, pivot.1 + 1..res.cols);
+
+                    let (index, max_abs) = rest_of_row.iter().enumerate().max_by(|(_, &x), (_, &y)| { x.abs().total_cmp(&y.abs()) }).unwrap();
+
+                    if !approx_eq!(f64, *max_abs, 0.0) {
+                        // There is a suitable pivot so change the position of the pivot to it
+                        pivot = (pivot.0, pivot.1 + 1 + index);
+                        continue
+                    }
+
+                    // Otherwise we are done here
+                    break
+                }
+
+                // Check if any of the other rows below have a non-zero value
+                // at this pivot column and if so then use that row's value instead
+                let slice_below = res.slice(pivot.0 + 1..res.rows, pivot.1..pivot.1 + 1);
+
+                let (index, max_abs) = slice_below.iter().enumerate().max_by(|(_, &x), (_, &y)| { x.abs().total_cmp(&y.abs()) }).unwrap();
+
+                if approx_eq!(f64, max_abs.abs(), 0.0) {
+                    // There is no suitable pivot on this row
+                    pivot = (pivot.0, pivot.1 + 1);
+                    continue
+                }
+
+                // There is a suitable pivot on this column in another row, so need to swap those rows
+                let chosen_copy = res.slice(index + pivot.0 + 1..index + pivot.0 + 2, pivot.1..res.cols);
+                let current_copy = res.slice(pivot.0..pivot.0 + 1, pivot.1..res.cols);
+
+                res.slice_mut(pivot.0..pivot.0 + 1, pivot.1..res.cols).set_all(&chosen_copy);
+                res.slice_mut(index + pivot.0 + 1..index + pivot.0 + 2, pivot.1..res.cols).set_all(&current_copy);
+
+                // Now we can resume with normal Gauss-Jordan elimination
+                continue
+            } else {
+                // Normalise the row
+                let norm_row = res.slice(pivot.0 .. pivot.0 + 1, pivot.1 .. res.cols) / pivot_val;
+                res.slice_mut(pivot.0 .. pivot.0 + 1, pivot.1 .. res.cols).set_all(&norm_row);
+
+                normal_pivot = true; // Use this to increment the pivot after eliminating the rows
+            }
+
+            // Eliminate all other rows
+            for i in 0..res.rows {
+                if i == pivot.0 {
+                    continue
+                }
+
+                let val_for_row = res[(i, pivot.1)];
+                let new_row = res.slice(i..i+1, pivot.1..res.cols) - res.slice(pivot.0..pivot.0 + 1, pivot.1..res.cols) * val_for_row;
+                res.slice_mut(i..i+1, pivot.1..res.cols).set_all(&new_row);
+            }
+
+            if normal_pivot {
+                // We slide the pivot one down and to the right in the normal case
+                pivot = (pivot.0 + 1, pivot.1 + 1);
+            }
+        }
+
+        res
     }
 }
 
 // Define a bunch of convenience mathematical functions for Tensor<Complex64> and Matrix<f64>
-// They will consume the original tensor and return the result
 impl Tensor<Complex64> {
     /// Computes the exponential of each element
     pub fn exp(self) -> Tensor<Complex64> {
@@ -1608,7 +1830,7 @@ impl Matrix<Complex64> {
 
             let u = v.norm_l2();
             let u_clone = u.clone();
-            let u_t = u_clone.transpose();
+            let u_t = u_clone.transpose_mt();
             let u_star = u_t.iter().map(|x| x.conj()).collect::<Matrix<Complex64>>().reshape(u_t.rows, u_t.cols).unwrap();
             let h_sub = identity::<Complex64>(u.shape.0.first().unwrap().clone()) - u
                 .contract_mul(&u_star)
@@ -1618,35 +1840,304 @@ impl Matrix<Complex64> {
             // Update R
             let r_slice_copy = r.slice(k..rows, k..cols);
             let mut r_slice_mut = r.slice_mut(k..rows, k..cols);
-            let r_slice_res = h_sub.clone().contract_mul(&r_slice_copy).unwrap();
+            let r_slice_res = h_sub.clone().contract_mul_mt(&r_slice_copy).unwrap();
 
-            for (pos, val) in r_slice_res.enumerated_iter() {
-                r_slice_mut[pos] = val;
-            }
+            r_slice_mut.set_all(&r_slice_res);
 
             // Update Q
             let q_slice_copy = q.slice(0..rows, k..rows);
             let mut q_slice_mut = q.slice_mut(0..rows, k..rows);
-            let q_slice_res = q_slice_copy.contract_mul(&h_sub).unwrap();
+            let q_slice_res = q_slice_copy.contract_mul_mt(&h_sub).unwrap();
 
-            for (pos, val) in q_slice_res.enumerated_iter() {
-                q_slice_mut[pos] = val;
-            }
+            q_slice_mut.set_all(&q_slice_res);
         }
 
         (q, r)
     }
+
+    /// Gives whether the matrix is in row echelon form or not
+    pub fn is_row_echelon(&self) -> bool {
+        let mut all_zero_rows = false;
+        let mut prev_pivot_col: i32 = -1;
+
+        for i in 0..self.rows {
+            let current_row = self.slice(i..i+1, 0..self.cols);
+
+            if all_zero_rows && !current_row.iter().all(|x| approx_eq!(f64, (*x).abs(), 0.0)) {
+                return false; // There is a row below a row of all 0 that is not itself all 0
+            }
+
+            if current_row.iter().all(|x| approx_eq!(f64, (*x).abs(), 0.0)) {
+                all_zero_rows = true;
+                continue
+            }
+
+            let (current_pivot_col, _) = current_row.iter().enumerate().find(|(_, &x)| !approx_eq!(f64, x.abs(), 0.0)).unwrap();
+
+            if (current_pivot_col as i32) <= prev_pivot_col {
+                return false;
+            }
+
+            prev_pivot_col = current_pivot_col as i32;
+        }
+
+        true
+    }
+
+    /// Gives whether the matrix is in reduced row echelon form or not
+    pub fn is_reduced_row_echelon(&self) -> bool {
+        let mut pivot = (0, 0);
+
+        while pivot.0 < self.rows && pivot.1 < self.cols {
+            let pivot_val = self[pivot];
+            let mut normal_pivot = false;
+
+            // Note everything below must be 0
+            if pivot.0 < self.rows - 1 {
+                let below_slice = self.slice(pivot.0 + 1..self.rows, pivot.1..pivot.1 + 1);
+
+                if below_slice.iter().any(|x| !approx_eq!(f64, (*x).abs(), 0.0)) {
+                    return false;
+                }
+            }
+
+            if approx_eq!(f64, pivot_val.abs(), 0.0) {
+                // If this is the last element in the row then there are no suitable other pivots
+                if pivot.1 == self.cols - 1 {
+                    // If this is the last row then return true because we are done checking everything else
+                    if pivot.0 == self.rows - 1 {
+                        return true
+                    }
+
+                    // This row is all 0 otherwise, so just check everything below is all 0 as well
+                    return self.slice(pivot.1 + 1..self.rows, 0..self.cols).iter().all(|x| approx_eq!(f64, (*x).abs(), 0.0));
+                }
+
+                // Check for all 0, otherwise just move to the first non-zero element
+                let right_slice = self.slice(pivot.0..pivot.0 + 1, pivot.1 + 1..self.cols);
+                let option_pivot = right_slice.iter().enumerate().find(|(_, &x)| approx_eq!(f64, x.abs(), 0.0));
+
+                match option_pivot {
+                    Some((index, _)) => {
+                        pivot = (pivot.0, pivot.1 + 1 + index);
+                        continue
+                    }
+                    None => {
+                        // This row is all 0, check rows below
+                        return self.slice(pivot.1 + 1..self.rows, 0..self.cols).iter().all(|x| approx_eq!(f64, (*x).abs(), 0.0));
+                    }
+                }
+            } else {
+                normal_pivot = true;
+            }
+
+            // Note everything to the left should be 0
+            if pivot.1 > 0 {
+                let left_slice = self.slice(pivot.0..pivot.0 + 1, 0..pivot.1);
+
+                if left_slice.iter().any(|x| !approx_eq!(f64, (*x).abs(), 0.0)) {
+                    return false;
+                }
+            }
+
+            // Similarly everything above must be 0
+            if pivot.0 > 0 {
+                let above_slice = self.slice(0..pivot.0, pivot.1..pivot.1 + 1);
+
+                if above_slice.iter().any(|x| !approx_eq!(f64, (*x).abs(), 0.0)) {
+                    return false;
+                }
+            }
+
+            if normal_pivot {
+                // Move pivot by 1 diagonally
+                pivot = (pivot.0 + 1, pivot.1 + 1);
+            }
+        }
+
+        true
+    }
+
+    /// Computes the row echelon form of a matrix.
+    /// This does not require that the leading entries are normalised.
+    pub fn row_echelon(&self) -> Matrix<Complex64> {
+        let mut res = self.clone();
+
+        let mut pivot = (0usize, 0usize);
+
+        while pivot.0 < res.rows - 1 && pivot.1 < res.cols {
+            // Identify if we can use this position as a pivot value
+            let pivot_val = res[pivot];
+
+            if approx_eq!(f64, pivot_val.abs(), 0.0) {
+                // The pivot value is 0
+
+                // Check if any of the other rows below have a non-zero value
+                // at this pivot column and if so then use that row's value instead
+                let slice_below = res.slice(pivot.0 + 1..res.rows, pivot.1..pivot.1 + 1);
+
+                let (index, max_abs) = slice_below.iter().enumerate().max_by(|(_, &x), (_, &y)| { x.abs().total_cmp(&y.abs()) }).unwrap();
+
+                if approx_eq!(f64, max_abs.abs(), 0.0) {
+                    // There is no suitable pivot on this row
+                    pivot = (pivot.0, pivot.1 + 1);
+                    continue
+                }
+
+                // There is a suitable pivot on this column in another row, so need to swap those rows
+                let chosen_copy = res.slice(index + pivot.0 + 1..index + pivot.0 + 2, pivot.1..res.cols);
+                let current_copy = res.slice(pivot.0..pivot.0 + 1, pivot.1..res.cols);
+
+                res.slice_mut(pivot.0..pivot.0 + 1, pivot.1..res.cols).set_all(&chosen_copy);
+                res.slice_mut(index + pivot.0 + 1..index + pivot.0 + 2, pivot.1..res.cols).set_all(&current_copy);
+
+                // Now we can resume with normal Gauss-Jordan elimination
+                continue
+            } else {
+                // Eliminate all rows below
+                for i in pivot.0 + 1..res.rows {
+                    if i == pivot.0 {
+                        continue
+                    }
+
+                    let val_for_row = res[(i, pivot.1)];
+                    let new_row = res.slice(i..i+1, pivot.1..res.cols) - res.slice(pivot.0..pivot.0 + 1, pivot.1..res.cols) * (val_for_row) / pivot_val;
+                    res.slice_mut(i..i+1, pivot.1..res.cols).set_all(&new_row);
+                }
+
+                // We slide the pivot one down and to the right in the normal case
+                pivot = (pivot.0 + 1, pivot.1 + 1);
+            }
+        }
+
+        res
+    }
+
+    /// Computes the reduced row echelon form of a matrix
+    pub fn reduced_row_echelon(&self) -> Matrix<Complex64> {
+        let mut res = self.clone();
+
+        let mut pivot = (0usize, 0usize);
+
+        while pivot.0 < res.rows && pivot.1 < res.cols {
+            // Identify if we can use this position as a pivot value
+            let pivot_val = res[pivot];
+            let mut normal_pivot = false;
+
+            if approx_eq!(f64, pivot_val.abs(), 0.0) {
+                // The pivot value is 0
+
+                // If this is the last row then there are no other rows to swap with,
+                // so we must see directly where the first usable pivot is in the last row.
+                // If such a pivot does not exist then we stop here.
+                if pivot.0 == res.rows - 1 {
+                    if pivot.1 == res.rows - 1 {
+                        // There is nothing to check
+                        break
+                    }
+
+                    let rest_of_row = res.slice(pivot.0..res.rows, pivot.1 + 1..res.cols);
+
+                    let (index, max_abs) = rest_of_row.iter().enumerate().max_by(|(_, &x), (_, &y)| { x.abs().total_cmp(&y.abs()) }).unwrap();
+
+                    if !approx_eq!(f64, max_abs.abs(), 0.0) {
+                        // There is a suitable pivot so change the position of the pivot to it
+                        pivot = (pivot.0, pivot.1 + 1 + index);
+                        continue
+                    }
+
+                    // Otherwise we are done here
+                    break
+                }
+
+                // Check if any of the other rows below have a non-zero value
+                // at this pivot column and if so then use that row's value instead
+                let slice_below = res.slice(pivot.0 + 1..res.rows, pivot.1..pivot.1 + 1);
+
+                let (index, max_abs) = slice_below.iter().enumerate().max_by(|(_, &x), (_, &y)| { x.abs().total_cmp(&y.abs()) }).unwrap();
+
+                if approx_eq!(f64, max_abs.abs(), 0.0) {
+                    // There is no suitable pivot on this row
+                    pivot = (pivot.0, pivot.1 + 1);
+                    continue
+                }
+
+                // There is a suitable pivot on this column in another row, so need to swap those rows
+                let chosen_copy = res.slice(index + pivot.0 + 1..index + pivot.0 + 2, pivot.1..res.cols);
+                let current_copy = res.slice(pivot.0..pivot.0 + 1, pivot.1..res.cols);
+
+                res.slice_mut(pivot.0..pivot.0 + 1, pivot.1..res.cols).set_all(&chosen_copy);
+                res.slice_mut(index + pivot.0 + 1..index + pivot.0 + 2, pivot.1..res.cols).set_all(&current_copy);
+
+                // Now we can resume with normal Gauss-Jordan elimination
+                continue
+            } else {
+                // Normalise the row
+                let norm_row = res.slice(pivot.0 .. pivot.0 + 1, pivot.1 .. res.cols) / pivot_val;
+                res.slice_mut(pivot.0 .. pivot.0 + 1, pivot.1 .. res.cols).set_all(&norm_row);
+
+                normal_pivot = true; // Use this to increment the pivot after eliminating the rows
+            }
+
+            // Eliminate all other rows
+            for i in 0..res.rows {
+                if i == pivot.0 {
+                    continue
+                }
+
+                let val_for_row = res[(i, pivot.1)];
+                let new_row = res.slice(i..i+1, pivot.1..res.cols) - res.slice(pivot.0..pivot.0 + 1, pivot.1..res.cols) * val_for_row;
+                res.slice_mut(i..i+1, pivot.1..res.cols).set_all(&new_row);
+            }
+
+            if normal_pivot {
+                // We slide the pivot one down and to the right in the normal case
+                pivot = (pivot.0 + 1, pivot.1 + 1);
+            }
+        }
+
+        res
+    }
 }
 
+impl ApproxEq for Tensor<f64> {
+    type Margin = F64Margin;
+
+    fn approx_eq<M: Into<Self::Margin>>(self, other: Self, margin: M) -> bool {
+        if self.shape != other.shape { return false }
+
+        let margin = margin.into();
+        
+        self.enumerated_iter().all(|(i, x)| {
+            approx_eq!(f64, x, other[&i], margin.clone())
+        })
+    }
+}
+impl ApproxEq for Matrix<f64> {
+    type Margin = F64Margin;
+
+    fn approx_eq<M: Into<Self::Margin>>(self, other: Self, margin: M) -> bool {
+        self.tensor.approx_eq(other.tensor, margin)
+    }
+}
 impl ApproxEq for Tensor<Complex64> {
     type Margin = F64Margin;
 
     fn approx_eq<M: Into<Self::Margin>>(self, other: Self, margin: M) -> bool {
+        if self.shape != other.shape { return false }
+
         let margin = margin.into();
-        
+
         self.enumerated_iter().all(|(i, x)| {
-            approx_eq!(f64, x.re, other[&i].re, margin.clone()) && approx_eq!(f64, x.im, other[&i].im, margin.clone())
+            x.re().approx_eq(other[&i].re(), margin) && x.im().approx_eq(other[&i].im(), margin)
         })
+    }
+}
+impl ApproxEq for Matrix<Complex64> {
+    type Margin = F64Margin;
+
+    fn approx_eq<M: Into<Self::Margin>>(self, other: Self, margin: M) -> bool {
+        self.tensor.approx_eq(other.tensor, margin)
     }
 }
 

@@ -152,6 +152,20 @@ pub struct TensorSliceMut<'a, T> {
     pub(crate) start: Vec<usize>,
     pub(crate) end: Vec<usize>,
 }
+impl<'a, T: Clone> TensorSliceMut<'a, T> {
+    /// Sets all the values in the mutable slice to the given values
+    pub fn set_all(&mut self, values: &Tensor<T>) {
+        let slice_shape = Shape::new(
+            self.end.iter().zip(self.start.iter()).map(|(e, s)| e - s).collect(),
+        ).unwrap();
+
+        assert_eq!(slice_shape, values.shape, "Slice shape and values shape are not the same");
+
+        for (index, value) in values.enumerated_iter() {
+            self[index.as_slice()] = value;
+        }
+    }
+}
 impl<T> Index<&[usize]> for TensorSliceMut<'_, T> {
     type Output = T;
 
@@ -798,6 +812,16 @@ pub struct MatrixSliceMut<'a, T> {
     pub(crate) orig: &'a mut Matrix<T>,
     pub(crate) start: (usize, usize),
     pub(crate) end: (usize, usize),
+}
+impl<'a, T: Clone> MatrixSliceMut<'a, T> {
+    /// Sets all the values in the mutable slice to the values in the given input
+    pub fn set_all(&mut self, values: &Matrix<T>) {
+        assert!(self.end.0 - self.start.0 == values.rows && self.end.1 - self.start.1 == values.cols, "Mutable slice shape and input shape do not match");
+
+        for (index, value) in values.enumerated_iter() {
+            self[index] = value
+        }
+    }
 }
 impl<T> Index<(usize, usize)> for MatrixSliceMut<'_, T> {
     type Output = T;

@@ -329,6 +329,65 @@ mod tensor_util_tests {
     }
 
     #[test]
+    fn set_all_tensor() {
+        let mut t1 = Tensor::<i32>::new(&shape![3, 3, 3], (0..27).collect()).unwrap();
+        let mut slice_mut = t1.slice_mut(&[0..2, 1..2, 0..2]);
+        let inserted = Tensor::<i32>::new(
+            &shape![2, 1, 2],
+            (0..4).collect(),
+        ).unwrap();
+
+        slice_mut.set_all(&inserted);
+        let ans = Tensor::<i32>::new(&shape![3, 3, 3], vec![
+            0, 1, 2,
+            0, 1, 5,
+            6, 7, 8,
+            9, 10, 11,
+            2, 3, 14,
+            15, 16, 17,
+            18, 19, 20,
+            21, 22, 23,
+            24, 25, 26,
+        ]).unwrap();
+
+        assert_eq!(t1, ans);
+    }
+
+    #[test]
+    #[should_panic]
+    fn set_all_tensor_fail() {
+        let mut t1 = Tensor::<i32>::new(&shape![3, 3, 3], (0..27).collect()).unwrap();
+        let mut slice_mut = t1.slice_mut(&[0..2, 0..2, 0..2]);
+
+        slice_mut.set_all(&Tensor::<i32>::zeros(&shape![1]));
+    }
+
+    #[test]
+    fn set_all_mat() {
+        let mut m1 = Matrix::<f64>::new(4, 4, (0..16).map(f64::from).collect()).unwrap();
+        let mut slice_mut = m1.slice_mut(1..3, 1..3);
+        let inserted = Matrix::<f64>::new(2, 2, (0..4).map(f64::from).collect()).unwrap();
+        slice_mut.set_all(&inserted);
+
+        let ans = Matrix::<f64>::new(4, 4, vec![
+            0.0, 1.0, 2.0, 3.0,
+            4.0, 0.0, 1.0, 7.0,
+            8.0, 2.0, 3.0, 11.0,
+            12.0, 13.0, 14.0, 15.0,
+        ]).unwrap();
+        assert_eq!(m1, ans);
+    }
+
+    #[test]
+    #[should_panic]
+    fn set_all_mat_fail() {
+        let mut m1 = Matrix::<f64>::new(4, 4, (0..16).map(f64::from).collect()).unwrap();
+        let mut slice_mut = m1.slice_mut(1..3, 1..3);
+
+        slice_mut.set_all(&Matrix::zeros(2, 1));
+    }
+
+    #[test]
     #[should_panic]
     fn slice_mut_out_of_bounds() {
         let mut t1 = Tensor::<i32>::from_shape(&shape![2, 3]);
