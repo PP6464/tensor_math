@@ -1,7 +1,7 @@
 use std::hint::black_box;
 use criterion::{criterion_group, criterion_main, Criterion};
 use tensor_math::tensor::tensor::{Tensor, Shape, Matrix};
-use tensor_math::tensor::tensor_math::{pool_avg, pool_avg_mat, Transpose};
+use tensor_math::tensor::tensor_math::{identity, pool_avg, pool_avg_mat, Transpose};
 use tensor_math::shape;
 
 pub fn bench_concat_mt(c: &mut Criterion) {
@@ -110,6 +110,30 @@ pub fn bench_pool_mat_mt(c: &mut Criterion) {
     });
 }
 
+pub fn bench_det(c: &mut Criterion) {
+    let m1 = Matrix::<f64>::rand(100, 100);
+
+    c.bench_function("det", |b| {
+        b.iter(|| {
+            m1.det();
+        })
+    });
+}
+
+pub fn bench_inv(c: &mut Criterion) {
+    let mut m1 = Matrix::<f64>::rand(100, 100);
+
+    if m1.det() == 0.0 {
+        m1 = m1 + identity(100);
+    }
+
+    c.bench_function("inv", |b| {
+        b.iter(|| {
+            m1.inv().expect("");
+        })
+    });
+}
+
 criterion_group!(
     benches,
     bench_concat_mt,
@@ -122,5 +146,7 @@ criterion_group!(
     bench_kronecker_mat_mt,
     bench_pool_mt,
     bench_pool_mat_mt,
+    bench_det,
+    bench_inv,
 );
 criterion_main!(benches);

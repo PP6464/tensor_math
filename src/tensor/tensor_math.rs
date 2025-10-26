@@ -1449,9 +1449,9 @@ impl Matrix<f64> {
 
     /// Computes the REF form of a matrix.
     /// This does not require that the leading entries of the rows are normalised.
-    pub fn row_echelon(&self) -> Matrix<f64> {
+    pub fn tracked_row_echelon(&self) -> (Matrix<f64>, i32) {
         let mut res = self.clone();
-
+        let mut det_scale = 1;
         let mut pivot = (0usize, 0usize);
 
         while pivot.0 < res.rows - 1 && pivot.1 < res.cols {
@@ -1480,6 +1480,9 @@ impl Matrix<f64> {
                 res.slice_mut(pivot.0..pivot.0 + 1, pivot.1..res.cols).set_all(&chosen_copy);
                 res.slice_mut(index + pivot.0 + 1..index + pivot.0 + 2, pivot.1..res.cols).set_all(&current_copy);
 
+                // Now multiply determinant scale factor by -1 because we swapped rows
+                det_scale *= -1;
+
                 // Now we can resume with normal Gauss-Jordan elimination
                 continue
             } else {
@@ -1499,7 +1502,13 @@ impl Matrix<f64> {
             }
         }
 
-        res
+        (res, det_scale)
+    }
+
+    /// Computes the row echelon form of a matrix.
+    /// This does not require that the leading entries of the rows are normalised.
+    pub fn row_echelon(&self) -> Matrix<f64> {
+        self.tracked_row_echelon().0
     }
 
     /// Computes the reduced row echelon form of a matrix
@@ -1586,6 +1595,65 @@ impl Matrix<f64> {
         }
 
         res
+    }
+
+    /// Computes the determinant of the matrix if it is square, otherwise panics
+    pub fn det(&self) -> f64 {
+        if !self.is_square() {
+            panic!("Determinant only implemented for square matrices");
+        }
+
+        let ord = self.rows;
+        let (ref_form, det_scale) = self.tracked_row_echelon();
+        let mut res = 1f64;
+
+        for i in 0..ord {
+            res *= ref_form[(i, i)];
+        }
+
+        res * det_scale as f64
+    }
+
+    /// Computes the inverse of a matrix, panics if the matrix is not square.
+    /// This returns a result for in case the determinant was zero.
+    pub fn inv(&self) -> Result<Matrix<f64>, TensorErrors> {
+        if !self.is_square() {
+            panic!("Inverse only implemented for square matrices");
+        }
+
+        let ord = self.rows;
+
+        let a_i_rref = self.concat_mt(&identity(ord), 1)?.reduced_row_echelon();
+        let left = a_i_rref.slice(0..ord, 0..ord);
+        let right = a_i_rref.slice(0..ord, ord..2 * ord);
+
+        if !approx_eq!(Matrix<f64>, left, identity(ord)) {
+            return Err(DeterminantZero);
+        }
+
+        Ok(right)
+    }
+
+    /// Gives the rank of the transformation represented by this matrix.
+    /// Note that `mat.rank()` will just give 2, since `Matrix` can be
+    /// dereferenced into a `Tensor`, so will just inherit `rank` from there,
+    /// but this function will give the desired result.
+    pub fn transformation_rank(&self) -> usize {
+        let mut all_zero_rows = 0usize;
+        let ref_form = self.row_echelon();
+        let rows = self.rows;
+
+        for i in (0..rows).rev() {
+            let row = ref_form.slice(i..i+1, 0..self.cols);
+
+            if !row.iter().all(|x| approx_eq!(f64, *x, 0.0)) {
+                return rows - all_zero_rows
+            }
+
+            all_zero_rows += 1;
+        }
+
+        0
     }
 }
 
@@ -1960,8 +2028,11 @@ impl Matrix<Complex64> {
 
     /// Computes the row echelon form of a matrix.
     /// This does not require that the leading entries are normalised.
-    pub fn row_echelon(&self) -> Matrix<Complex64> {
+    /// This returns a tuple of the result and 1 if an even number of rows
+    /// have been swapped or -1 if an odd number of rows have been swapped
+    fn tracked_row_echelon(&self) -> (Matrix<Complex64>, i32) {
         let mut res = self.clone();
+        let mut det_scale = 1;
 
         let mut pivot = (0usize, 0usize);
 
@@ -1991,6 +2062,9 @@ impl Matrix<Complex64> {
                 res.slice_mut(pivot.0..pivot.0 + 1, pivot.1..res.cols).set_all(&chosen_copy);
                 res.slice_mut(index + pivot.0 + 1..index + pivot.0 + 2, pivot.1..res.cols).set_all(&current_copy);
 
+                // Multiply the determinant scale factor by -1 because we swapped a row
+                det_scale *= -1;
+
                 // Now we can resume with normal Gauss-Jordan elimination
                 continue
             } else {
@@ -2010,7 +2084,13 @@ impl Matrix<Complex64> {
             }
         }
 
-        res
+        (res, det_scale)
+    }
+
+    /// Computes the row echelon form of a matrix.
+    /// This does not require that the leading entries are normalised.
+    pub fn row_echelon(&self) -> Matrix<Complex64> {
+        self.tracked_row_echelon().0
     }
 
     /// Computes the reduced row echelon form of a matrix
@@ -2097,6 +2177,66 @@ impl Matrix<Complex64> {
         }
 
         res
+    }
+
+    /// Computes the determinant of a matrix.
+    /// This will panic if the matrix is not square.
+    pub fn det(&self) -> Complex64 {
+        if !self.is_square() {
+            panic!("Determinant only implemented for square matrices");
+        }
+
+        let (ref_form, det_scale) = self.tracked_row_echelon();
+        let ord = self.rows;
+        let mut res = Complex64::ONE;
+
+        for i in 0..ord {
+            res *= ref_form[(i, i)];
+        }
+
+        res * Complex64::new(det_scale as f64, 0.0)
+    }
+
+    /// Computes the inverse of a matrix, panics if the matrix is not square.
+    /// This returns a result for in case the determinant was zero.
+    pub fn inv(&self) -> Result<Matrix<Complex64>, TensorErrors> {
+        if !self.is_square() {
+            panic!("Inverse only implemented for square matrices");
+        }
+
+        let ord = self.rows;
+
+        let a_i_rref = self.concat_mt(&identity(ord), 1)?.reduced_row_echelon();
+        let left = a_i_rref.slice(0..ord, 0..ord);
+        let right = a_i_rref.slice(0..ord, ord..2 * ord);
+
+        if !approx_eq!(Matrix<Complex64>, left, identity(ord)) {
+            return Err(DeterminantZero);
+        }
+
+        Ok(right)
+    }
+
+    /// Gives the rank of the transformation represented by this matrix.
+    /// Note that `mat.rank()` will just give 2, since `Matrix` can be
+    /// dereferenced into a `Tensor`, so will just inherit `rank` from there,
+    /// but this function will give the desired result.
+    pub fn transformation_rank(&self) -> usize {
+        let mut all_zero_rows = 0usize;
+        let ref_form = self.row_echelon();
+        let rows = self.rows;
+
+        for i in (0..rows).rev() {
+            let row = ref_form.slice(i..i+1, 0..self.cols);
+
+            if !row.iter().all(|x| approx_eq!(f64, x.abs(), 0.0)) {
+                return rows - all_zero_rows
+            }
+
+            all_zero_rows += 1;
+        }
+
+        0
     }
 }
 
@@ -2336,7 +2476,9 @@ pub fn trace<T: Add<Output = T> + Clone>(m: &Matrix<T>) -> T {
 }
 
 /// Calculates the determinant for a matrix of values of type `T`.
-pub fn det<T: Add<Output = T> + Mul<Output = T> + Sub<Output = T> + Clone + Zero>(
+/// This uses a slower method which is O(n!) for an n x n matrix but may be
+/// useful for matrices of types that aren't f64 or Complex64.
+pub fn det_slow<T: Add<Output = T> + Mul<Output = T> + Sub<Output = T> + Clone + Zero>(
     m: &Matrix<T>,
 ) -> T {
     assert!(m.is_square(), "Determinant is only defined for square matrices");
@@ -2358,7 +2500,7 @@ pub fn det<T: Add<Output = T> + Mul<Output = T> + Sub<Output = T> + Clone + Zero
 
         if i == 0 {
             let slice = m.slice(1..ord, 1..ord);
-            determinant = determinant + m[&[0, i]].clone() * det(&slice);
+            determinant = determinant + m[&[0, i]].clone() * det_slow(&slice);
 
             continue;
         }
@@ -2367,9 +2509,9 @@ pub fn det<T: Add<Output = T> + Mul<Output = T> + Sub<Output = T> + Clone + Zero
             let slice = m.slice(1..ord, 0..(ord - 1));
 
             if is_minus {
-                determinant = determinant - m[&[0, i]].clone() * det(&slice);
+                determinant = determinant - m[&[0, i]].clone() * det_slow(&slice);
             } else {
-                determinant = determinant + m[&[0, i]].clone() * det(&slice);
+                determinant = determinant + m[&[0, i]].clone() * det_slow(&slice);
             }
 
             continue;
@@ -2381,9 +2523,9 @@ pub fn det<T: Add<Output = T> + Mul<Output = T> + Sub<Output = T> + Clone + Zero
             .unwrap();
 
         if is_minus {
-            determinant = determinant - m[&[0, i]].clone() * det(&slice)
+            determinant = determinant - m[&[0, i]].clone() * det_slow(&slice)
         } else {
-            determinant = determinant + m[&[0, i]].clone() * det(&slice)
+            determinant = determinant + m[&[0, i]].clone() * det_slow(&slice)
         }
     }
 
@@ -2391,8 +2533,11 @@ pub fn det<T: Add<Output = T> + Mul<Output = T> + Sub<Output = T> + Clone + Zero
 }
 
 /// Calculates the inverse for a matrix of values of type `T`.
-/// If the determinant is 0 you will receive `TensorErrors::DeterminantZero`
-pub fn inv<T>(m: &Matrix<T>) -> Result<Matrix<T>, TensorErrors>
+/// If the determinant is 0 you will receive `TensorErrors::DeterminantZero`.
+/// This uses a slower implementation for det and is slower itself than using
+/// REF/RREF, but note that this can be used on matrices that don't have REF/RREF
+/// implemented for them.
+pub fn inv_slow<T>(m: &Matrix<T>) -> Result<Matrix<T>, TensorErrors>
 where
     T: Add<Output = T>
         + Mul<Output = T>
@@ -2407,7 +2552,7 @@ where
 
     let ord = m.shape[0];
     let mut res = Matrix::<T>::from_value(m.rows, m.cols, T::zero());
-    let d = det(&m);
+    let d = det_slow(&m);
 
     if d == T::zero() {
         return Err(DeterminantZero);
@@ -2450,7 +2595,7 @@ where
                 }
             };
 
-            res[&[j, i]] = if is_minus { -det(&slice) } else { det(&slice) };
+            res[&[j, i]] = if is_minus { -det_slow(&slice) } else { det_slow(&slice) };
         }
     }
 

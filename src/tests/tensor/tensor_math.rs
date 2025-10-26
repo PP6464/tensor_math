@@ -2,7 +2,7 @@
 mod tensor_math_tests {
     use crate::tensor::tensor::{Matrix, Tensor};
     use crate::tensor::tensor::{Shape, TensorErrors};
-    use crate::tensor::tensor_math::{det, gaussian_pdf_multi_sigma, gaussian_pdf_single_sigma, gaussian_sample, identity, inv, pool_avg, pool_avg_mat, pool_max, pool_max_mat, pool_min, pool_min_mat, pool_sum, pool_sum_mat, solve_cubic, solve_quadratic, solve_quartic, trace, Transpose};
+    use crate::tensor::tensor_math::{det_slow, gaussian_pdf_multi_sigma, gaussian_pdf_single_sigma, gaussian_sample, identity, inv_slow, pool_avg, pool_avg_mat, pool_max, pool_max_mat, pool_min, pool_min_mat, pool_sum, pool_sum_mat, solve_cubic, solve_quadratic, solve_quartic, trace, Transpose};
     use crate::{shape, transpose};
     use float_cmp::{approx_eq, assert_approx_eq, ApproxEq, F64Margin, FloatMargin};
     use num::complex::{Complex64, ComplexFloat};
@@ -304,14 +304,15 @@ mod tensor_math_tests {
     #[test]
     fn determinant() {
         let m1 = Matrix::<i32>::new(3, 3, vec![5, -2, 1, 8, 9, -5, 1, 0, 2]).unwrap();
-        assert_eq!(det(&m1), 123);
+        assert_eq!(det_slow(&m1), 123);
+        assert!(approx_eq!(f64, m1.transform_elementwise(|x| x as f64).det(), 123.0));
     }
 
     #[test]
     #[should_panic]
     fn invalid_det_square_matrix_only() {
         let m1 = Matrix::<i32>::new(3, 2, (0..6).collect()).unwrap();
-        det(&m1);
+        det_slow(&m1);
     }
 
     #[test]
@@ -322,7 +323,8 @@ mod tensor_math_tests {
             vec![3.0, 4.0, 5.0, 2.0, -1.0, 4.0, 3.0, -5.0, -10.0],
         )
         .unwrap();
-        let inverse = inv(&m1).unwrap();
+        let inverse = inv_slow(&m1).unwrap();
+        let fast_inverse = m1.inv().unwrap();
         let ans = Matrix::<f64>::new(
             3,
             3,
@@ -340,7 +342,8 @@ mod tensor_math_tests {
         )
         .unwrap();
 
-        assert_eq!(inverse, ans);
+        assert!(approx_eq!(Matrix<f64>, inverse.clone(), ans.clone(), epsilon = 1e-15));
+        assert!(approx_eq!(Matrix<f64>, fast_inverse, ans, epsilon = 1e-15));
         assert!(m1
             .contract_mul(&inverse)
             .unwrap()
@@ -351,14 +354,15 @@ mod tensor_math_tests {
     #[test]
     fn inverse_det_0() {
         let m1 = Matrix::<f64>::new(3, 3, vec![0.0; 9]).unwrap();
-        inv(&m1).expect_err(format!("{:?}", TensorErrors::DeterminantZero).as_str());
+        inv_slow(&m1).expect_err(format!("{:?}", TensorErrors::DeterminantZero).as_str());
+        m1.inv().expect_err(format!("{:?}", TensorErrors::DeterminantZero).as_str());
     }
 
     #[test]
     #[should_panic]
     fn invalid_inversion_square_matrix_only() {
         let m1 = Matrix::<i32>::new(3, 2, (0..6).collect()).unwrap();
-        inv(&m1).expect("TODO: panic message");
+        inv_slow(&m1).expect("Should've panicked");
     }
 
     #[test]
@@ -1051,5 +1055,36 @@ mod tensor_math_tests {
         ).unwrap();
 
         assert!(approx_eq!(Matrix<Complex64>, m4_rref, m4_rref_ans, epsilon = 1e-15));
+    }
+
+    #[test]
+    fn transformation_rank_mat() {
+        let m1: Matrix<f64> = identity(3);
+        assert_eq!(m1.transformation_rank(), 3);
+
+        let mut m2 = identity(4);
+        m2.slice_mut(1..3, 0..4).set_all(&Matrix::<f64>::zeros(2, 4));
+        assert_eq!(m2.transformation_rank(), 2);
+
+        let m3 = Matrix::<Complex64>::new(
+            3, 4,
+            vec![
+                Complex64::new(1.0, 2.0), Complex64::new(-4.0, 0.0), Complex64::new(3.0, 1.0), Complex64::new(3.0, 1.0),
+                Complex64::new(1.0, 3.0), Complex64::new(-4.0, 1.0), Complex64::new(3.2, -1.0), Complex64::new(3.0, 1.0),
+                Complex64::new(1.0, 4.0), Complex64::new(-3.0, 0.0), Complex64::new(3.1, 1.5), Complex64::new(3.0, 1.0),
+            ],
+        ).unwrap();
+        assert_eq!(m3.transformation_rank(), 3);
+
+        let m4 = Matrix::<Complex64>::new(
+            3, 3,
+            vec![
+                Complex64::new(1.0, 2.0), Complex64::new(3.0, 1.0), Complex64::new(3.0, 1.0),
+                Complex64::new(1.0, 3.0), Complex64::new(3.0, 1.0), Complex64::new(3.0, 1.0),
+                Complex64::new(1.0, 4.0), Complex64::new(3.0, 1.0), Complex64::new(3.0, 1.0),
+            ],
+        ).unwrap();
+
+        assert_eq!(m4.transformation_rank(), 2);
     }
 }
