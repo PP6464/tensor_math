@@ -652,7 +652,7 @@ mod tensor_math_tests {
 
     #[test]
     fn test_householder() {
-        let m1: Matrix<Complex64> = Tensor::<i32>::new(
+        let m1: Matrix<f64> = Tensor::<i32>::new(
             &shape![9],
             vec![
                     4, 1, 1,
@@ -662,11 +662,9 @@ mod tensor_math_tests {
             )
             .unwrap()
             .iter()
-            .map(|x| Complex64::from_i32(*x).unwrap())
-            .collect::<Tensor<Complex64>>()
-            .reshape(&shape![3, 3])
-            .unwrap()
-            .try_into()
+            .map(|x| f64::from_i32(*x).unwrap())
+            .collect::<Matrix<f64>>()
+            .reshape(3, 3)
             .unwrap();
 
         let (q1, r1) = m1.householder();
