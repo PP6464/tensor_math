@@ -1726,7 +1726,7 @@ impl Matrix<f64> {
         let (mut h, mut q) = (self.clone(), identity(ord));
 
         for i in 0..ord - 2 {
-            let vec_bottom = self.slice(i+1..ord, i..i + 1);
+            let vec_bottom = h.slice(i+1..ord, i..i + 1);
             let alpha = -1.0
                 * match vec_bottom[&[0, 0]] {
                 0.0 => 1.0,
@@ -1762,7 +1762,7 @@ impl Matrix<f64> {
             let mut h_slice_mut = h.slice_mut(0..ord, ord - reflector_ord..ord);
             h_slice_mut.set_all(&h_slice_res);
 
-            // Update H Part 2: premultiply by the conjugate of the reflector
+            // Update H Part 2: premultiply by the transpose of the reflector
             let h_slice = h.slice(ord - reflector_ord..ord, 0..ord);
             let h_slice_res = reflector_transpose.contract_mul_mt(&h_slice).unwrap();
             let mut h_slice_mut = h.slice_mut(ord - reflector_ord..ord, 0..ord);
@@ -2382,7 +2382,7 @@ impl Matrix<Complex64> {
         let (mut h, mut q) = (self.clone(), identity(ord));
 
         for i in 0..ord - 2 {
-            let vec_bottom = self.slice(i+1..ord, i..i + 1);
+            let vec_bottom = h.slice(i+1..ord, i..i + 1);
             let alpha = -1.0
                 * match vec_bottom[&[0, 0]] {
                 Complex64::ZERO => Complex64::ONE,
@@ -2419,7 +2419,7 @@ impl Matrix<Complex64> {
             let mut h_slice_mut = h.slice_mut(0..ord, ord - reflector_ord..ord);
             h_slice_mut.set_all(&h_slice_res);
 
-            // Update H Part 2: premultiply by the conjugate of the reflector
+            // Update H Part 2: premultiply by the conjugate transpose of the reflector
             let h_slice = h.slice(ord - reflector_ord..ord, 0..ord);
             let h_slice_res = reflector_star.contract_mul_mt(&h_slice).unwrap();
             let mut h_slice_mut = h.slice_mut(ord - reflector_ord..ord, 0..ord);
