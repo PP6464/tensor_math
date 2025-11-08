@@ -1085,4 +1085,51 @@ mod tensor_math_tests {
 
         assert_eq!(m4.transformation_rank(), 2);
     }
+
+    #[test]
+    fn upper_hessenberg() {
+        let m1 = Matrix::<Complex64>::new(
+            3, 3,
+            vec![
+                Complex64 { re: 3.0, im: 0.0 }, Complex64 { re: 2.0, im: 0.0 }, Complex64 { re: 0.0, im: 4.0 },
+                Complex64 { re: 0.0, im: 0.0 }, Complex64 { re: 0.0, im: 5.0 }, Complex64 { re: 0.0, im: 6.0 },
+                Complex64 { re: -5.0, im: 4.0 }, Complex64 { re: 7.0, im: 0.0 }, Complex64 { re: 3.0, im: 0.0 },
+            ],
+        ).unwrap();
+        let (h1, q1) = m1.upper_hessenberg();
+        let h1_ans = Matrix::<Complex64>::new(
+            3, 3,
+            vec![
+                Complex64 { re: 3.0, im: 0.0 }, Complex64 { re: 2.498780190217697, im: 3.123475237772121 }, Complex64 { re: 1.5617376188860606, im: 1.2493900951088488 },
+                Complex64 { re: -6.4031242374328485, im: 0.0 }, Complex64 { re: 3.0, im: 0.0 }, Complex64 { re: 1.536585365853658, im: 6.829268292682927 },
+                Complex64 { re: 0.0, im: 0.0 }, Complex64 { re: 5.853658536585366, im: 1.3170731707317078 }, Complex64 { re: 0.0, im: 5.0 },
+            ],
+        ).unwrap();
+
+        assert!(approx_eq!(Matrix<Complex64>, h1.clone(), h1_ans, epsilon = 1e-13));
+        assert!(approx_eq!(Matrix<Complex64>, h1, q1.clone().conj_transpose().contract_mul_mt(&m1).unwrap().contract_mul_mt(&q1).unwrap(), epsilon = 1e-15));
+
+        let m2 = Matrix::<f64>::new(
+            4, 4,
+            vec![
+                1.0, 0.5, 0.25, 0.125,
+                0.3, 0.6, 0.9, 1.2,
+                0.4, 0.8, 1.2, 1.6,
+                -5.0, 10.0, -15.0, 20.0,
+            ],
+        ).unwrap();
+
+        let (h2, q2) = m2.upper_hessenberg();
+        let h2_ans = Matrix::<f64>::new(
+            4, 4,
+            vec![
+                1.0, 0.07462778926574916, -0.5401332641873883, -0.17553276043970875,
+                -5.024937810560447, 20.215841584158426, -8.797449191038035, 15.04568564663292,
+                -1.6556041611993013e-15, -2.7578563455132983, 1.6120875547945435, -0.028801527312802312,
+                1.881368364999203e-16, -2.674321825006028, 1.5632579770231754, -0.027929138952962687
+            ]
+        ).unwrap();
+        assert!(approx_eq!(Matrix<f64>, h2.clone(), h2_ans, epsilon = 1e-13));
+        assert!(approx_eq!(Matrix<f64>, h2, q2.clone().transpose().contract_mul_mt(&m2).unwrap().contract_mul_mt(&q2).unwrap(), epsilon = 1e-13));
+    }
 }
