@@ -1132,4 +1132,50 @@ mod tensor_math_tests {
         assert!(approx_eq!(Matrix<f64>, h2.clone(), h2_ans, epsilon = 1e-13));
         assert!(approx_eq!(Matrix<f64>, h2, q2.clone().transpose().contract_mul_mt(&m2).unwrap().contract_mul_mt(&q2).unwrap(), epsilon = 1e-13));
     }
+
+    #[test]
+    fn lower_hessenberg() {
+        let m1 = Matrix::<Complex64>::new(
+            3, 3,
+            vec![
+                Complex64 { re: 3.0, im: 0.0 }, Complex64 { re: 2.0, im: 0.0 }, Complex64 { re: 0.0, im: 4.0 },
+                Complex64 { re: 0.0, im: 0.0 }, Complex64 { re: 0.0, im: 5.0 }, Complex64 { re: 0.0, im: 6.0 },
+                Complex64 { re: -5.0, im: 4.0 }, Complex64 { re: 7.0, im: 0.0 }, Complex64 { re: 3.0, im: 0.0 },
+            ],
+        ).unwrap();
+        let (h1, q1) = m1.lower_hessenberg();
+        let h1_ans = Matrix::<Complex64>::new(
+            3, 3,
+            vec![
+                Complex64 { re: 3.0, im: 0.0 }, Complex64 { re: -4.472135954999581, im: -0.0 }, Complex64 { re: 0.0, im: -2.220446049250313e-16 },
+                Complex64 { re: 3.5777087639996643, im: 4.4721359549995805 }, Complex64 { re: 4.800000000000005, im: 3.8000000000000074 }, Complex64 { re: -7.600000000000007, im: -2.400000000000002 },
+                Complex64 { re: -2.23606797749979, im: 1.788854381999832 }, Complex64 { re: 0.6000000000000011, im: -3.6000000000000014 }, Complex64 { re: -1.8000000000000005, im: 1.2000000000000008 }],
+        ).unwrap();
+
+        assert!(approx_eq!(Matrix<Complex64>, h1.clone(), h1_ans, epsilon = 1e-13));
+        assert!(approx_eq!(Matrix<Complex64>, h1, q1.clone().conj_transpose().contract_mul_mt(&m1).unwrap().contract_mul_mt(&q1).unwrap(), epsilon = 1e-15));
+
+        let m2 = Matrix::<f64>::new(
+            4, 4,
+            vec![
+                1.0, 0.5, 0.25, 0.125,
+                0.3, 0.6, 0.9, 1.2,
+                0.4, 0.8, 1.2, 1.6,
+                -5.0, 10.0, -15.0, 20.0,
+            ],
+        ).unwrap();
+
+        let (h2, q2) = m2.lower_hessenberg();
+        let h2_ans = Matrix::<f64>::new(
+            4, 4,
+            vec![
+                1.0, -0.57282196186948, 0.0, 0.0,
+                0.6546536707079773, 3.142857142857143, 2.2654040016393293, -5.9593794318500874,
+                3.6773549565274646, 5.172952349463506, 2.6029105252033844, -19.471102321183157,
+                -3.3613225217362688, -3.174476127498444, -1.1189777523362032, 16.054232331939474,
+            ]
+        ).unwrap();
+        assert!(approx_eq!(Matrix<f64>, h2.clone(), h2_ans, epsilon = 1e-13));
+        assert!(approx_eq!(Matrix<f64>, h2, q2.clone().transpose().contract_mul_mt(&m2).unwrap().contract_mul_mt(&q2).unwrap(), epsilon = 1e-13));
+    }
 }
