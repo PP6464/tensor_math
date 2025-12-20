@@ -757,6 +757,19 @@ impl<T: Add<Output = T> + Clone> Matrix<T> {
     pub fn sum(&self) -> T {
         self.tensor.sum()
     }
+
+    /// Computes the trace of a matrix
+    pub fn trace(self: &Matrix<T>) -> T {
+        assert!(self.is_square(), "Trace only defined for square matrices");
+
+        let mut sum = self.elements.first().unwrap().clone();
+
+        for i in 1..self.shape.0.iter().min().unwrap().clone() {
+            sum = sum.add(self[&[i, i]].clone());
+        }
+
+        sum
+    }
 }
 impl<T: PartialOrd + Clone> Tensor<T> {
     /// Bounds the values between `min` and `max`
@@ -2449,6 +2462,64 @@ impl Matrix<Complex64> {
     pub fn conj_transpose_mt(&self) -> Matrix<Complex64> {
         self.transpose_mt().transform_elementwise(|x| x.conj())
     }
+
+    /// Returns the eigendecomposition for a matrix in the form `(values, vectors)`
+    /// where `values` is a vector of eigenvalues and `vectors` is a matrix where
+    /// the columns are the eigenvectors. If the matrix is not square then this will panic.
+    pub fn eigendecompose(&self) -> (Vec<Complex64>, Matrix<Complex64>) {
+        if !self.is_square() {
+            panic!("Eigendecomposition is only defined for square matrices");
+        }
+
+        if self.rows == 1 {
+            return (self.elements.clone(), self.clone());
+        }
+
+        let (mut h, mut q) = self.upper_hessenberg();
+        let ord = self.rows;
+        let mut diff = Complex64::ONE;
+        let mut prev_ref = h[(ord - 1, ord - 1)];
+        let mut iters = 0;
+
+        while diff.abs() > 1e-50 && iters < 100000 {
+            iters += 1;
+
+            // Calculate the Wilkinson shift
+            let bottom_right_mat = h.slice(ord - 2..ord, ord - 2..ord);
+            let bottom_right = h[(ord - 1, ord - 1)];
+
+            let roots = solve_quadratic(&[
+                bottom_right_mat.det(),
+                -bottom_right_mat.trace(),
+                Complex64::ONE,
+            ]);
+
+            let dist0 = (roots[0] - bottom_right).abs();
+            let dist1 = (roots[1] - bottom_right).abs();
+
+            let mut ws = roots[0];
+
+            if dist1 < dist0 {
+                ws = roots[1]
+            }
+
+            let shifted = h.clone() - identity(ord) * ws;
+            let (qs, rs) = shifted.householder();
+
+            h = rs.contract_mul_mt(&qs).unwrap() + identity(ord) * ws;
+            q = q.contract_mul_mt(&qs).unwrap();
+
+            diff = h[(ord - 1, ord - 1)] - prev_ref;
+            prev_ref = h[(ord - 1, ord - 1)];
+        }
+
+        let mut eigenvalues = Vec::with_capacity(ord);
+        for i in 0..ord {
+            eigenvalues.push(h[(i, i)]);
+        }
+
+        (eigenvalues, q)
+    }
 }
 
 impl ApproxEq for Tensor<f64> {
@@ -2575,9 +2646,9 @@ pub fn pool_avg_mat<T: Add<Output = T> + Div<f64, Output = T> + Clone>(m: Matrix
     sum / elems
 }
 
-/// Solves a quadratic. The coefficients are entered as a `&[Complex64]` where the index of the
+/// Solves a quadratic. The coefficients are entered as a `&[Complex64; 3]` where the index of the
 /// coefficient corresponds to the power of x, e.g. [1, 2, 3\] would be 1 + 2x + 3x².
-pub fn solve_quadratic(coefficients: &[Complex64]) -> Vec<Complex64> {
+pub fn solve_quadratic(coefficients: &[Complex64; 3]) -> Vec<Complex64> {
     assert_eq!(coefficients.len(), 3, "Input must be a quadratic");
 
     let a = coefficients[2];
@@ -2593,9 +2664,9 @@ pub fn solve_quadratic(coefficients: &[Complex64]) -> Vec<Complex64> {
     roots
 }
 
-/// Solves a cubic. The coefficients are entered as a `&[Complex64]` where the index of the
+/// Solves a cubic. The coefficients are entered as a `&[Complex64; 4]` where the index of the
 /// coefficient corresponds to the power of x, e.g. [1, 2, 3, 4\] would be 1 + 2x + 3x² + 4x³.
-pub fn solve_cubic(coefficients: &[Complex64]) -> Vec<Complex64> {
+pub fn solve_cubic(coefficients: &[Complex64; 4]) -> Vec<Complex64> {
     assert_eq!(coefficients.len(), 4, "Input must be a cubic");
 
     let a = coefficients[3];
@@ -2624,9 +2695,9 @@ pub fn solve_cubic(coefficients: &[Complex64]) -> Vec<Complex64> {
     ]
 }
 
-/// Solves a quartic. The coefficients are entered as a `&[Complex64]` where the index of the
+/// Solves a quartic. The coefficients are entered as a `&[Complex64; 5]` where the index of the
 /// coefficient corresponds to the power of x, e.g. [1, 2, 3, 4, 5\] would be 1 + 2x + 3x² + 4x³ + 5x⁴.
-pub fn solve_quartic(coefficients: &[Complex64]) -> Vec<Complex64> {
+pub fn solve_quartic(coefficients: &[Complex64; 5]) -> Vec<Complex64> {
     assert_eq!(coefficients.len(), 5, "Input must be a quartic");
 
     let a = coefficients[4];
@@ -2670,20 +2741,6 @@ pub fn solve_quartic(coefficients: &[Complex64]) -> Vec<Complex64> {
         (-b - y0 + y1 - y2) / (4.0 * a),
         (-b - y0 - y1 + y2) / (4.0 * a),
     ]
-}
-
-// Matrix specific functions
-/// Computes the trace of a matrix
-pub fn trace<T: Add<Output = T> + Clone>(m: &Matrix<T>) -> T {
-    assert!(m.is_square(), "Trace only defined for square matrices");
-
-    let mut sum = m.elements.first().unwrap().clone();
-
-    for i in 1..m.shape.0.iter().min().unwrap().clone() {
-        sum = sum.add(m[&[i, i]].clone());
-    }
-
-    sum
 }
 
 /// Calculates the determinant for a matrix of values of type `T`.

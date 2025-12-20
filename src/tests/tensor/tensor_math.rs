@@ -2,7 +2,7 @@
 mod tensor_math_tests {
     use crate::tensor::tensor::{Matrix, Tensor};
     use crate::tensor::tensor::{Shape, TensorErrors};
-    use crate::tensor::tensor_math::{det_slow, gaussian_pdf_multi_sigma, gaussian_pdf_single_sigma, gaussian_sample, identity, inv_slow, pool_avg, pool_avg_mat, pool_max, pool_max_mat, pool_min, pool_min_mat, pool_sum, pool_sum_mat, solve_cubic, solve_quadratic, solve_quartic, trace, Transpose};
+    use crate::tensor::tensor_math::{det_slow, gaussian_pdf_multi_sigma, gaussian_pdf_single_sigma, gaussian_sample, identity, inv_slow, pool_avg, pool_avg_mat, pool_max, pool_max_mat, pool_min, pool_min_mat, pool_sum, pool_sum_mat, solve_cubic, solve_quadratic, solve_quartic, Transpose};
     use crate::{shape, transpose};
     use float_cmp::{approx_eq, assert_approx_eq, ApproxEq, F64Margin, FloatMargin};
     use num::complex::{Complex64, ComplexFloat};
@@ -291,14 +291,14 @@ mod tensor_math_tests {
     #[test]
     fn test_trace() {
         let m1 = Matrix::<i32>::new(2, 2, (0..4).collect()).unwrap();
-        assert_eq!(3, trace(&m1));
+        assert_eq!(3, m1.trace());
     }
 
     #[test]
     #[should_panic]
     fn invalid_trace_non_square() {
         let m1 = Matrix::<i32>::new(2, 3, (0..6).collect()).unwrap();
-        trace(&m1);
+        m1.trace();
     }
 
     #[test]
@@ -1088,26 +1088,26 @@ mod tensor_math_tests {
 
     #[test]
     fn upper_hessenberg() {
-        // let m1 = Matrix::<Complex64>::new(
-        //     3, 3,
-        //     vec![
-        //         Complex64 { re: 3.0, im: 0.0 }, Complex64 { re: 2.0, im: 0.0 }, Complex64 { re: 0.0, im: 4.0 },
-        //         Complex64 { re: 0.0, im: 0.0 }, Complex64 { re: 0.0, im: 5.0 }, Complex64 { re: 0.0, im: 6.0 },
-        //         Complex64 { re: -5.0, im: 4.0 }, Complex64 { re: 7.0, im: 0.0 }, Complex64 { re: 3.0, im: 0.0 },
-        //     ],
-        // ).unwrap();
-        // let (h1, q1) = m1.upper_hessenberg();
-        // let h1_ans = Matrix::<Complex64>::new(
-        //     3, 3,
-        //     vec![
-        //         Complex64 { re: 3.0, im: 0.0 }, Complex64 { re: 2.498780190217697, im: 3.123475237772121 }, Complex64 { re: 1.5617376188860606, im: 1.2493900951088488 },
-        //         Complex64 { re: -6.4031242374328485, im: 0.0 }, Complex64 { re: 3.0, im: 0.0 }, Complex64 { re: 1.536585365853658, im: 6.829268292682927 },
-        //         Complex64 { re: 0.0, im: 0.0 }, Complex64 { re: 5.853658536585366, im: 1.3170731707317078 }, Complex64 { re: 0.0, im: 5.0 },
-        //     ],
-        // ).unwrap();
-        //
-        // assert!(approx_eq!(Matrix<Complex64>, h1.clone(), h1_ans, epsilon = 1e-13));
-        // assert!(approx_eq!(Matrix<Complex64>, h1, q1.clone().conj_transpose().contract_mul_mt(&m1).unwrap().contract_mul_mt(&q1).unwrap(), epsilon = 1e-15));
+        let m1 = Matrix::<Complex64>::new(
+            3, 3,
+            vec![
+                Complex64 { re: 3.0, im: 0.0 }, Complex64 { re: 2.0, im: 0.0 }, Complex64 { re: 0.0, im: 4.0 },
+                Complex64 { re: 0.0, im: 0.0 }, Complex64 { re: 0.0, im: 5.0 }, Complex64 { re: 0.0, im: 6.0 },
+                Complex64 { re: -5.0, im: 4.0 }, Complex64 { re: 7.0, im: 0.0 }, Complex64 { re: 3.0, im: 0.0 },
+            ],
+        ).unwrap();
+        let (h1, q1) = m1.upper_hessenberg();
+        let h1_ans = Matrix::<Complex64>::new(
+            3, 3,
+            vec![
+                Complex64 { re: 3.0, im: 0.0 }, Complex64 { re: 2.498780190217697, im: 3.123475237772121 }, Complex64 { re: 1.5617376188860606, im: 1.2493900951088488 },
+                Complex64 { re: -6.4031242374328485, im: 0.0 }, Complex64 { re: 3.0, im: 0.0 }, Complex64 { re: 1.536585365853658, im: 6.829268292682927 },
+                Complex64 { re: 0.0, im: 0.0 }, Complex64 { re: 5.853658536585366, im: 1.3170731707317078 }, Complex64 { re: 0.0, im: 5.0 },
+            ],
+        ).unwrap();
+        
+        assert!(approx_eq!(Matrix<Complex64>, h1.clone(), h1_ans, epsilon = 1e-13));
+        assert!(approx_eq!(Matrix<Complex64>, h1, q1.clone().conj_transpose().contract_mul_mt(&m1).unwrap().contract_mul_mt(&q1).unwrap(), epsilon = 1e-15));
 
         let m2 = Matrix::<f64>::new(
             4, 4,
@@ -1179,5 +1179,38 @@ mod tensor_math_tests {
 
         assert!(approx_eq!(Matrix<f64>, h2.clone(), h2_ans, epsilon = 1e-13));
         assert!(approx_eq!(Matrix<f64>, h2, q2.clone().transpose().contract_mul_mt(&m2).unwrap().contract_mul_mt(&q2).unwrap(), epsilon = 1e-13));
+    }
+
+    #[test]
+    fn eigenvalues() {
+        let ms = vec![
+            Matrix::<Complex64>::new(
+            3, 3,
+        vec![
+                    Complex64::new(1.0, 0.0), Complex64::new(0.0, 0.0), Complex64::new(0.0, 0.0),
+                    Complex64::new(0.0, 0.0), Complex64::new(0.5.sqrt(), 0.0), Complex64::new(-0.5.sqrt(), 0.0),
+                    Complex64::new(0.0, 0.0), Complex64::new(0.5.sqrt(), 0.0), Complex64::new(0.5.sqrt(), 0.0),
+                ],
+            ).unwrap(),
+            Matrix::<Complex64>::new(
+                2, 2,
+                vec![
+                    Complex64::new(1.0, 0.0), Complex64::new(1.0, 0.0),
+                    Complex64::new(1.0, 0.0), Complex64::new(1.0, 0.0),
+                ],
+            ).unwrap(),
+        ];
+
+        for m in ms {
+            let (vals, vecs) = m.eigendecompose();
+            let ord = m.rows;
+
+            for i in 0..ord {
+                let vec = vecs.slice(0..ord, i..i + 1);
+                let val = vals[i];
+
+                assert!(approx_eq!(Matrix<Complex64>, vec.clone() * val, m.contract_mul_mt(&vec).unwrap(), epsilon = 1e-13));
+            }
+        }
     }
 }
