@@ -2976,28 +2976,34 @@ pub fn gaussian_sample(sigma: f64, shape: &Shape, min: f64, max: f64) -> Tensor<
     res
 }
 
-// The following is WIP
-// /// Creates a tensor of values of the Gaussian pdf with a specified covariance matrix.
-// /// The shape of the result is also specified by the user. The mean is the centre value,
-// /// but when tensors have an even number of elements in a certain axis, then the centre
-// /// is treated as being in between the two.
-// pub fn gaussian_pdf_mat_sigma(sigma: Tensor<f64>, shape: &Shape) -> Tensor<f64> {
-//     assert_eq!(sigma.rank(), 2, "Sigma should be a matrix");
-//     assert_eq!(sigma.shape[0], sigma.shape[1], "Sigma should be a square matrix");
-//     assert!(sigma.iter().all(|x| x > &0.0), "All values in sigma must be positive");
-//
-//     let ord = sigma.shape[0];
-//
-//     assert_eq!(ord, shape.rank(), "Sigma matrix should have the same order as the rank of the result");
-//
-//     let mut res = Tensor::<f64>::from_shape(shape);
-//     let sigma_inv = inv(&sigma).unwrap();
-//
-//     let centre = shape.0.iter().map(|x| { (x - 1).to_f64().unwrap() / 2.0 }).collect::<Vec<f64>>();
-//
-//     for (pos, val) in res.enumerated_iter_mut() {
-//
-//     }
-//
-//     res
-// }
+/// Creates a tensor of values of the Gaussian pdf with a specified covariance matrix.
+/// The shape of the result is also specified by the user. The mean is the centre value,
+/// but when tensors have an even number of elements in a certain axis, then the centre
+/// is treated as being in between the two.
+pub fn gaussian_pdf_cov_mat(sigma: Matrix<f64>, shape: &Shape) -> Tensor<f64> {
+    assert!(sigma.is_square(), "Covariance matrix should be square");
+
+    let ord = sigma.rows;
+
+    assert_eq!(ord, shape.rank(), "Sigma matrix should have the same order as the rank of the result");
+
+    let (vals, _) = sigma.clone().transform_elementwise(|x| Complex64::new(x, 0.0)).eigendecompose();
+    assert!(vals.iter().all(|x| x.re > 0.0 && approx_eq!(f64, x.im, 0.0, epsilon = 1e-15)), "Covariance matrix should be positive definite");
+
+    let mut res = Tensor::<f64>::from_shape(shape);
+    let sigma_inv = sigma.inv().unwrap();
+
+    let centre = shape.0.iter().map(|x| { (x - 1).to_f64().unwrap() / 2.0 }).collect::<Vec<f64>>();
+
+    let denom = (2.0 * PI).powf(0.5 * ord as f64) * sigma.det().sqrt();
+
+    for (pos, val) in res.enumerated_iter_mut() {
+        let offset = pos.iter().zip(centre.iter()).map(|(i, j)| *i as f64 - j).collect::<Matrix<f64>>();
+
+        let exponent = -0.5 * offset.contract_mul_mt(&sigma_inv.contract_mul_mt(&offset.transpose_mt()).unwrap()).unwrap()[(0, 0)];
+
+        *val = exponent.exp() / denom;
+    }
+
+    res
+}

@@ -2,7 +2,7 @@
 mod tensor_math_tests {
     use crate::tensor::tensor::{Matrix, Tensor};
     use crate::tensor::tensor::{Shape, TensorErrors};
-    use crate::tensor::tensor_math::{det_slow, gaussian_pdf_multi_sigma, gaussian_pdf_single_sigma, gaussian_sample, identity, inv_slow, pool_avg, pool_avg_mat, pool_max, pool_max_mat, pool_min, pool_min_mat, pool_sum, pool_sum_mat, solve_cubic, solve_quadratic, solve_quartic, Transpose};
+    use crate::tensor::tensor_math::{det_slow, gaussian_pdf_cov_mat, gaussian_pdf_multi_sigma, gaussian_pdf_single_sigma, gaussian_sample, identity, inv_slow, pool_avg, pool_avg_mat, pool_max, pool_max_mat, pool_min, pool_min_mat, pool_sum, pool_sum_mat, solve_cubic, solve_quadratic, solve_quartic, Transpose};
     use crate::{shape, transpose};
     use float_cmp::{approx_eq, assert_approx_eq, ApproxEq, F64Margin, FloatMargin};
     use num::complex::{Complex64, ComplexFloat};
@@ -651,6 +651,45 @@ mod tensor_math_tests {
     }
 
     #[test]
+    fn gaussian_covariance_matrix_tensor() {
+        let cov = Matrix::<f64>::new(
+            2, 2,
+            vec![
+                1.0, 0.5,
+                0.5, 1.0
+            ],
+        ).unwrap();
+
+        let ans = Tensor::<f64>::new(
+            &shape![3, 4],
+            vec![
+                0.057228531823873385, 0.11146595955293902, 0.057228531823873385, 0.007745039563599408,
+                0.041006034909973794, 0.1555632781262252, 0.1555632781262252, 0.041006034909973794,
+                0.007745039563599408, 0.057228531823873385, 0.11146595955293902, 0.057228531823873385,
+            ],
+        ).unwrap();
+        assert!(approx_eq!(Tensor<f64>, gaussian_pdf_cov_mat(cov, &shape![3, 4]), ans, epsilon = 1e-15));
+    }
+
+    #[test]
+    #[should_panic]
+    fn invalid_cov_mat_non_square() {
+        gaussian_pdf_cov_mat(Matrix::<f64>::new(2, 1, vec![0.0, 1.0]).unwrap(), &shape![1, 1]);
+    }
+
+    #[test]
+    #[should_panic]
+    fn invalid_cov_mat_shape_not_right_dim() {
+        gaussian_pdf_cov_mat(identity(2), &shape![1]);
+    }
+
+    #[test]
+    #[should_panic]
+    fn invalid_cov_mat_not_positive_definite() {
+        gaussian_pdf_cov_mat(Matrix::<f64>::new(2, 2, vec![0.0, 1.0, 1.0, 0.0]).unwrap(), &shape![1, 1]);
+    }
+
+    #[test]
     fn test_householder() {
         let m1: Matrix<f64> = Tensor::<i32>::new(
             &shape![9],
@@ -1212,5 +1251,11 @@ mod tensor_math_tests {
                 assert!(approx_eq!(Matrix<Complex64>, vec.clone() * val, m.contract_mul_mt(&vec).unwrap(), epsilon = 1e-13));
             }
         }
+    }
+
+    #[test]
+    #[should_panic]
+    fn invalid_eigendecomposition_non_square() {
+        Matrix::<Complex64>::new(2, 1, vec![Complex64::ONE, Complex64::ZERO]).unwrap().eigendecompose();
     }
 }
