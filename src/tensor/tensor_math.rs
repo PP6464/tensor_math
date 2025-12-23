@@ -8,6 +8,7 @@ use num::{One, ToPrimitive, Zero};
 use rand::distr::weighted::WeightedIndex;
 use rand::distr::Distribution;
 use std::cmp::min;
+use std::collections::HashSet;
 use std::f64::consts::PI;
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Range, Rem, Sub};
 use std::sync::{Arc, Mutex, RwLock};
@@ -2481,7 +2482,7 @@ impl Matrix<Complex64> {
         let mut prev_ref = h[(ord - 1, ord - 1)];
         let mut iters = 0;
 
-        while diff.abs() > 1e-50 && iters < 100000 {
+        while diff.abs() > 1e-15 && iters < 1000 {
             iters += 1;
 
             // Calculate the Wilkinson shift
@@ -3003,6 +3004,115 @@ pub fn gaussian_pdf_cov_mat(sigma: Matrix<f64>, shape: &Shape) -> Tensor<f64> {
         let exponent = -0.5 * offset.contract_mul_mt(&sigma_inv.contract_mul_mt(&offset.transpose_mt()).unwrap()).unwrap()[(0, 0)];
 
         *val = exponent.exp() / denom;
+    }
+
+    res
+}
+
+/// This computes the FFT of a vector of Complex64 values
+/// where the length of the vector is a power of 2. This
+/// panics if the length of the input is not a power of 2.
+pub(crate) fn radix_2_fft(x: &Vec<Complex64>) -> Vec<Complex64> {
+    let n = x.len();
+    let log2_n = n.trailing_zeros() as usize;
+    let mut res = x.clone();
+
+    if n & n - 1 > 0 {
+        panic!("List size is not a power of two");
+    }
+
+    let omega = Complex64::from_polar(1.0, -2.0 * PI / n as f64);
+
+    // Bit-reverse indices
+    let mut swapped = HashSet::<usize>::new();
+
+    for i in 0..n {
+        if swapped.contains(&i) {
+            continue;
+        }
+
+        let mut orig = i;
+        let mut rev = 0;
+
+        for _ in 0..log2_n {
+            rev <<= 1;
+            rev |= orig & 1;
+            orig >>= 1;
+        }
+
+        swapped.insert(i);
+        swapped.insert(rev);
+
+        let orig_copy = res[i];
+        res[i] = res[rev];
+        res[rev] = orig_copy;
+    }
+
+    // Compute twiddle factors
+    let mut twiddle_factors: Vec<Complex64> = Vec::with_capacity(n);
+    twiddle_factors.push(Complex64::one());
+
+    for _ in 1..n {
+        twiddle_factors.push(twiddle_factors.last().unwrap() * omega);
+    }
+
+    // FFT Butterfly
+    for iters in 1..=log2_n {
+        let half_len = (1 << iters) >> 1;
+
+        for chunk in 0..n >> iters {
+            for i in 0..half_len {
+                let first_pos = (chunk << iters) + i;
+                let second_pos = (chunk << iters) + i + half_len;
+
+                let twiddle_index = (n >> iters) * (i & n - 1);
+                let twiddle = twiddle_factors[twiddle_index];
+
+                let first = res[first_pos];
+                let second = res[second_pos];
+
+                res[first_pos] = first + twiddle * second;
+                res[second_pos] = first - twiddle * second;
+            }
+        }
+    }
+
+    res
+}
+
+/// Computes an FFT for an arbitrarily long vector using the Bluestein method.
+pub(crate) fn bluestein_fft(x: &Vec<Complex64>) -> Vec<Complex64> {
+    let n = x.len();
+
+    let l = ((n << 1) - 1).next_power_of_two();
+
+    let mut res = vec![Complex64::zero(); n];
+    let mut u = vec![Complex64::zero(); l];
+    let mut v = vec![Complex64::zero(); l];
+    let mut v_star = vec![Complex64::zero(); n];
+
+    for i in 0..n {
+        let w_i = Complex64::from_polar(1.0, -PI * (i * i) as f64 / n as f64);
+
+        u[i] = x[i] * w_i;
+        v[i] = w_i.conj();
+        v_star[i] = w_i;
+
+        if i > 0 {
+            v[l - i] = v[i];
+        }
+    }
+
+    u = radix_2_fft(&u);
+    v = radix_2_fft(&v);
+
+
+    // Note that IFFT(x) = FFT(x.conj_each()).conj_each()
+    let mut conv_res = (0..l).map(|i| (u[i] * v[i]).conj()).collect::<Vec<_>>();
+    conv_res = radix_2_fft(&conv_res).iter().map(|x| x.conj() / l as f64).collect();
+
+    for i in 0..n {
+        res[i] = conv_res[i] * v_star[i];
     }
 
     res
