@@ -1,5 +1,6 @@
 use std::hint::black_box;
 use criterion::{criterion_group, criterion_main, Criterion};
+use num::complex::Complex64;
 use tensor_math::tensor::tensor::{Tensor, Shape, Matrix};
 use tensor_math::tensor::tensor_math::{identity, pool_avg, pool_avg_mat, Transpose};
 use tensor_math::shape;
@@ -134,6 +135,18 @@ pub fn bench_inv(c: &mut Criterion) {
     });
 }
 
+pub fn bench_eigendecompose(c: &mut Criterion) {
+    let m1 = Matrix::<f64>::rand(20, 20).transform_elementwise(|x| Complex64 { re: x, im: 0.0 });
+    let m2 = Matrix::<f64>::rand(20, 20).transform_elementwise(|x| Complex64 { re: 0.0, im: x });
+    let m = &m1 + &m2;
+
+    c.bench_function("eigendecompose", |b| {
+        b.iter(|| {
+            m.eigendecompose();
+        })
+    });
+}
+
 criterion_group!(
     benches,
     bench_concat_mt,
@@ -148,5 +161,6 @@ criterion_group!(
     bench_pool_mat_mt,
     bench_det,
     bench_inv,
+    bench_eigendecompose,
 );
 criterion_main!(benches);
