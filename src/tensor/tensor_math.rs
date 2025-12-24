@@ -3117,3 +3117,23 @@ pub(crate) fn bluestein_fft(x: &Vec<Complex64>) -> Vec<Complex64> {
 
     res
 }
+
+/// Computes an FFT for an arbitrarily long vector, using radix 2 FFT
+/// directly where appropriate, otherwise using the Bluestein method.
+pub(crate) fn fft(x: &Vec<Complex64>) -> Vec<Complex64> {
+    let n = x.len();
+
+    if n & n - 1 == 0 {
+        radix_2_fft(x)
+    } else {
+        bluestein_fft(x)
+    }
+}
+
+/// Computes an inverse FFT using the `fft` function and the identity
+/// IFFT(x) === 1/N × FFT(x*)* where * means conjugating every element
+/// and N is the size of the list x.
+pub(crate) fn ifft(x: &Vec<Complex64>) -> Vec<Complex64> {
+    let n = x.len() as f64;
+    fft(&x.iter().map(|z| z.conj()).collect()).iter().map(|z| z.conj() / n).collect()
+}
