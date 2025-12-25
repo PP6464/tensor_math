@@ -147,6 +147,30 @@ pub fn bench_eigendecompose(c: &mut Criterion) {
     });
 }
 
+pub fn bench_tensor_fft(c: &mut Criterion) {
+    let t1 = Tensor::<f64>::rand(&shape![256, 50, 20]).transform_elementwise(|x| Complex64 { re: x, im: 0.0 });
+    let t2 = Tensor::<f64>::rand(&shape![256, 50, 20]).transform_elementwise(|x| Complex64 { re: 0.0, im: x });
+    let t = &t1 + &t2;
+
+    c.bench_function("tensor_fft", |b| {
+        b.iter(|| {
+            t.fft();
+        })
+    });
+}
+
+pub fn bench_mat_fft(c: &mut Criterion) {
+    let m1 = Matrix::<f64>::rand(256, 100).transform_elementwise(|x| Complex64 { re: x, im: 0.0 });
+    let m2 = Matrix::<f64>::rand(256, 100).transform_elementwise(|x| Complex64 { re: 0.0, im: x });
+    let m = &m1 + &m2;
+
+    c.bench_function("mat_fft", |b| {
+        b.iter(|| {
+            m.fft();
+        })
+    });
+}
+
 criterion_group!(
     benches,
     bench_concat_mt,
@@ -162,5 +186,7 @@ criterion_group!(
     bench_det,
     bench_inv,
     bench_eigendecompose,
+    bench_tensor_fft,
+    bench_mat_fft,
 );
 criterion_main!(benches);

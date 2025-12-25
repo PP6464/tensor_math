@@ -71,6 +71,7 @@ impl Shape {
         Ok(Shape(shape))
     }
 
+    /// This returns the number of dimensions of the shape
     pub fn rank(&self) -> usize {
         self.0.len()
     }
@@ -78,6 +79,11 @@ impl Shape {
     /// The size of the elements a tensor of this shape would have
     pub fn element_count(&self) -> usize {
         self.0.iter().product()
+    }
+
+    /// This gives a list of all indices that are valid for a tensor with this shape
+    pub fn indices(&self) -> Vec<Vec<usize>> {
+        (0..self.element_count()).map(|i| tensor_index(i, self)).collect()
     }
 }
 impl Index<usize> for Shape {

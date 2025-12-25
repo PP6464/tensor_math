@@ -2,7 +2,7 @@
 mod tensor_math_tests {
     use crate::tensor::tensor::{Matrix, Tensor};
     use crate::tensor::tensor::{Shape, TensorErrors};
-    use crate::tensor::tensor_math::{bluestein_fft, det_slow, fft, gaussian_pdf_cov_mat, gaussian_pdf_multi_sigma, gaussian_pdf_single_sigma, gaussian_sample, identity, ifft, inv_slow, pool_avg, pool_avg_mat, pool_max, pool_max_mat, pool_min, pool_min_mat, pool_sum, pool_sum_mat, radix_2_fft, solve_cubic, solve_quadratic, solve_quartic, Transpose};
+    use crate::tensor::tensor_math::{bluestein_fft_vec, det_slow, fft_vec, gaussian_pdf_cov_mat, gaussian_pdf_multi_sigma, gaussian_pdf_single_sigma, gaussian_sample, identity, ifft_vec, inv_slow, pool_avg, pool_avg_mat, pool_max, pool_max_mat, pool_min, pool_min_mat, pool_sum, pool_sum_mat, radix_2_fft_vec, solve_cubic, solve_quadratic, solve_quartic, Transpose};
     use crate::{shape, transpose};
     use float_cmp::{approx_eq, assert_approx_eq, ApproxEq, F64Margin, FloatMargin};
     use num::complex::{Complex64, ComplexFloat};
@@ -713,15 +713,9 @@ mod tensor_math_tests {
                 continue
             }
 
-            assert!(r1.slice(i+1..r1.shape[0], i..i+1).iter().all(|x| {
-                if x.abs() > 1e-10 {
-                    println!("Failed for: {:?}", x.abs());
-                }
-                x.abs() <= 1e-10 }));
+            assert!(r1.slice(i+1..r1.shape[0], i..i+1).iter().all(|x| { x.abs() <= 1e-10 }));
         }
         assert!(q1.contract_mul(&r1).unwrap().tensor.approx_eq(m1.clone().tensor, F64Margin::default().epsilon(1e-10)));
-
-        println!("Passed test 1: square");
 
         let m2: Matrix<Complex64> = Tensor::<Complex64>::new(
             &shape![3, 2],
@@ -742,9 +736,6 @@ mod tensor_math_tests {
         }
         assert!(q2.contract_mul(&r2).unwrap().tensor.approx_eq(m2.tensor, F64Margin::default().epsilon(1e-10)));
 
-
-        println!("Passed test 2: tall");
-
         let m3: Matrix<Complex64> = Tensor::<Complex64>::new(
             &shape![2, 3],
             vec![
@@ -761,8 +752,6 @@ mod tensor_math_tests {
             assert!(r3.slice(i+1..r3.shape[0], i..i+1).iter().all(|x| x.abs() <= 1e-10));
         }
         assert!(q3.contract_mul(&r3).unwrap().tensor.approx_eq(m3.tensor, F64Margin::default().epsilon(1e-10)));
-
-        println!("Passed test 3: wide");
     }
 
     #[test]
@@ -875,7 +864,6 @@ mod tensor_math_tests {
         ).unwrap();
 
         let m2_ref = m2.row_echelon();
-        println!("m2 ref: {m2_ref:?}");
         assert!(approx_eq!(Matrix<Complex64>, m2_ref.reduced_row_echelon(), m2.reduced_row_echelon(), epsilon = 1e-14));
 
         let m3 = Matrix::<f64>::new(
@@ -1285,8 +1273,8 @@ mod tensor_math_tests {
             Complex64 { re: 0.0, im: 0.0 },
             Complex64 { re: 0.0, im: 0.0 },
         ];
-        let res1 = radix_2_fft(&v1);
-        let res2 = radix_2_fft(&v2);
+        let res1 = radix_2_fft_vec(&v1);
+        let res2 = radix_2_fft_vec(&v2);
 
         let ans1 = vec![
             Complex64 { re: 26.0, im: 0.0 },
@@ -1331,7 +1319,7 @@ mod tensor_math_tests {
     #[test]
     #[should_panic]
     fn invalid_radix_2_vec_fft_len_not_pow_2() {
-        radix_2_fft(&vec![Complex64 { re: 0.0, im: 0.0 }, Complex64 { re: 0.0, im: 1.0 }, Complex64 { re: 0.0, im: 1.0 }]);
+        radix_2_fft_vec(&vec![Complex64 { re: 0.0, im: 0.0 }, Complex64 { re: 0.0, im: 1.0 }, Complex64 { re: 0.0, im: 1.0 }]);
     }
 
     #[test]
@@ -1343,7 +1331,7 @@ mod tensor_math_tests {
             Complex64::new(5.0, -4.0),
             Complex64::new(8.0, -7.0)
         ];
-        let res = bluestein_fft(&v1);
+        let res = bluestein_fft_vec(&v1);
         let ans = vec![
             Complex64 { re: 16.0, im: - 14.0},
             Complex64 { re: 3.8036497995578236, im: 10.012395135066075 },
@@ -1392,9 +1380,9 @@ mod tensor_math_tests {
             Complex64::new(8.0, -7.0),
         ];
 
-        let res1 = fft(&v1);
-        let res2 = fft(&v2);
-        let res3 = fft(&v3);
+        let res1 = fft_vec(&v1);
+        let res2 = fft_vec(&v2);
+        let res3 = fft_vec(&v3);
 
         let ans1 = vec![
             Complex64 { re: 26.0, im: 0.0 },
@@ -1518,12 +1506,9 @@ mod tensor_math_tests {
             Complex64::new(8.0, -7.0),
         ];
 
-        let res1 = ifft(&v1);
-        let res2 = ifft(&v2);
-        let res3 = ifft(&v3);
-
-        println!("res1: {res1:?}");
-        println!("ans1: {ans1:?}");
+        let res1 = ifft_vec(&v1);
+        let res2 = ifft_vec(&v2);
+        let res3 = ifft_vec(&v3);
 
         for i in 0..8 {
             assert!(approx_eq!(f64, res1[i].re, ans1[i].re, epsilon = 1e-10));
@@ -1538,6 +1523,230 @@ mod tensor_math_tests {
         for i in 0..5 {
             assert!(approx_eq!(f64, res3[i].re, ans3[i].re, epsilon = 1e-10));
             assert!(approx_eq!(f64, res3[i].im, ans3[i].im, epsilon = 1e-10));
+        }
+    }
+
+    #[test]
+    fn mat_fft() {
+        let m1 = Matrix::<Complex64>::new(
+            2, 3,
+            vec![
+                Complex64::new(1.0, 0.0), Complex64::new(2.0, -1.0), Complex64::new(3.0, 2.0),
+                Complex64::new(0.0, 1.0), Complex64::new(1.0, -1.0), Complex64::new(2.0, -3.0),
+            ],
+        ).unwrap();
+        let ans_cols = Matrix::<Complex64>::new(
+            2, 3,
+            vec![
+                Complex64::new(1.0, 1.0), Complex64::new(3.0, -2.0), Complex64::new(5.0, -1.0),
+                Complex64::new(1.0, -1.0), Complex64::new(1.0, 0.0), Complex64::new(1.0, 5.0),
+            ],
+        ).unwrap();
+        let ans_rows = Matrix::<Complex64>::new(
+            2, 3,
+            vec![
+                Complex64::new(6.0, 1.0), Complex64::new(-4.09807621, 0.3660254), Complex64::new(1.09807621, -1.3660254),
+                Complex64::new(3.0, -3.0), Complex64::new(0.23205081, 3.8660254), Complex64::new(-3.23205081, 2.1339746),
+            ],
+        ).unwrap();
+        let ans_entire = Matrix::<Complex64>::new(
+            2, 3,
+            vec![
+                Complex64::new(9.0, -2.0), Complex64::new(-3.8660254, 4.23205081), Complex64::new(-2.1339746, 0.76794919),
+                Complex64::new(3.0, 4.0), Complex64::new(-4.33012702, -3.5), Complex64::new(4.33012702, -3.5),
+            ],
+        ).unwrap();
+
+        let res_rows = m1.fft_rows();
+        let res_cols = m1.fft_cols();
+        let res_entire = m1.fft();
+
+        for i in 0..2 {
+            for j in 0..3 {
+                assert!(approx_eq!(f64, res_rows[(i, j)].re, ans_rows[(i, j)].re, epsilon = 1e-5));
+                assert!(approx_eq!(f64, res_rows[(i, j)].im, ans_rows[(i, j)].im, epsilon = 1e-5));
+                assert!(approx_eq!(f64, res_cols[(i, j)].re, ans_cols[(i, j)].re, epsilon = 1e-5));
+                assert!(approx_eq!(f64, res_cols[(i, j)].im, ans_cols[(i, j)].im, epsilon = 1e-5));
+                assert!(approx_eq!(f64, res_entire[(i, j)].re, ans_entire[(i, j)].re, epsilon = 1e-5));
+                assert!(approx_eq!(f64, res_entire[(i, j)].im, ans_entire[(i, j)].im, epsilon = 1e-5));
+            }
+        }
+    }
+
+    #[test]
+    fn mat_ifft() {
+        let m1 = Matrix::<Complex64>::new(
+            2, 3,
+            vec![
+                Complex64::new(9.0, -2.0), Complex64::new(-3.8660254, 4.23205081), Complex64::new(-2.1339746, 0.76794919),
+                Complex64::new(3.0, 4.0), Complex64::new(-4.33012702, -3.5), Complex64::new(4.33012702, -3.5),
+            ],
+        ).unwrap();
+
+        let ans_cols = Matrix::<Complex64>::new(
+            2, 3,
+            vec![
+                Complex64::new(6.0, 1.0), Complex64::new(-4.09807621, 0.3660254), Complex64::new(1.09807621, -1.3660254),
+                Complex64::new(3.0, -3.0), Complex64::new(0.23205081, 3.8660254), Complex64::new(-3.23205081, 2.1339746),
+            ],
+        ).unwrap();
+        let ans_rows = Matrix::<Complex64>::new(
+            2, 3,
+            vec![
+                Complex64::new(1.0, 1.0), Complex64::new(3.0, -2.0), Complex64::new(5.0, -1.0),
+                Complex64::new(1.0, -1.0), Complex64::new(1.0, 0.0), Complex64::new(1.0, 5.0),
+            ],
+        ).unwrap();
+        let ans_entire = Matrix::<Complex64>::new(
+            2, 3,
+            vec![
+                Complex64::new(1.0, 0.0), Complex64::new(2.0, -1.0), Complex64::new(3.0, 2.0),
+                Complex64::new(0.0, 1.0), Complex64::new(1.0, -1.0), Complex64::new(2.0, -3.0),
+            ],
+        ).unwrap();
+
+        let res_rows = m1.ifft_rows();
+        let res_cols = m1.ifft_cols();
+        let res_entire = m1.ifft();
+
+        for i in 0..2 {
+            for j in 0..3 {
+                assert!(approx_eq!(f64, res_rows[(i, j)].re, ans_rows[(i, j)].re, epsilon = 1e-5));
+                assert!(approx_eq!(f64, res_rows[(i, j)].im, ans_rows[(i, j)].im, epsilon = 1e-5));
+                assert!(approx_eq!(f64, res_cols[(i, j)].re, ans_cols[(i, j)].re, epsilon = 1e-5));
+                assert!(approx_eq!(f64, res_cols[(i, j)].im, ans_cols[(i, j)].im, epsilon = 1e-5));
+                assert!(approx_eq!(f64, res_entire[(i, j)].re, ans_entire[(i, j)].re, epsilon = 1e-5));
+                assert!(approx_eq!(f64, res_entire[(i, j)].im, ans_entire[(i, j)].im, epsilon = 1e-5));
+            }
+        }
+    }
+
+    #[test]
+    fn tensor_fft() {
+        let t1 = Tensor::<Complex64>::new(
+            &shape![3, 2, 4],
+            (0..24).map(|i| Complex64::new(i as f64, i as f64 * if i % 2 == 0 { 1.0 } else { -1.0 })).collect(),
+        ).unwrap();
+
+        let ans_axes_1_2 = Tensor::<Complex64>::new(
+            &shape![3, 2, 4],
+            vec![
+                Complex64::new(28.0, -4.0), Complex64::new(0.0, 0.0), Complex64::new(-4.0, 28.0), Complex64::new(-8.0, -8.0),
+                Complex64::new(-16.0, 0.0), Complex64::new(0.0, 0.0), Complex64::new(0.0, -16.0), Complex64::new(0.0, 0.0),
+
+                Complex64::new(92.0, -4.0), Complex64::new(0.0, 0.0), Complex64::new(-4.0, 92.0), Complex64::new(-8.0, -8.0),
+                Complex64::new(-16.0, 0.0), Complex64::new(0.0, 0.0), Complex64::new(0.0, -16.0), Complex64::new(0.0, 0.0),
+
+                Complex64::new(156.0, -4.0), Complex64::new(0.0, 0.0), Complex64::new(-4.0, 156.0), Complex64::new(-8.0, -8.0),
+                Complex64::new(-16.0, 0.0), Complex64::new(0.0, 0.0), Complex64::new(0.0, -16.0), Complex64::new(0.0, 0.0),
+            ],
+        ).unwrap();
+        let ans_axis_0 = Tensor::<Complex64>::new(
+            &shape![3, 2, 4],
+            vec![
+                Complex64::new(24.0, 24.0), Complex64::new(27.0, -27.0), Complex64::new(30.0, 30.0), Complex64::new(33.0, -33.0),
+                Complex64::new(36.0, 36.0), Complex64::new(39.0, -39.0), Complex64::new(42.0, 42.0), Complex64::new(45.0, -45.0),
+
+                Complex64::new(-18.92820323, -5.07179677), Complex64::new(-5.07179677, 18.92820323), Complex64::new(-18.92820323,-5.07179677), Complex64::new(-5.07179677, 18.92820323),
+                Complex64::new(-18.92820323, -5.07179677), Complex64::new(-5.07179677, 18.92820323), Complex64::new(-18.92820323,-5.07179677), Complex64::new(-5.07179677, 18.92820323),
+
+                Complex64::new(-5.07179677, -18.92820323), Complex64::new(-18.92820323, 5.07179677), Complex64::new(-5.07179677, -18.92820323), Complex64::new(-18.92820323, 5.07179677),
+                Complex64::new(-5.07179677, -18.92820323), Complex64::new(-18.92820323, 5.07179677), Complex64::new(-5.07179677, -18.92820323), Complex64::new(-18.92820323, 5.07179677),
+            ],
+        ).unwrap();
+        let ans_entire = Tensor::<Complex64>::new(
+            &shape![3, 2, 4],
+            vec![
+                Complex64::new(276.0, -12.0), Complex64::new(0.0, 0.0), Complex64::new(-12.0, 276.0), Complex64::new(-24.0, -24.0),
+                Complex64::new(-48.0, 0.0), Complex64::new(0.0, 0.0), Complex64::new(0.0, -48.0), Complex64::new(0.0, 0.0),
+
+                Complex64::new(-96.0, 55.42562584), Complex64::new(0.0, 0.0), Complex64::new(-55.42562584, -96.0), Complex64::new(0.0, 0.0),
+                Complex64::new(0.0, 0.0), Complex64::new(0.0, 0.0), Complex64::new(0.0, 0.0), Complex64::new(0.0, 0.0),
+
+                Complex64::new(-96.0, -55.42562584), Complex64::new(0.0, 0.0), Complex64::new(55.42562584, -96.0), Complex64::new(0.0, 0.0),
+                Complex64::new(0.0, 0.0), Complex64::new(0.0, 0.0), Complex64::new(0.0, 0.0), Complex64::new(0.0, 0.0),
+            ],
+        ).unwrap();
+
+        let res_axes_1_2 = t1.fft_axes(vec![1, 2]);
+        let res_axis_0 = t1.fft_single_axis(0);
+        let res_entire = t1.fft();
+
+        for i in 0..3 {
+            for j in 0..2 {
+                for k in 0..4 {
+                    assert!(approx_eq!(f64, res_axes_1_2[&[i, j, k]].re, ans_axes_1_2[&[i, j, k]].re, epsilon = 1e-5));
+                    assert!(approx_eq!(f64, res_axes_1_2[&[i, j, k]].im, ans_axes_1_2[&[i, j, k]].im, epsilon = 1e-5));
+                    assert!(approx_eq!(f64, res_axis_0[&[i, j, k]].re, ans_axis_0[&[i, j, k]].re, epsilon = 1e-5));
+                    assert!(approx_eq!(f64, res_axis_0[&[i, j, k]].im, ans_axis_0[&[i, j, k]].im, epsilon = 1e-5));
+                    assert!(approx_eq!(f64, res_entire[&[i, j, k]].re, ans_entire[&[i, j, k]].re, epsilon = 1e-5));
+                    assert!(approx_eq!(f64, res_entire[&[i, j, k]].im, ans_entire[&[i, j, k]].im, epsilon = 1e-5));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn tensor_ifft() {
+        let ans_entire = Tensor::<Complex64>::new(
+            &shape![3, 2, 4],
+            (0..24).map(|i| Complex64::new(i as f64, i as f64 * if i % 2 == 0 { 1.0 } else { -1.0 })).collect(),
+        ).unwrap();
+        let ans_axis_0 = Tensor::<Complex64>::new(
+            &shape![3, 2, 4],
+            vec![
+                Complex64::new(28.0, -4.0), Complex64::new(0.0, 0.0), Complex64::new(-4.0, 28.0), Complex64::new(-8.0, -8.0),
+                Complex64::new(-16.0, 0.0), Complex64::new(0.0, 0.0), Complex64::new(0.0, -16.0), Complex64::new(0.0, 0.0),
+
+                Complex64::new(92.0, -4.0), Complex64::new(0.0, 0.0), Complex64::new(-4.0, 92.0), Complex64::new(-8.0, -8.0),
+                Complex64::new(-16.0, 0.0), Complex64::new(0.0, 0.0), Complex64::new(0.0, -16.0), Complex64::new(0.0, 0.0),
+
+                Complex64::new(156.0, -4.0), Complex64::new(0.0, 0.0), Complex64::new(-4.0, 156.0), Complex64::new(-8.0, -8.0),
+                Complex64::new(-16.0, 0.0), Complex64::new(0.0, 0.0), Complex64::new(0.0, -16.0), Complex64::new(0.0, 0.0),
+            ],
+        ).unwrap();
+        let ans_axes_1_2 = Tensor::<Complex64>::new(
+            &shape![3, 2, 4],
+            vec![
+                Complex64::new(24.0, 24.0), Complex64::new(27.0, -27.0), Complex64::new(30.0, 30.0), Complex64::new(33.0, -33.0),
+                Complex64::new(36.0, 36.0), Complex64::new(39.0, -39.0), Complex64::new(42.0, 42.0), Complex64::new(45.0, -45.0),
+
+                Complex64::new(-18.92820323, -5.07179677), Complex64::new(-5.07179677, 18.92820323), Complex64::new(-18.92820323,-5.07179677), Complex64::new(-5.07179677, 18.92820323),
+                Complex64::new(-18.92820323, -5.07179677), Complex64::new(-5.07179677, 18.92820323), Complex64::new(-18.92820323,-5.07179677), Complex64::new(-5.07179677, 18.92820323),
+
+                Complex64::new(-5.07179677, -18.92820323), Complex64::new(-18.92820323, 5.07179677), Complex64::new(-5.07179677, -18.92820323), Complex64::new(-18.92820323, 5.07179677),
+                Complex64::new(-5.07179677, -18.92820323), Complex64::new(-18.92820323, 5.07179677), Complex64::new(-5.07179677, -18.92820323), Complex64::new(-18.92820323, 5.07179677),
+            ],
+        ).unwrap();
+        let t1 = Tensor::<Complex64>::new(
+            &shape![3, 2, 4],
+            vec![
+                Complex64::new(276.0, -12.0), Complex64::new(0.0, 0.0), Complex64::new(-12.0, 276.0), Complex64::new(-24.0, -24.0),
+                Complex64::new(-48.0, 0.0), Complex64::new(0.0, 0.0), Complex64::new(0.0, -48.0), Complex64::new(0.0, 0.0),
+
+                Complex64::new(-96.0, 55.42562584), Complex64::new(0.0, 0.0), Complex64::new(-55.42562584, -96.0), Complex64::new(0.0, 0.0),
+                Complex64::new(0.0, 0.0), Complex64::new(0.0, 0.0), Complex64::new(0.0, 0.0), Complex64::new(0.0, 0.0),
+
+                Complex64::new(-96.0, -55.42562584), Complex64::new(0.0, 0.0), Complex64::new(55.42562584, -96.0), Complex64::new(0.0, 0.0),
+                Complex64::new(0.0, 0.0), Complex64::new(0.0, 0.0), Complex64::new(0.0, 0.0), Complex64::new(0.0, 0.0),
+            ],
+        ).unwrap();
+
+        let res_axes_1_2 = t1.ifft_axes(vec![1, 2]);
+        let res_axis_0 = t1.ifft_single_axis(0);
+        let res_entire = t1.ifft();
+
+        for i in 0..3 {
+            for j in 0..2 {
+                for k in 0..4 {
+                    assert!(approx_eq!(f64, res_axes_1_2[&[i, j, k]].re, ans_axes_1_2[&[i, j, k]].re, epsilon = 1e-5));
+                    assert!(approx_eq!(f64, res_axes_1_2[&[i, j, k]].im, ans_axes_1_2[&[i, j, k]].im, epsilon = 1e-5));
+                    assert!(approx_eq!(f64, res_axis_0[&[i, j, k]].re, ans_axis_0[&[i, j, k]].re, epsilon = 1e-5));
+                    assert!(approx_eq!(f64, res_axis_0[&[i, j, k]].im, ans_axis_0[&[i, j, k]].im, epsilon = 1e-5));
+                    assert!(approx_eq!(f64, res_entire[&[i, j, k]].re, ans_entire[&[i, j, k]].re, epsilon = 1e-5));
+                    assert!(approx_eq!(f64, res_entire[&[i, j, k]].im, ans_entire[&[i, j, k]].im, epsilon = 1e-5));
+                }
+            }
         }
     }
 }
