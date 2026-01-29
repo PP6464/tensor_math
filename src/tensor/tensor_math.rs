@@ -7,7 +7,7 @@ use num::complex::{Complex64, ComplexFloat};
 use num::{One, ToPrimitive, Zero};
 use rand::distr::weighted::WeightedIndex;
 use rand::distr::Distribution;
-use std::cmp::min;
+use std::cmp::{min};
 use std::collections::HashSet;
 use std::f64::consts::PI;
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Range, Rem, Sub};
@@ -340,6 +340,7 @@ impl<T: Neg<Output = T> + Clone> Neg for Matrix<T> {
 /// transposition. E.g.:
 /// To transpose (a,b,c) to (c,a,b) the permutation would be [2, 0, 1\]
 /// because we want axis 2 to be at axis 0, axis 0 to be at axis 1 etc.
+#[derive(Debug, Eq, PartialEq)]
 pub struct Transpose {
     permutation: Vec<usize>,
 }
@@ -399,7 +400,24 @@ impl Transpose {
             new_shape_vec.push(old_shape[*old_pos]);
         }
 
-        Ok(Shape::new(new_shape_vec).unwrap())
+        Ok(Shape::new(new_shape_vec)?)
+    }
+
+    /// Returns the old shape that would have been transformed into the `new_shape`
+    pub fn old_shape(&self, new_shape: &Shape) -> Result<Shape, TensorErrors> {
+        if new_shape.rank() != self.permutation.len() {
+            return Err(TensorErrors::ShapesIncompatible);
+        }
+
+        let mut old_shape_vec = Vec::with_capacity(new_shape.rank());
+        let mut count = 0;
+
+        for old_pos in self.permutation.iter() {
+            old_shape_vec[*old_pos] = new_shape[count];
+            count += 1
+        }
+
+        Ok(Shape::new(old_shape_vec)?)
     }
 
     /// Returns the new tensor index for an old tensor index after the transposition
@@ -433,6 +451,19 @@ impl Transpose {
 
         Ok(old_index_vec)
     }
+
+    /// Returns the inverse transpose
+    pub fn inverse(&self) -> Transpose {
+        let mut inv_vec = vec![0; self.permutation.len()];
+        let mut count = 0;
+
+        for i in self.permutation.iter() {
+            inv_vec[*i] = count;
+            count += 1;
+        }
+
+        Transpose::new(&inv_vec).unwrap()
+    }
 }
 
 #[macro_export]
@@ -445,6 +476,32 @@ macro_rules! transpose {
 }
 
 impl<T: Clone> Tensor<T> {
+    /// Flips a `Tensor` along a list of specified axes
+    pub fn flip_axes(&self, axes: &HashSet<usize>) -> Tensor<T> {
+        for axis in axes.iter() {
+            assert!((0..self.rank()).contains(axis));
+        }
+
+        let mut res = self.clone();
+
+        for (i, e) in self.enumerated_iter() {
+            let mut new_index = i.clone();
+
+            for &axis in axes {
+                new_index[axis] = self.shape[axis] - i[axis] - 1;
+            }
+
+            res[&new_index] = e;
+        }
+
+        res
+    }
+
+    /// Flips a `Tensor` along all axes
+    pub fn flip(&self) -> Tensor<T> {
+        self.flip_axes(&(0..self.rank()).collect())
+    }
+
     /// Transposes a `Tensor` and returns the result
     pub fn transpose(&self, transpose: &Transpose) -> Result<Tensor<T>, TensorErrors> {
         if transpose.permutation.len() != self.shape().rank() {
@@ -488,8 +545,74 @@ impl<T: Clone> Matrix<T> {
         self.rows = self.tensor.shape()[0];
         self.cols = self.tensor.shape()[1];
     }
+
+    /// Flips the columns of a `Matrix`
+    pub fn flip_rows(&self) -> Matrix<T> {
+        let mut res = self.clone();
+
+        for ((row, col), v) in self.enumerated_iter() {
+            res[(row, self.cols - col - 1)] = v;
+        }
+
+        res
+    }
+
+    /// Flips the rows of a `Matrix`
+    pub fn flip_cols(&self) -> Matrix<T> {
+        let mut res = self.clone();
+
+        for ((row, col), v) in self.enumerated_iter() {
+            res[(self.rows - row - 1, col)] = v
+        }
+
+        res
+    }
+
+    /// Flips a `Matrix`
+    pub fn flip(&self) -> Matrix<T> {
+        let mut res = self.clone();
+
+        for ((row, col), v) in self.enumerated_iter() {
+            res[(self.rows - row - 1, self.cols - col - 1)] = v;
+        }
+
+        res
+    }
 }
 impl<T: Clone + Send + Sync> Tensor<T> {
+    /// Flips a tensor along specified axes
+    pub fn flip_axes_mt(&self, axes: &HashSet<usize>) -> Tensor<T> {
+        let mut res = self.clone();
+        let self_arc = Arc::new(self.clone());
+
+        for axis in axes.iter() {
+            assert!((0..self.rank()).contains(axis));
+        }
+
+        scope(|s| {
+            for (i, chunk) in res.chunks_mut(1).enumerate() {
+                let self_ref = self_arc.clone();
+
+                s.spawn(move || {
+                    let mut new_index = tensor_index(i, self.shape());
+
+                    for &axis in axes {
+                        new_index[axis] = self.shape[axis] - new_index[axis] - 1;
+                    }
+
+                    chunk[0] = self_ref[&new_index].clone();
+                });
+            }
+        });
+
+        res
+    }
+
+    /// Flips a tensor
+    pub fn flip_mt(&self) -> Tensor<T> {
+        self.flip_axes_mt(&(0..self.rank()).collect())
+    }
+
     /// Transposes a `Tensor` using a multithreaded implementation and returns the result
     pub fn transpose_mt(&self, transpose: &Transpose) -> Result<Tensor<T>, TensorErrors> {
         if transpose.permutation.len() != self.shape().rank() {
@@ -536,6 +659,63 @@ impl<T: Clone + Send + Sync> Tensor<T> {
     }
 }
 impl<T: Clone + Send + Sync> Matrix<T> {
+    /// Flips the columns of a matrix
+    pub fn flip_cols_mt(&self) -> Matrix<T> {
+        let self_arc = Arc::new(self);
+        let mut res = self.clone();
+
+        scope(|s| {
+            for (i, chunk) in res.chunks_mut(1).enumerate() {
+                let self_ref = self_arc.clone();
+                let mat_index = tensor_index(i, &self_arc.shape);
+
+                s.spawn(move || {
+                   chunk[0] = self_ref[(self.rows - 1 - mat_index[0], mat_index[1])].clone();
+                });
+            }
+        });
+
+        res
+    }
+
+    /// Flips the columns of a matrix
+    pub fn flip_rows_mt(&self) -> Matrix<T> {
+        let self_arc = Arc::new(self);
+        let mut res = self.clone();
+
+        scope(|s| {
+            for (i, chunk) in res.chunks_mut(1).enumerate() {
+                let self_ref = self_arc.clone();
+                let mat_index = tensor_index(i, &self_arc.shape);
+
+                s.spawn(move || {
+                    chunk[0] = self_ref[(mat_index[0], self.cols - 1 - mat_index[1])].clone();
+                });
+            }
+        });
+
+        res
+    }
+
+    /// Flips the columns of a matrix
+    pub fn flip_mt(&self) -> Matrix<T> {
+        let self_arc = Arc::new(self);
+        let mut res = self.clone();
+
+        scope(|s| {
+            for (i, chunk) in res.chunks_mut(1).enumerate() {
+                let self_ref = self_arc.clone();
+                let mat_index = tensor_index(i, &self_arc.shape);
+
+                s.spawn(move || {
+                    chunk[0] = self_ref[(self.rows - 1 - mat_index[0], self.cols - 1 - mat_index[1])].clone();
+                });
+            }
+        });
+
+        res
+    }
+
     /// Transposes a `Matrix` using a multithreaded implementation and returns the result
     pub fn transpose_mt(&self) -> Matrix<T> {
         let new_shape = (self.cols, self.rows);
@@ -636,6 +816,195 @@ impl<T: Default + Clone> Tensor<T> {
 
         result
     }
+
+    /// Pools a `Tensor<T>` into a `Tensor<O>` using a mutable-borrowing custom pooling function.
+    /// The custom function will take a `Tensor<T>` that corresponds to the slice that the kernel covers.
+    /// If the kernel is hanging over the edge of the tensor, then only the bits of the tensor that fit are included.
+    /// This is reflected in the shape of the input tensor.
+    /// Default functions for `max` and `avg` are given as well.
+    pub fn pool_mut<O: Default + Clone>(&self, mut pool_fn: impl FnMut(Tensor<T>) -> O, kernel_shape: &Shape, stride_shape: &Shape) -> Tensor<O> {
+        assert_eq!(
+            kernel_shape.rank(),
+            self.rank(),
+            "Kernel shape rank and tensor shape rank are not the same"
+        );
+        assert_eq!(
+            stride_shape.rank(),
+            self.rank(),
+            "Stride shape rank and tensor shape rank are not the same"
+        );
+
+        let res_shape = &Shape::new(
+            self.shape()
+                .0
+                .iter()
+                .cloned()
+                .zip(stride_shape.0.iter().cloned())
+                .map(|(x, y)| x.div_ceil(y))
+                .collect::<Vec<usize>>(),
+        )
+            .unwrap();
+
+        let mut result = Tensor::<O>::from_shape(res_shape);
+
+        for (pos, val) in result.enumerated_iter_mut() {
+            let start_pos = pos
+                .iter()
+                .zip(stride_shape.0.iter())
+                .map(|(x, y)| x * y)
+                .collect::<Vec<usize>>();
+            let end_pos = start_pos
+                .iter()
+                .zip(kernel_shape.0.iter())
+                .enumerate()
+                .map(|(i, (x, y))| {
+                    let shape_val = self.shape[i];
+
+                    if x + y < shape_val {
+                        x + y
+                    } else {
+                        shape_val
+                    }
+                })
+                .collect::<Vec<usize>>();
+
+            let indices = end_pos
+                .iter()
+                .zip(start_pos.iter())
+                .map(|(x, y)| *y..*x)
+                .collect::<Vec<_>>();
+
+            *val = pool_fn(self.slice(indices.as_slice()));
+        }
+
+        result
+    }
+
+    /// Pools a `Tensor<T>` into a `Tensor<O>` using a custom pooling function with the index.
+    /// The custom function will take a `Tensor<T>` that corresponds to the slice that the kernel covers.
+    /// If the kernel is hanging over the edge of the tensor, then only the bits of the tensor that fit are included.
+    /// This is reflected in the shape of the input tensor.
+    /// Default functions for `max` and `avg` are given as well.
+    pub fn pool_indexed<O: Default + Clone>(&self, pool_fn: impl Fn(Vec<usize>, Tensor<T>) -> O, kernel_shape: &Shape, stride_shape: &Shape) -> Tensor<O> {
+        assert_eq!(
+            kernel_shape.rank(),
+            self.rank(),
+            "Kernel shape rank and tensor shape rank are not the same"
+        );
+        assert_eq!(
+            stride_shape.rank(),
+            self.rank(),
+            "Stride shape rank and tensor shape rank are not the same"
+        );
+
+        let res_shape = &Shape::new(
+            self.shape()
+                .0
+                .iter()
+                .cloned()
+                .zip(stride_shape.0.iter().cloned())
+                .map(|(x, y)| x.div_ceil(y))
+                .collect::<Vec<usize>>(),
+        )
+            .unwrap();
+
+        let mut result = Tensor::<O>::from_shape(res_shape);
+
+        for (pos, val) in result.enumerated_iter_mut() {
+            let start_pos = pos
+                .iter()
+                .zip(stride_shape.0.iter())
+                .map(|(x, y)| x * y)
+                .collect::<Vec<usize>>();
+            let end_pos = start_pos
+                .iter()
+                .zip(kernel_shape.0.iter())
+                .enumerate()
+                .map(|(i, (x, y))| {
+                    let shape_val = self.shape[i];
+
+                    if x + y < shape_val {
+                        x + y
+                    } else {
+                        shape_val
+                    }
+                })
+                .collect::<Vec<usize>>();
+
+            let indices = end_pos
+                .iter()
+                .zip(start_pos.iter())
+                .map(|(x, y)| *y..*x)
+                .collect::<Vec<_>>();
+
+            *val = pool_fn(start_pos, self.slice(indices.as_slice()));
+        }
+
+        result
+    }
+
+    /// Pools a `Tensor<T>` into a `Tensor<O>` using a mutable-borrowing custom pooling function with the index.
+    /// The custom function will take a `Tensor<T>` that corresponds to the slice that the kernel covers.
+    /// If the kernel is hanging over the edge of the tensor, then only the bits of the tensor that fit are included.
+    /// This is reflected in the shape of the input tensor.
+    /// Default functions for `max` and `avg` are given as well.
+    pub fn pool_indexed_mut<O: Default + Clone>(&self, mut pool_fn: impl FnMut(Vec<usize>, Tensor<T>) -> O, kernel_shape: &Shape, stride_shape: &Shape) -> Tensor<O> {
+        assert_eq!(
+            kernel_shape.rank(),
+            self.rank(),
+            "Kernel shape rank and tensor shape rank are not the same"
+        );
+        assert_eq!(
+            stride_shape.rank(),
+            self.rank(),
+            "Stride shape rank and tensor shape rank are not the same"
+        );
+
+        let res_shape = &Shape::new(
+            self.shape()
+                .0
+                .iter()
+                .cloned()
+                .zip(stride_shape.0.iter().cloned())
+                .map(|(x, y)| x.div_ceil(y))
+                .collect::<Vec<usize>>(),
+        )
+            .unwrap();
+
+        let mut result = Tensor::<O>::from_shape(res_shape);
+
+        for (pos, val) in result.enumerated_iter_mut() {
+            let start_pos = pos
+                .iter()
+                .zip(stride_shape.0.iter())
+                .map(|(x, y)| x * y)
+                .collect::<Vec<usize>>();
+            let end_pos = start_pos
+                .iter()
+                .zip(kernel_shape.0.iter())
+                .enumerate()
+                .map(|(i, (x, y))| {
+                    let shape_val = self.shape[i];
+
+                    if x + y < shape_val {
+                        x + y
+                    } else {
+                        shape_val
+                    }
+                })
+                .collect::<Vec<usize>>();
+
+            let indices = end_pos
+                .iter()
+                .zip(start_pos.iter())
+                .map(|(x, y)| *y..*x)
+                .collect::<Vec<_>>();
+
+            *val = pool_fn(start_pos, self.slice(indices.as_slice()));
+        }
+
+        result
+    }
 }
 impl<T: Default + Clone> Matrix<T> {
     /// Pools a `Matrix<T>` into a `Matrix<O>` using a custom pooling function.
@@ -662,8 +1031,129 @@ impl<T: Default + Clone> Matrix<T> {
 
         res
     }
+
+    /// Pools a `Matrix<T>` into a `Matrix<O>` using a mutable-borrowing custom pooling function.
+    /// The custom function will take a `Matrix<T>` that corresponds to the slice that the kernel covers.
+    /// If the kernel is hanging over the edge of the tensor, then only the bits of the tensor that fit are included.
+    /// This is reflected in the shape of the input tensor.
+    /// Default functions for `max` and `avg` are given as well.
+    pub fn pool_mut<O: Default + Clone>(&self, mut pool_fn: impl FnMut(Matrix<T>) -> O, kernel_shape: (usize, usize), stride_shape: (usize, usize)) -> Matrix<O> {
+        assert!(kernel_shape.0 != 0 || kernel_shape.1 != 0, "Invalid kernel shape");
+        assert!(stride_shape.0 != 0 || stride_shape.1 != 0, "Invalid stride shape");
+
+        let res_shape = (self.rows.div_ceil(stride_shape.0), self.cols.div_ceil(stride_shape.1));
+        let mut res = Matrix::<O>::from_shape(res_shape.0, res_shape.1);
+
+        for (pos, val) in res.enumerated_iter_mut() {
+            let start_pos = (pos.0 * stride_shape.0, pos.1 * stride_shape.1);
+            let end_pos = (min(start_pos.0 + kernel_shape.0, self.rows), min(start_pos.1 + kernel_shape.1, self.cols));
+
+            let indices = (start_pos.0..end_pos.0, start_pos.1..end_pos.1);
+            let value = pool_fn(self.slice(indices.0, indices.1));
+
+            *val = value;
+        }
+
+        res
+    }
+
+    /// Pools a `Matrix<T>` into a `Matrix<O>` using a custom pooling function with the index.
+    /// The custom function will take a `Matrix<T>` that corresponds to the slice that the kernel covers.
+    /// If the kernel is hanging over the edge of the tensor, then only the bits of the tensor that fit are included.
+    /// This is reflected in the shape of the input tensor.
+    /// Default functions for `max` and `avg` are given as well.
+    pub fn pool_indexed<O: Default + Clone>(&self, pool_fn: impl Fn((usize, usize), Matrix<T>) -> O, kernel_shape: (usize, usize), stride_shape: (usize, usize)) -> Matrix<O> {
+        assert!(kernel_shape.0 != 0 || kernel_shape.1 != 0, "Invalid kernel shape");
+        assert!(stride_shape.0 != 0 || stride_shape.1 != 0, "Invalid stride shape");
+
+        let res_shape = (self.rows.div_ceil(stride_shape.0), self.cols.div_ceil(stride_shape.1));
+        let mut res = Matrix::<O>::from_shape(res_shape.0, res_shape.1);
+
+        for (pos, val) in res.enumerated_iter_mut() {
+            let start_pos = (pos.0 * stride_shape.0, pos.1 * stride_shape.1);
+            let end_pos = (min(start_pos.0 + kernel_shape.0, self.rows), min(start_pos.1 + kernel_shape.1, self.cols));
+
+            let indices = (start_pos.0..end_pos.0, start_pos.1..end_pos.1);
+            let value = pool_fn(start_pos, self.slice(indices.0, indices.1));
+
+            *val = value;
+        }
+
+        res
+    }
+
+    /// Pools a `Matrix<T>` into a `Matrix<O>` using a mutable-borrowing custom pooling function with the index.
+    /// The custom function will take a `Matrix<T>` that corresponds to the slice that the kernel covers.
+    /// If the kernel is hanging over the edge of the tensor, then only the bits of the tensor that fit are included.
+    /// This is reflected in the shape of the input tensor.
+    /// Default functions for `max` and `avg` are given as well.
+    pub fn pool_indexed_mut<O: Default + Clone>(&self, mut pool_fn: impl FnMut((usize, usize), Matrix<T>) -> O, kernel_shape: (usize, usize), stride_shape: (usize, usize)) -> Matrix<O> {
+        assert!(kernel_shape.0 != 0 || kernel_shape.1 != 0, "Invalid kernel shape");
+        assert!(stride_shape.0 != 0 || stride_shape.1 != 0, "Invalid stride shape");
+
+        let res_shape = (self.rows.div_ceil(stride_shape.0), self.cols.div_ceil(stride_shape.1));
+        let mut res = Matrix::<O>::from_shape(res_shape.0, res_shape.1);
+
+        for (pos, val) in res.enumerated_iter_mut() {
+            let start_pos = (pos.0 * stride_shape.0, pos.1 * stride_shape.1);
+            let end_pos = (min(start_pos.0 + kernel_shape.0, self.rows), min(start_pos.1 + kernel_shape.1, self.cols));
+
+            let indices = (start_pos.0..end_pos.0, start_pos.1..end_pos.1);
+            let value = pool_fn(start_pos, self.slice(indices.0, indices.1));
+
+            *val = value;
+        }
+
+        res
+    }
 }
 impl<T: Default + Clone + Send + Sync> Tensor<T> {
+    /// Pools a `Tensor<T>` into a `Tensor<O>` using a custom pooling function with the index.
+    /// The custom function will take a `Tensor<T>` that corresponds to the slice that the kernel covers.
+    /// If the kernel is hanging over the edge of the tensor, then only the bits of the tensor that fit are included.
+    /// This is reflected in the shape of the input tensor.
+    /// Default functions for `max` and `avg` are given as well.
+    /// This is a multithreaded implementation.
+    pub fn pool_indexed_mt<O: Default + Clone + Send + Sync>(&self, pool_fn: &(impl Fn(Vec<usize>, Tensor<T>) -> O + Sync), kernel_shape: &Shape, stride_shape: &Shape) -> Tensor<O> {
+        assert_eq!(self.rank(), kernel_shape.rank(), "Kernel shape rank and tensor shape rank are not the same");
+        assert_eq!(self.rank(), stride_shape.rank(), "Stride shape rank and tensor shape rank are not the same");
+
+        let res_shape = &Shape::new(
+            self.shape()
+                .0
+                .iter()
+                .cloned()
+                .zip(stride_shape.0.iter().cloned())
+                .map(|(x, y)| x.div_ceil(y))
+                .collect::<Vec<usize>>(),
+        )
+            .unwrap();
+
+        let mut result = Tensor::<O>::from_shape(res_shape);
+
+        scope(|s| {
+            let res_chunks = result.chunks_mut(1);
+
+            for (i, chunk) in res_chunks.enumerate() {
+                s.spawn(move || {
+                    let res_pos = tensor_index(i, &res_shape);
+                    let self_pos = res_pos.into_tensor() * stride_shape.clone().0.into_tensor();
+                    let self_end_pos = (&self_pos + &kernel_shape.clone().0.into_tensor()).iter().enumerate().map(|(i, x)| if x > &self.shape()[i] { self.shape()[i] } else { *x }).collect::<Vec<usize>>();
+
+                    let indices = self_pos
+                        .iter()
+                        .zip(self_end_pos.iter())
+                        .map(|(x, y)| *x..*y)
+                        .collect::<Vec<Range<usize>>>();
+
+                    chunk[0] = pool_fn(self_pos.elements, self.slice(indices.as_slice()));
+                });
+            }
+        });
+
+        result
+    }
+
     /// Pools a `Tensor<T>` into a `Tensor<O>` using a custom pooling function.
     /// The custom function will take a `Tensor<T>` that corresponds to the slice that the kernel covers.
     /// If the kernel is hanging over the edge of the tensor, then only the bits of the tensor that fit are included.
@@ -740,6 +1230,42 @@ impl<T: Default + Clone + Send + Sync> Matrix<T> {
                     let indices = (self_pos.0..self_end_pos.0, self_pos.1..self_end_pos.1);
 
                     chunk[0] = pool_fn(self.slice(indices.0, indices.1));
+                });
+            }
+        });
+
+        result
+    }
+
+    /// Pools a `Matrix<T>` into a `Matrix<O>` using a custom pooling function with the index.
+    /// The custom function will take a `Matrix<T>` that corresponds to the slice that the kernel covers.
+    /// If the kernel is hanging over the edge of the tensor, then only the bits of the tensor that fit are included.
+    /// This is reflected in the shape of the input tensor.
+    /// Default functions for `max` and `avg` are given as well.
+    /// This is a multithreaded implementation.
+    pub fn pool_indexed_mt<O: Default + Clone + Send + Sync>(&self, pool_fn: &(impl Fn((usize, usize), Matrix<T>) -> O + Sync), kernel_shape: (usize, usize), stride_shape: (usize, usize)) -> Matrix<O> {
+        assert!(kernel_shape.0 != 0 || kernel_shape.1 != 0, "Invalid kernel shape");
+        assert!(stride_shape.0 != 0 || stride_shape.1 != 0, "Invalid stride shape");
+
+        let res_shape = (self.rows.div_ceil(stride_shape.0), self.cols.div_ceil(stride_shape.1));
+
+        let mut result = Matrix::<O>::from_shape(res_shape.0, res_shape.1);
+
+        scope(|s| {
+            let res_chunks = result.chunks_mut(1);
+
+            for (i, chunk) in res_chunks.enumerate() {
+                s.spawn(move || {
+                    let res_pos = tensor_index(i, &shape![res_shape.0, res_shape.1]);
+                    let self_pos = (res_pos[0] * stride_shape.0, res_pos[1] * stride_shape.1);
+                    let self_end_pos = (
+                        min(self_pos.0 + kernel_shape.0, self.rows),
+                        min(self_pos.1 + kernel_shape.1, self.cols),
+                    );
+
+                    let indices = (self_pos.0..self_end_pos.0, self_pos.1..self_end_pos.1);
+
+                    chunk[0] = pool_fn(self_pos, self.slice(indices.0, indices.1));
                 });
             }
         });
@@ -1112,6 +1638,162 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Send + Sync> Matrix<T> {
     /// Does matrix multiplication on multiple threads. This is just an alternate name for the method
     pub fn mat_mul_mt(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
         self.contract_mul_mt(other)
+    }
+}
+impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Default> Tensor<T> {
+    /// Computes the correlation of two tensors across all axes
+    pub fn corr(&self, other: &Tensor<T>) -> Tensor<T> {
+        assert_eq!(self.rank(), other.rank());
+
+        let res_shape = Shape::new(self
+            .shape
+            .0
+            .iter()
+            .zip(other.shape.0.iter())
+            .map(|(&s, &o)| { s + o - 1 })
+            .collect::<Vec<_>>()
+        ).unwrap();
+
+        let padded_shape = Shape::new(
+            self.shape.0
+                .iter()
+                .zip(other.shape.0.iter())
+                .map(|(&s, &o)| { s + 2 * (o - 1) })
+                .collect::<Vec<_>>()
+        ).unwrap();
+
+        let mut self_padded = Self::zeros(&padded_shape);
+
+        self_padded.slice_mut(
+            &(0..self.rank())
+                .map(|i| other.shape[i] - 1..other.shape[i] + self.shape[i] - 1)
+                .collect::<Vec<_>>()
+        ).set_all(self);
+
+        self_padded.pool(
+            |t| {
+                if t.shape == other.shape {
+                    (other * t).sum()
+                } else {
+                    T::zero()
+                }
+            },
+            &other.shape,
+            &Shape::new(vec![1; self.rank()]).unwrap(),
+        ).slice(&res_shape.0.iter().map(|&x| 0..x).collect::<Vec<_>>())
+    }
+
+    /// Computes the convolution of two matrices across all axes
+    pub fn conv(&self, other: &Tensor<T>) -> Tensor<T> {
+        self.corr(&other.flip())
+    }
+}
+impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Default> Matrix<T> {
+    /// Computes the correlation of two matrices across rows and columns
+    pub fn corr(&self, other: &Matrix<T>) -> Matrix<T> {
+        let (padded_rows, padded_cols) = (self.rows + 2 * (other.rows - 1), self.cols + 2 * (other.cols - 1));
+        let (res_rows, res_cols) = (self.rows + other.rows - 1, self.cols + other.cols - 1);
+
+        let mut self_padded = Self::zeros(padded_rows, padded_cols);
+
+        self_padded
+            .slice_mut(other.rows - 1..other.rows - 1 + self.rows, other.cols - 1..other.cols - 1 + self.cols)
+            .set_all(self);
+
+        self_padded.pool(
+            |t| {
+                if t.shape == other.shape {
+                    (other * t).sum()
+                } else {
+                    T::zero()
+                }
+            },
+            (other.rows, other.cols),
+            (1, 1),
+        ).slice(0..res_rows, 0..res_cols)
+    }
+
+    /// Computes the convolution of two matrices across rows and columns
+    pub fn conv(&self, other: &Matrix<T>) -> Matrix<T> {
+        self.corr(&other.flip())
+    }
+}
+impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Default + Send + Sync> Tensor<T> {
+    /// Computes the correlation of two tensors across all axes on multiple threads
+    pub fn corr_mt(&self, other: &Tensor<T>) -> Tensor<T> {
+        assert_eq!(self.rank(), other.rank());
+
+        let res_shape = Shape::new(self
+            .shape
+            .0
+            .iter()
+            .zip(other.shape.0.iter())
+            .map(|(&s, &o)| { s + o - 1 })
+            .collect::<Vec<_>>()
+        ).unwrap();
+
+        let padded_shape = Shape::new(
+            self.shape.0
+                .iter()
+                .zip(other.shape.0.iter())
+                .map(|(&s, &o)| { s + 2 * (o - 1) })
+                .collect::<Vec<_>>()
+        ).unwrap();
+
+        let mut self_padded = Self::zeros(&padded_shape);
+
+        self_padded.slice_mut(
+            &(0..self.rank())
+                .map(|i| other.shape[i] - 1..other.shape[i] + self.shape[i] - 1)
+                .collect::<Vec<_>>()
+        ).set_all(self);
+
+        self_padded.pool_mt(
+            &|t| {
+                if t.shape == other.shape {
+                    (other * t).sum()
+                } else {
+                    T::zero()
+                }
+            },
+            &other.shape,
+            &Shape::new(vec![1; self.rank()]).unwrap(),
+        ).slice(&res_shape.0.iter().map(|&x| 0..x).collect::<Vec<_>>())
+    }
+
+    /// Computes the convolution of two tensors across all axes on multiple threads
+    pub fn conv_mt(&self, other: &Tensor<T>) -> Tensor<T> {
+        self.corr_mt(&other.flip())
+    }
+}
+impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Default + Send + Sync> Matrix<T> {
+    /// Computes the correlation of two tensors across all axes on multiple threads
+    pub fn corr_mt(&self, other: &Matrix<T>) -> Matrix<T> {
+        let (padded_rows, padded_cols) = (self.rows + 2 * (other.rows - 1), self.cols + 2 * (other.cols - 1));
+        let (res_rows, res_cols) = (self.rows + other.rows - 1, self.cols + other.cols - 1);
+
+        let mut self_padded = Self::zeros(padded_rows, padded_cols);
+
+        self_padded
+            .slice_mut(other.rows - 1..other.rows - 1 + self.rows, other.cols - 1..other.cols - 1 + self.cols)
+            .set_all(self);
+
+        self_padded.pool_mt(
+            &|t| {
+                if t.shape == other.shape {
+                    (other * t).sum()
+                } else {
+                    T::zero()
+                }
+            },
+            (other.rows, other.cols),
+            (1, 1),
+        ).slice(0..res_rows, 0..res_cols)
+    }
+
+    /// Computes the convolution of two matrices across rows and columns\
+    pub fn conv_mt(&self, other: &Matrix<T>) -> Matrix<T> {
+        self.corr_mt(&other.flip())
     }
 }
 
@@ -2036,6 +2718,102 @@ impl Tensor<Complex64> {
     pub fn ifft(&self) -> Tensor<Complex64> {
         self.ifft_axes((0..self.rank()).collect())
     }
+
+    /// Computes the correlation of this and another tensor along a specified list of axes.
+    pub fn fft_corr_axes(&self, other: &Tensor<Complex64>, axes: &HashSet<usize>) -> Tensor<Complex64> {
+        self.fft_conv_axes(&other.flip_axes_mt(axes), axes)
+    }
+
+    /// Computes the convolution of this and another tensor along a specified list of axes.
+    pub fn fft_conv_axes(&self, other: &Tensor<Complex64>, axes: &HashSet<usize>) -> Tensor<Complex64> {
+        // Check that the shapes match on all non-convolution axes
+        assert_eq!(self.rank(), other.rank(), "Tensors are of two different ranks");
+
+        let rank = self.rank();
+        let k = axes.len();
+
+        assert!(axes.len() <= rank);
+
+        let mut perm_vec = Vec::with_capacity(rank);
+
+        for i in 0..rank {
+            if !axes.contains(&i) {
+                assert_eq!(self.shape[i], other.shape[i], "Tensor shapes not equal on axis that is not convolved");
+                perm_vec.push(i);
+            }
+        }
+
+        perm_vec.extend(axes);
+        let perm = Transpose::new(&perm_vec).unwrap();
+        let inv_perm = perm.inverse();
+
+        // Pad the tensors as required
+        let mut new_shape = self.shape().0.clone();
+
+        for axis in axes {
+            new_shape[*axis] += other.shape[*axis] - 1;
+        }
+
+        let new_shape = Shape::new(new_shape).unwrap();
+
+        let mut self_padded = Self::zeros(&new_shape);
+        let mut other_padded = Self::zeros(&new_shape);
+
+        self_padded
+            .slice_mut(self.shape.0.iter().map(|x| 0..*x).collect::<Vec<_>>().as_slice())
+            .set_all(&self);
+        other_padded
+            .slice_mut(other.shape.0.iter().map(|x| 0..*x).collect::<Vec<_>>().as_slice())
+            .set_all(&other);
+
+        let self_fft = self_padded
+            .transpose_mt(&perm)
+            .unwrap()
+            .fft_axes((1..=k).map(|i| rank - i).collect());
+
+        let other_fft = other_padded
+            .transpose_mt(&perm)
+            .unwrap()
+            .fft_axes((1..=k).map(|i| rank - i).collect());
+
+        let res = self_fft * other_fft;
+
+        res.ifft_axes((1..=k).map(|i| rank - i).collect()).transpose_mt(&inv_perm).unwrap()
+    }
+
+    /// Computes the correlation of this and another tensor
+    pub fn fft_corr(&self, other: &Tensor<Complex64>) -> Tensor<Complex64> {
+        self.fft_conv(&other.flip_mt())
+    }
+
+    /// Computes the convolution of this and another tensor
+    pub fn fft_conv(&self, other: &Tensor<Complex64>) -> Tensor<Complex64> {
+        assert_eq!(self.rank(), other.rank(), "Tensors are of two different ranks");
+
+        let mut new_shape = self.shape().0.clone();
+
+        for axis in 0..self.rank() {
+            new_shape[axis] += other.shape[axis] - 1;
+        }
+
+        let new_shape = Shape::new(new_shape).unwrap();
+
+        let mut self_padded = Self::zeros(&new_shape);
+        let mut other_padded = Self::zeros(&new_shape);
+
+        self_padded
+            .slice_mut(self.shape.0.iter().map(|x| 0..*x).collect::<Vec<_>>().as_slice())
+            .set_all(&self);
+        other_padded
+            .slice_mut(other.shape.0.iter().map(|x| 0..*x).collect::<Vec<_>>().as_slice())
+            .set_all(&other);
+
+        let self_fft = self_padded.fft();
+
+        let other_fft = other_padded.fft();
+
+        (self_fft * other_fft).ifft()
+    }
 }
 impl Matrix<Complex64> {
     /// Computes the exponential of each element
@@ -2801,6 +3579,52 @@ impl Matrix<Complex64> {
     pub fn ifft(self) -> Matrix<Complex64> {
         self.ifft_rows().ifft_cols()
     }
+
+    /// Computes convolution along the columns
+    pub fn fft_conv_cols(&self, other: &Matrix<Complex64>) -> Matrix<Complex64> {
+        assert_eq!(self.cols, other.cols, "Matrices do not have the same number of columns");
+
+        let self_padded = self.concat_mt(&Self::zeros(other.rows - 1, self.cols), 0).unwrap();
+        let other_padded = other.concat_mt(&Self::zeros(self.rows - 1, other.cols), 0).unwrap();
+
+        (self_padded.fft_cols() * other_padded.fft_cols()).ifft_cols()
+    }
+
+    /// Computes correlation along the columns
+    pub fn fft_corr_cols(&self, other: &Matrix<Complex64>) -> Matrix<Complex64> {
+        self.fft_conv_cols(&other.flip_cols_mt())
+    }
+
+    /// Computes convolution along the rows
+    pub fn fft_conv_rows(&self, other: &Matrix<Complex64>) -> Matrix<Complex64> {
+        assert_eq!(self.rows, other.rows, "Matrices do not have the same number of rows");
+
+        let self_padded = self.concat_mt(&Self::zeros(self.rows, other.cols - 1), 1).unwrap();
+        let other_padded = other.concat_mt(&Self::zeros(other.rows, self.cols - 1), 1).unwrap();
+
+        (self_padded.fft_rows() * other_padded.fft_rows()).ifft_rows()
+    }
+
+    /// Computes correlation along the columns
+    pub fn fft_corr_rows(&self, other: &Matrix<Complex64>) -> Matrix<Complex64> {
+        self.fft_conv_rows(&other.flip_rows_mt())
+    }
+
+    /// Computes convolution of two matrices
+    pub fn fft_conv(&self, other: &Matrix<Complex64>) -> Matrix<Complex64> {
+        let mut self_padded = Self::zeros(self.rows + other.rows - 1, self.cols + other.cols - 1);
+        let mut other_padded = Self::zeros(self.rows + other.rows - 1, self.cols + other.cols - 1);
+
+        self_padded.slice_mut(0..self.rows, 0..self.cols).set_all(&self);
+        other_padded.slice_mut(0..other.rows, 0..other.cols).set_all(&other);
+
+        (self_padded.fft() * other_padded.fft()).ifft()
+    }
+
+    /// Computes correlation of two matrices
+    pub fn fft_corr(&self, other: &Matrix<Complex64>) -> Matrix<Complex64> {
+        self.fft_conv(&other.flip_mt())
+    }
 }
 
 impl ApproxEq for Tensor<f64> {
@@ -3243,7 +4067,7 @@ pub fn gaussian_sample(sigma: f64, shape: &Shape, min: f64, max: f64) -> Tensor<
     let mut res = Tensor::<f64>::from_shape(shape);
     let dist = WeightedIndex::new(
         (0..=1000)
-            .map(|x| f64::exp(-((x.to_f64().unwrap() - 500.0).powi(2)) / (2.0 * sigma.powi(2))))
+            .map(|x| f64::exp(-(x.to_f64().unwrap() - 500.0).powi(2)) / (2.0 * sigma.powi(2)))
             .collect::<Vec<f64>>(),
     )
     .unwrap();

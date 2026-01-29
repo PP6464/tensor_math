@@ -136,8 +136,8 @@ pub fn bench_inv(c: &mut Criterion) {
 }
 
 pub fn bench_eigendecompose(c: &mut Criterion) {
-    let m1 = Matrix::<f64>::rand(20, 20).transform_elementwise(|x| Complex64 { re: x, im: 0.0 });
-    let m2 = Matrix::<f64>::rand(20, 20).transform_elementwise(|x| Complex64 { re: 0.0, im: x });
+    let m1 = Matrix::<f64>::rand(10, 10).transform_elementwise(|x| Complex64 { re: x, im: 0.0 });
+    let m2 = Matrix::<f64>::rand(10, 10).transform_elementwise(|x| Complex64 { re: 0.0, im: x });
     let m = &m1 + &m2;
 
     c.bench_function("eigendecompose", |b| {
@@ -171,6 +171,76 @@ pub fn bench_mat_fft(c: &mut Criterion) {
     });
 }
 
+pub fn bench_flip_mat_mt(c: &mut Criterion) {
+    let m1 = Matrix::<f64>::rand(100, 100);
+
+    c.bench_function("flip_mat_mt", |b| {
+        b.iter(|| {
+            m1.flip_mt();
+        });
+    });
+}
+
+pub fn bench_flip_tensor_mt(c: &mut Criterion) {
+    let m1 = Tensor::<f64>::rand(&shape![16, 20, 80]);
+
+    c.bench_function("flip_tensor_mt", |b| {
+        b.iter(|| {
+            m1.flip_mt();
+        });
+    });
+}
+
+pub fn bench_normal_conv_mat_mt(c: &mut Criterion) {
+    let m1 = Matrix::<f64>::rand(100, 100).clip(-100.0, 100.0);
+    let m2 = Matrix::<f64>::rand(200, 100).clip(-100.0, 100.0);
+
+    c.bench_function("normal_conv_mat_mt", |b| {
+        m1.conv_mt(&m2);
+    });
+}
+
+pub fn bench_normal_conv_tensor_mt(c: &mut Criterion) {
+    let t1 = Tensor::<f64>::rand(&shape![100, 100]).clip(-100.0, 100.0);
+    let t2 = Tensor::<f64>::rand(&shape![200, 100]).clip(-100.0, 100.0);
+
+    c.bench_function("normal_conv_tensor_mt", |b| {
+        t1.conv_mt(&t2);
+    });
+}
+
+pub fn bench_fft_conv_mat(c: &mut Criterion) {
+    let m1 = Matrix::<f64>::rand(256, 100).transform_elementwise(|x| Complex64 { re: x, im: 0.0 });
+    let m2 = Matrix::<f64>::rand(256, 100).transform_elementwise(|x| Complex64 { re: 0.0, im: x });
+    let in1 = &m1 + &m2;
+
+    let m1 = Matrix::<f64>::rand(256, 100).transform_elementwise(|x| Complex64 { re: x, im: 0.0 });
+    let m2 = Matrix::<f64>::rand(256, 100).transform_elementwise(|x| Complex64 { re: 0.0, im: x });
+    let in2 = &m1 + &m2;
+
+    c.bench_function("fft_conv_mat", |b| {
+        b.iter(|| {
+            in1.fft_conv(&in2);
+        })
+    });
+}
+
+pub fn bench_fft_conv_tensor(c: &mut Criterion) {
+    let t1 = Tensor::<f64>::rand(&shape![16, 20, 8]).transform_elementwise(|x| Complex64 { re: x, im: 0.0 });
+    let t2 = Tensor::<f64>::rand(&shape![16, 20, 8]).transform_elementwise(|x| Complex64 { re: 0.0, im: x });
+    let in1 = &t1 + &t2;
+
+    let t1 = Tensor::<f64>::rand(&shape![16, 20, 8]).transform_elementwise(|x| Complex64 { re: x, im: 0.0 });
+    let t2 = Tensor::<f64>::rand(&shape![16, 20, 8]).transform_elementwise(|x| Complex64 { re: 0.0, im: x });
+    let in2 = &t1 + &t2;
+
+    c.bench_function("fft_conv_tensor", |b| {
+        b.iter(|| {
+            in1.fft_conv(&in2);
+        })
+    });
+}
+
 criterion_group!(
     benches,
     bench_concat_mt,
@@ -188,5 +258,11 @@ criterion_group!(
     bench_eigendecompose,
     bench_tensor_fft,
     bench_mat_fft,
+    bench_flip_mat_mt,
+    bench_flip_tensor_mt,
+    bench_normal_conv_mat_mt,
+    bench_normal_conv_tensor_mt,
+    bench_fft_conv_mat,
+    bench_fft_conv_tensor,
 );
 criterion_main!(benches);

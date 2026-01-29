@@ -85,6 +85,17 @@ impl Shape {
     pub fn indices(&self) -> Vec<Vec<usize>> {
         (0..self.element_count()).map(|i| tensor_index(i, self)).collect()
     }
+
+    /// This gives the address for a corresponding shape index
+    pub fn address_of(&self, index: Vec<usize>) -> usize {
+        assert_eq!(index.len(), self.rank(), "Index of a different rank tensor");
+
+        for (i, &v) in index.iter().enumerate() {
+            assert!(v < self[i], "Index out of bounds")
+        }
+
+        dot_vectors(&Strides::from_shape(self).0, &index)
+    }
 }
 impl Index<usize> for Shape {
     type Output = usize;

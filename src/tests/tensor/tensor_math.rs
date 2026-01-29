@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod tensor_math_tests {
+    use std::collections::HashSet;
     use crate::tensor::tensor::{Matrix, Tensor};
     use crate::tensor::tensor::{Shape, TensorErrors};
     use crate::tensor::tensor_math::{bluestein_fft_vec, det_slow, fft_vec, gaussian_pdf_cov_mat, gaussian_pdf_multi_sigma, gaussian_pdf_single_sigma, gaussian_sample, identity, ifft_vec, inv_slow, pool_avg, pool_avg_mat, pool_max, pool_max_mat, pool_min, pool_min_mat, pool_sum, pool_sum_mat, radix_2_fft_vec, solve_cubic, solve_quadratic, solve_quartic, Transpose};
@@ -8,7 +9,8 @@ mod tensor_math_tests {
     use num::complex::{Complex64, ComplexFloat};
     use std::f64::consts::PI;
     use std::ops::Add;
-    use num::FromPrimitive;
+    use num::{FromPrimitive, ToPrimitive};
+    use num::traits::real::Real;
 
     #[test]
     fn add_tensors() {
@@ -498,7 +500,7 @@ mod tensor_math_tests {
         let t1_norm_l2_ans = Tensor::<f64>::new(
             &shape![3, 3, 3],
             (0..27)
-                .map(|x| (x as f64) / 6201.0.sqrt())
+                .map(|x| (x as f64) / ComplexFloat::sqrt(6201.0))
                 .collect::<Vec<f64>>(),
         )
         .unwrap();
@@ -534,8 +536,8 @@ mod tensor_math_tests {
             &shape![2, 3],
             (0..6)
                 .map(|x| Complex64 {
-                    re: (x as f64) / 110.0.sqrt(),
-                    im: (x as f64) / 110.0.sqrt(),
+                    re: (x as f64) / ComplexFloat::sqrt(110.0),
+                    im: (x as f64) / ComplexFloat::sqrt(110.0),
                 })
                 .collect(),
         )
@@ -1215,8 +1217,8 @@ mod tensor_math_tests {
             3, 3,
         vec![
                     Complex64::new(1.0, 0.0), Complex64::new(0.0, 0.0), Complex64::new(0.0, 0.0),
-                    Complex64::new(0.0, 0.0), Complex64::new(0.5.sqrt(), 0.0), Complex64::new(-0.5.sqrt(), 0.0),
-                    Complex64::new(0.0, 0.0), Complex64::new(0.5.sqrt(), 0.0), Complex64::new(0.5.sqrt(), 0.0),
+                    Complex64::new(0.0, 0.0), Complex64::new(ComplexFloat::sqrt(0.5), 0.0), Complex64::new(-ComplexFloat::sqrt(0.5), 0.0),
+                    Complex64::new(0.0, 0.0), Complex64::new(ComplexFloat::sqrt(0.5), 0.0), Complex64::new(ComplexFloat::sqrt(0.5), 0.0),
                 ],
             ).unwrap(),
             Matrix::<Complex64>::new(
@@ -1748,5 +1750,522 @@ mod tensor_math_tests {
                 }
             }
         }
+    }
+
+    #[test]
+    #[should_panic]
+    fn invalid_tensor_fft_conv_axes_different_ranks() {
+        let t1 = Tensor::<Complex64>::new(
+            &shape![1, 2, 3],
+            (0..6).map(|x| Complex64 { re: x as f64, im: 0.0 }).collect(),
+        ).unwrap();
+        let t2 = Tensor::<Complex64>::new(
+            &shape![2, 3],
+            (0..6).map(|x| Complex64 { re: x as f64, im: 0.0 }).collect(),
+        ).unwrap();
+
+        t1.fft_conv_axes(&t2, &HashSet::new());
+    }
+
+    #[test]
+    #[should_panic]
+    fn invalid_tensor_fft_conv_axes_incompatible_shapes() {
+        let t1 = Tensor::<Complex64>::new(
+            &shape![1, 2, 3],
+            (0..6).map(|x| Complex64 { re: x as f64, im: 0.0 }).collect(),
+        ).unwrap();
+        let t2 = Tensor::<Complex64>::new(
+            &shape![1, 3, 2],
+            (0..6).map(|x| Complex64 { re: x as f64, im: 0.0 }).collect(),
+        ).unwrap();
+        let mut axes = HashSet::new();
+        axes.insert(0);
+
+        t1.fft_conv_axes(&t2, &axes);
+    }
+
+    #[test]
+    fn tensor_fft_conv_axes() {
+        let t1 = Tensor::<Complex64>::new(
+            &shape![4, 2, 3],
+            (0..24).map(|x| Complex64 { re: x as f64, im: x as f64 }).collect(),
+        ).unwrap();
+        let t2 = Tensor::<Complex64>::new(
+            &shape![1, 2, 3],
+            (0..6).map(|x| Complex64 { re: x as f64, im: -x as f64 }).collect(),
+        ).unwrap();
+        let mut axes = HashSet::new();
+        axes.insert(0);
+        axes.insert(2);
+
+        let res = t1.fft_conv_axes(&t2, &axes);
+
+        let ans = Tensor::<Complex64>::new(
+            &shape![4, 2, 5],
+            vec![
+                0, 0, 2, 8, 8,
+                18, 48, 92, 80, 50,
+                0, 12, 38, 44, 32,
+                54, 132, 236, 188, 110,
+                0, 24, 74, 80, 56,
+                90, 216, 380, 296, 170,
+                0, 36, 110, 116, 80,
+                126, 300, 524, 404, 230,
+            ].iter().map(|x| Complex64::from_f64(*x as f64).unwrap()).collect()
+        ).unwrap();
+
+        assert!(approx_eq!(Tensor<Complex64>, res, ans, epsilon = 1e-10));
+    }
+
+    #[test]
+    #[should_panic]
+    fn invalid_tensor_fft_conv_diff_ranks() {
+        let t1 = Tensor::<Complex64>::new(
+            &shape![1, 2, 3],
+            (0..6).map(|x| Complex64 { re: x as f64, im: 0.0 }).collect(),
+        ).unwrap();
+        let t2 = Tensor::<Complex64>::new(
+            &shape![2, 3],
+            (0..6).map(|x| Complex64 { re: x as f64, im: 0.0 }).collect(),
+        ).unwrap();
+
+        t1.fft_conv(&t2);
+    }
+
+    #[test]
+    fn tensor_fft_conv() {
+        let t1 = Tensor::<Complex64>::new(
+            &shape![4, 2, 3],
+            (0..24).map(|x| Complex64 { re: x as f64, im: x as f64 }).collect(),
+        ).unwrap();
+        let t2 = Tensor::<Complex64>::new(
+            &shape![1, 2, 3],
+            (0..6).map(|x| Complex64 { re: x as f64, im: -x as f64 }).collect(),
+        ).unwrap();
+
+        let res = t1.fft_conv(&t2);
+
+        let ans = Tensor::<Complex64>::new(
+            &shape![4, 3, 5],
+            vec![
+                0, 0, 2, 8, 8,
+                0, 12, 40, 52, 40,
+                18, 48, 92, 80, 50,
+
+                0, 12, 38, 44, 32,
+                36, 108, 220, 196, 124,
+                54, 132, 236, 188, 110,
+
+                0, 24, 74, 80, 56,
+                72, 204, 400, 340, 208,
+                90, 216, 380, 296, 170,
+
+                0, 36, 110, 116, 80,
+                108, 300, 580, 484, 292,
+                126, 300, 524, 404, 230,
+            ].iter().map(|x| Complex64::from_f64(*x as f64).unwrap()).collect()
+        ).unwrap();
+
+        assert!(approx_eq!(Tensor<Complex64>, res, ans, epsilon = 1e-10));
+    }
+
+    #[test]
+    #[should_panic]
+    fn invalid_fft_mat_conv_cols_different_cols() {
+        let m1 = Matrix::<Complex64>::zeros(5, 1);
+        let m2 = Matrix::<Complex64>::zeros(3, 2);
+
+        m1.fft_conv_cols(&m2);
+    }
+
+    #[test]
+    #[should_panic]
+    fn invalid_fft_mat_conv_rows_different_rows() {
+        let m1 = Matrix::<Complex64>::zeros(2, 2);
+        let m2 = Matrix::<Complex64>::zeros(1, 1);
+
+        m1.fft_conv_cols(&m2);
+    }
+
+    #[test]
+    fn fft_mat_conv_rows() {
+        let m1 = Matrix::<Complex64>::new(
+            3, 2,
+            (0..6).map(|x| Complex64 { re: x as f64, im: 0.0 }).collect(),
+        ).unwrap();
+        let m2 = Matrix::<Complex64>::new(
+            3, 5,
+            (0..15).map(|x| Complex64 { re: 0.0, im: x as f64 }).collect(),
+        ).unwrap();
+
+        let res = m1.fft_conv_rows(&m2);
+
+        let ans = Matrix::<Complex64>::new(
+            3, 6,
+            vec![
+                0, 0, 1, 2, 3, 4,
+                10, 27, 32, 37, 42, 27,
+                40, 94, 103, 112, 121, 70,
+            ].iter().map(|x| Complex64 { re: 0.0, im: *x as f64 }).collect(),
+        ).unwrap();
+
+        assert!(approx_eq!(Matrix<Complex64>, ans, res, epsilon = 1e-10));
+    }
+
+    #[test]
+    fn fft_mat_conv_cols() {
+        let m1 = Matrix::<Complex64>::new(
+            2, 3,
+            (0..6).map(|x| Complex64 { re: x as f64, im: 0.0 }).collect(),
+        ).unwrap();
+        let m2 = Matrix::<Complex64>::new(
+            5, 3,
+            (0..15).map(|x| Complex64 { re: 0.0, im: x as f64 }).collect(),
+        ).unwrap();
+
+        let res = m1.fft_conv_cols(&m2);
+
+        let ans = Matrix::<Complex64>::new(
+            6, 3,
+            vec![
+                0, 1, 4,
+                0, 8, 20,
+                9, 23, 41,
+                18, 38, 62,
+                27, 53, 83,
+                36, 52, 70,
+            ].iter().map(|x| Complex64 { re: 0.0, im: *x as f64 }).collect(),
+        ).unwrap();
+
+        assert!(approx_eq!(Matrix<Complex64>, ans, res, epsilon = 1e-10));
+    }
+
+    #[test]
+    fn fft_mat_conv() {
+        let m1 = Matrix::<Complex64>::new(
+            2, 3,
+            (0..6).map(|x| Complex64 { re: x as f64, im: 0.0 }).collect(),
+        ).unwrap();
+        let m2 = Matrix::<Complex64>::new(
+            5, 3,
+            (0..15).map(|x| Complex64 { re: 0.0, im: x as f64 }).collect(),
+        ).unwrap();
+
+        let res = m1.fft_conv(&m2);
+
+        let ans = Matrix::<Complex64>::new(
+            6, 5,
+            vec![
+                0, 0, 1, 4, 4,
+                0, 6, 20, 26, 20,
+                9, 30, 65, 62, 41,
+                18, 54, 110, 98, 62,
+                27, 78, 155, 134, 83,
+                36, 87, 154, 121, 70,
+            ].iter().map(|x| Complex64 { re: 0.0, im: *x as f64 }).collect(),
+        ).unwrap();
+
+        assert!(approx_eq!(Matrix<Complex64>, ans, res, epsilon = 1e-10));
+    }
+
+    #[test]
+    #[should_panic]
+    fn invalid_flip_axes_tensor() {
+        let t1 = Tensor::<i32>::new(
+            &shape![1, 2, 3, 4],
+            vec![1; 24],
+        ).unwrap();
+
+        let mut axes = HashSet::new();
+        axes.insert(4);
+
+        t1.flip_axes(&axes);
+    }
+
+    #[test]
+    #[should_panic]
+    fn invalid_flip_axes_mt_tensor() {
+        let t1 = Tensor::<i32>::new(
+            &shape![1, 2, 3, 4],
+            vec![1; 24],
+        ).unwrap();
+
+        let mut axes = HashSet::new();
+        axes.insert(4);
+
+        t1.flip_axes_mt(&axes);
+    }
+
+    #[test]
+    fn flip_tensor() {
+        let t1 = Tensor::<i32>::new(
+            &shape![2, 3, 4],
+            (0..24).collect(),
+        ).unwrap();
+        let mut axes = HashSet::new();
+        axes.insert(0);
+        axes.insert(2);
+
+        let res_axes = t1.flip_axes(&axes);
+        let res = t1.flip();
+
+        let ans_axes = Tensor::<i32>::new(
+            &shape![2, 3, 4],
+              vec![
+                  15, 14, 13, 12,
+                  19, 18, 17, 16,
+                  23, 22, 21, 20,
+
+                  3, 2, 1, 0,
+                  7, 6, 5, 4,
+                  11, 10, 9, 8,
+              ],
+        ).unwrap();
+        let ans = Tensor::<i32>::new(
+            &shape![2, 3, 4],
+            vec![
+                23, 22, 21, 20,
+                19, 18, 17, 16,
+                15, 14, 13, 12,
+
+                11, 10, 9, 8,
+                7, 6, 5, 4,
+                3, 2, 1, 0,
+            ],
+        ).unwrap();
+
+        assert_eq!(res_axes, ans_axes);
+        assert_eq!(res, ans);
+    }
+
+    #[test]
+    fn flip_matrix() {
+        let m1 = Matrix::<i32>::new(
+            2, 3,
+            vec![
+                0, 1, 2,
+                3, 4, 5,
+            ],
+        ).unwrap();
+        let res_cols = m1.flip_cols();
+        let res_rows = m1.flip_rows();
+        let res = m1.flip();
+
+        let ans_cols = Matrix::<i32>::new(
+            2, 3,
+            vec![
+                3, 4, 5,
+                0, 1, 2,
+            ],
+        ).unwrap();
+        let ans_rows = Matrix::<i32>::new(
+            2, 3,
+            vec![
+                2, 1, 0,
+                5, 4, 3,
+            ],
+        ).unwrap();
+        let ans = Matrix::<i32>::new(
+            2, 3,
+            vec![
+                5, 4, 3,
+                2, 1, 0,
+            ],
+        ).unwrap();
+
+        assert_eq!(res_cols, ans_cols);
+        assert_eq!(res_rows, ans_rows);
+        assert_eq!(res, ans);
+    }
+
+    #[test]
+    fn flip_mt_tensor() {
+        let t1 = Tensor::<i32>::rand(&shape![10, 20, 10]);
+        let mut axes = HashSet::new();
+        axes.insert(0);
+        axes.insert(1);
+
+        let res_axes = t1.flip_axes(&axes);
+        let res_axes_mt = t1.flip_axes_mt(&axes);
+
+        let res = t1.flip();
+        let res_mt = t1.flip_mt();
+
+        assert_eq!(res_axes, res_axes_mt);
+        assert_eq!(res, res_mt);
+    }
+
+    #[test]
+    fn flip_mt_mat() {
+        let m1 = Matrix::<i32>::rand(10, 20);
+
+        let res_cols = m1.flip_cols();
+        let res_rows = m1.flip_rows();
+        let res = m1.flip();
+
+        let res_cols_mt = m1.flip_cols_mt();
+        let res_rows_mt = m1.flip_rows_mt();
+        let res_mt = m1.flip_mt();
+
+        assert_eq!(res_cols, res_cols_mt);
+        assert_eq!(res_rows, res_rows_mt);
+        assert_eq!(res, res_mt);
+    }
+
+    #[test]
+    #[should_panic]
+    fn invalid_corr_tensors() {
+        let t1 = Tensor::<i32>::new(
+            &shape![1, 2, 3, 4],
+            vec![1; 24],
+        ).unwrap();
+        let t2 = Tensor::<i32>::new(
+            &shape![1, 2, 3],
+            vec![1; 6],
+        ).unwrap();
+
+        t1.corr(&t2);
+    }
+
+    #[test]
+    fn corr_tensors() {
+        let t1 = Tensor::<i32>::new(
+            &shape![2, 3, 4],
+            (0..24).collect(),
+        ).unwrap();
+        let t2 = Tensor::<i32>::new(
+            &shape![1, 2, 3],
+            (0..6).collect(),
+        ).unwrap();
+
+        let res = t1.corr(&t2);
+        let ans = t1
+            .transform_elementwise(|x| Complex64::new(x as f64, 0.0))
+            .fft_conv(&t2.transform_elementwise(|x| Complex64::new(x as f64, 0.0)).flip_mt())
+            .transform_elementwise(|c| c.re.round().to_i32().unwrap());
+
+        assert_eq!(res, ans);
+    }
+
+    #[test]
+    fn corr_mat() {
+        let m1 = Matrix::<i32>::new(
+            4, 6,
+            (0..24).collect(),
+        ).unwrap();
+        let m2 = Matrix::<i32>::new(
+            2, 3,
+            (0..6).collect(),
+        ).unwrap();
+
+        let res = m1.corr(&m2);
+        let ans = m1
+            .transform_elementwise(|x| Complex64::new(x as f64, 0.0))
+            .fft_conv(&m2.transform_elementwise(|x| Complex64::new(x as f64, 0.0)).flip_mt())
+            .transform_elementwise(|c| c.re.round().to_i32().unwrap());
+
+        assert_eq!(res, ans);
+    }
+
+    #[test]
+    fn corr_mt_tensors() {
+        let t1 = Tensor::<f64>::rand(&shape![10, 20]).clip(-100.0, 100.0);
+        let t2 = Tensor::<f64>::rand(&shape![10, 20]).clip(-100.0, 100.0);
+
+        let res_mt = t1.corr_mt(&t2);
+        let res = t1.corr(&t2);
+
+        assert_eq!(res, res_mt);
+    }
+
+    #[test]
+    fn corr_mt_mat() {
+        let m1 = Matrix::<f64>::rand(10, 20).clip(-100.0, 100.0);
+        let m2 = Matrix::<f64>::rand(10, 20).clip(-100.0, 100.0);
+
+        let res_mt = m1.corr_mt(&m2);
+        let res = m1.corr(&m2);
+
+        assert_eq!(res, res_mt);
+    }
+
+    #[test]
+    fn corr_complex_mat() {
+        let m1 = Matrix::<f64>::rand(10, 10).clip(-100.0, 100.0);
+        let m2 = Matrix::<f64>::rand(10, 10).clip(-100.0, 100.0);
+        let m3 = Matrix::<f64>::rand(10, 10).clip(-100.0, 100.0);
+        let m4 = Matrix::<f64>::rand(10, 10).clip(-100.0, 100.0);
+
+        let in1 = m1.transform_elementwise(|x| Complex64::new(x, 0.0)) + m2.transform_elementwise(|x| Complex64::new(0.0, x));
+        let in2 = m3.transform_elementwise(|x| Complex64::new(x, 0.0)) + m4.transform_elementwise(|x| Complex64::new(0.0, x));
+
+        assert_eq!(in1.fft_corr_cols(&in2), in1.fft_conv_cols(&in2.flip_cols_mt()));
+        assert_eq!(in1.fft_corr_rows(&in2), in1.fft_conv_rows(&in2.flip_rows_mt()));
+        assert_eq!(in1.fft_corr(&in2), in1.fft_conv(&in2.flip_mt()));
+    }
+
+    #[test]
+    fn corr_complex_tensor() {
+        let t1 = Tensor::<f64>::rand(&shape![10, 2, 5]).clip(-100.0, 100.0);
+        let t2 = Tensor::<f64>::rand(&shape![10, 2, 5]).clip(-100.0, 100.0);
+        let t3 = Tensor::<f64>::rand(&shape![10, 2, 5]).clip(-100.0, 100.0);
+        let t4 = Tensor::<f64>::rand(&shape![10, 2, 5]).clip(-100.0, 100.0);
+
+        let mut axes = HashSet::new();
+        axes.insert(1);
+
+        let in1 = t1.transform_elementwise(|x| Complex64::new(x, 0.0)) + t2.transform_elementwise(|x| Complex64::new(0.0, x));
+        let in2 = t3.transform_elementwise(|x| Complex64::new(x, 0.0)) + t4.transform_elementwise(|x| Complex64::new(0.0, x));
+
+        assert_eq!(in1.fft_corr_axes(&in2, &axes), in1.fft_conv_axes(&in2.flip_axes_mt(&axes), &axes));
+        assert_eq!(in1.fft_corr(&in2), in1.fft_conv(&in2.flip_mt()));
+    }
+
+    #[test]
+    fn conv_mat() {
+        let m1 = Matrix::<f64>::rand(10, 10).clip(-100.0, 100.0);
+        let m2 = Matrix::<f64>::rand(10, 10).clip(-100.0, 100.0);
+        let m3 = Matrix::<f64>::rand(10, 10).clip(-100.0, 100.0);
+        let m4 = Matrix::<f64>::rand(10, 10).clip(-100.0, 100.0);
+
+        let in1 = m1.transform_elementwise(|x| Complex64::new(x, 0.0)) + m2.transform_elementwise(|x| Complex64::new(0.0, x));
+        let in2 = m3.transform_elementwise(|x| Complex64::new(x, 0.0)) + m4.transform_elementwise(|x| Complex64::new(0.0, x));
+
+        assert!(approx_eq!(Matrix<Complex64>, in1.conv(&in2), in1.fft_conv(&in2), epsilon = 1e-10));
+    }
+
+    #[test]
+    fn conv_tensor() {
+        let t1 = Tensor::<f64>::rand(&shape![10, 2, 5]).clip(-100.0, 100.0);
+        let t2 = Tensor::<f64>::rand(&shape![10, 2, 5]).clip(-100.0, 100.0);
+        let t3 = Tensor::<f64>::rand(&shape![10, 2, 5]).clip(-100.0, 100.0);
+        let t4 = Tensor::<f64>::rand(&shape![10, 2, 5]).clip(-100.0, 100.0);
+
+        let in1 = t1.transform_elementwise(|x| Complex64::new(x, 0.0)) + t2.transform_elementwise(|x| Complex64::new(0.0, x));
+        let in2 = t3.transform_elementwise(|x| Complex64::new(x, 0.0)) + t4.transform_elementwise(|x| Complex64::new(0.0, x));
+
+        assert!(approx_eq!(Tensor<Complex64>, in1.conv(&in2), in1.fft_conv(&in2), epsilon = 1e-10));
+    }
+
+    #[test]
+    fn conv_mat_mt() {
+        let m1 = Matrix::<f64>::rand(10, 10).clip(-100.0, 100.0);
+        let m2 = Matrix::<f64>::rand(10, 10).clip(-100.0, 100.0);
+
+        let res_mt = m1.conv_mt(&m2);
+        let res = m1.conv(&m2);
+
+        assert_eq!(res_mt, res);
+    }
+
+    #[test]
+    fn conv_tensor_mt() {
+        let t1 = Tensor::<f64>::rand(&shape![10, 20, 5]).clip(-100.0, 100.0);
+        let t2 = Tensor::<f64>::rand(&shape![10, 10, 1]).clip(-100.0, 100.0);
+
+        let res_mt = t1.conv_mt(&t2);
+        let res = t1.conv(&t2);
+
+        assert_eq!(res_mt, res);
     }
 }
