@@ -196,7 +196,7 @@ pub fn bench_normal_conv_mat_mt(c: &mut Criterion) {
     let m2 = Matrix::<f64>::rand(200, 100).clip(-100.0, 100.0);
 
     c.bench_function("normal_conv_mat_mt", |b| {
-        m1.conv_mt(&m2);
+        b.iter(|| { m1.conv_mt(&m2); });
     });
 }
 
@@ -205,7 +205,7 @@ pub fn bench_normal_conv_tensor_mt(c: &mut Criterion) {
     let t2 = Tensor::<f64>::rand(&shape![200, 100]).clip(-100.0, 100.0);
 
     c.bench_function("normal_conv_tensor_mt", |b| {
-        t1.conv_mt(&t2);
+        b.iter(|| { t1.conv_mt(&t2); });
     });
 }
 
