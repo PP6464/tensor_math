@@ -10,7 +10,6 @@ mod tensor_math_tests {
     use std::f64::consts::PI;
     use std::ops::Add;
     use num::{FromPrimitive, ToPrimitive};
-    use num::traits::real::Real;
 
     #[test]
     fn add_tensors() {
@@ -2267,5 +2266,75 @@ mod tensor_math_tests {
         let res = t1.conv(&t2);
 
         assert_eq!(res_mt, res);
+    }
+
+    #[test]
+    fn corr_axes_tensor() {
+        let t1 = Tensor::<f64>::rand(&shape![10, 2, 5]).clip(-100.0, 100.0);
+        let t2 = Tensor::<f64>::rand(&shape![10, 2, 5]).clip(-100.0, 100.0);
+        let t3 = Tensor::<f64>::rand(&shape![10, 2, 5]).clip(-100.0, 100.0);
+        let t4 = Tensor::<f64>::rand(&shape![10, 2, 5]).clip(-100.0, 100.0);
+
+        let in1 = t1.transform_elementwise(|x| Complex64::new(x, 0.0)) + t2.transform_elementwise(|x| Complex64::new(0.0, x));
+        let in2 = t3.transform_elementwise(|x| Complex64::new(x, 0.0)) + t4.transform_elementwise(|x| Complex64::new(0.0, x));
+
+        let mut axes = HashSet::new();
+        axes.insert(0);
+        axes.insert(2);
+
+        let res = in1.corr_axes(&in2, &axes);
+        let ans = in1.fft_corr_axes(&in2, &axes);
+
+        assert!(approx_eq!(Tensor<Complex64>, ans, res, epsilon = 1e-10));
+    }
+
+    #[test]
+    fn corr_axes_mt_tensor() {
+        let t1 = Tensor::<f64>::rand(&shape![10, 2, 5]).clip(-100.0, 100.0);
+        let t2 = Tensor::<f64>::rand(&shape![10, 2, 5]).clip(-100.0, 100.0);
+        let t3 = Tensor::<f64>::rand(&shape![10, 2, 5]).clip(-100.0, 100.0);
+        let t4 = Tensor::<f64>::rand(&shape![10, 2, 5]).clip(-100.0, 100.0);
+
+        let in1 = t1.transform_elementwise(|x| Complex64::new(x, 0.0)) + t2.transform_elementwise(|x| Complex64::new(0.0, x));
+        let in2 = t3.transform_elementwise(|x| Complex64::new(x, 0.0)) + t4.transform_elementwise(|x| Complex64::new(0.0, x));
+
+        let mut axes = HashSet::new();
+        axes.insert(0);
+        axes.insert(2);
+
+        let res = in1.corr_axes_mt(&in2, &axes);
+        let ans = in1.fft_corr_axes(&in2, &axes);
+
+        assert!(approx_eq!(Tensor<Complex64>, ans, res, epsilon = 1e-10));
+    }
+
+    #[test]
+    fn corr_axes_mat() {
+        let m1 = Matrix::<f64>::rand(10, 10).clip(-100.0, 100.0);
+        let m2 = Matrix::<f64>::rand(10, 10).clip(-100.0, 100.0);
+        let m3 = Matrix::<f64>::rand(10, 10).clip(-100.0, 100.0);
+        let m4 = Matrix::<f64>::rand(10, 10).clip(-100.0, 100.0);
+
+        let in1 = m1.transform_elementwise(|x| Complex64::new(x, 0.0)) + m2.transform_elementwise(|x| Complex64::new(0.0, x));
+        let in2 = m3.transform_elementwise(|x| Complex64::new(x, 0.0)) + m4.transform_elementwise(|x| Complex64::new(0.0, x));
+
+        assert!(approx_eq!(Matrix<Complex64>, in1.fft_corr_rows(&in2), in1.corr_rows(&in2), epsilon = 1e-10));
+        assert!(approx_eq!(Matrix<Complex64>, in1.fft_corr_cols(&in2), in1.corr_cols(&in2), epsilon = 1e-10));
+        assert!(approx_eq!(Matrix<Complex64>, in1.fft_corr(&in2), in1.corr(&in2), epsilon = 1e-10));
+    }
+
+    #[test]
+    fn corr_axes_mt_mat() {
+        let m1 = Matrix::<f64>::rand(10, 10).clip(-100.0, 100.0);
+        let m2 = Matrix::<f64>::rand(10, 10).clip(-100.0, 100.0);
+        let m3 = Matrix::<f64>::rand(10, 10).clip(-100.0, 100.0);
+        let m4 = Matrix::<f64>::rand(10, 10).clip(-100.0, 100.0);
+
+        let in1 = m1.transform_elementwise(|x| Complex64::new(x, 0.0)) + m2.transform_elementwise(|x| Complex64::new(0.0, x));
+        let in2 = m3.transform_elementwise(|x| Complex64::new(x, 0.0)) + m4.transform_elementwise(|x| Complex64::new(0.0, x));
+
+        assert!(approx_eq!(Matrix<Complex64>, in1.fft_corr_rows(&in2), in1.corr_rows_mt(&in2), epsilon = 1e-10));
+        assert!(approx_eq!(Matrix<Complex64>, in1.fft_corr_cols(&in2), in1.corr_cols_mt(&in2), epsilon = 1e-10));
+        assert!(approx_eq!(Matrix<Complex64>, in1.fft_corr(&in2), in1.corr_mt(&in2), epsilon = 1e-10));
     }
 }

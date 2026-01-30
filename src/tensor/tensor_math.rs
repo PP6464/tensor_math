@@ -817,138 +817,12 @@ impl<T: Default + Clone> Tensor<T> {
         result
     }
 
-    /// Pools a `Tensor<T>` into a `Tensor<O>` using a mutable-borrowing custom pooling function.
-    /// The custom function will take a `Tensor<T>` that corresponds to the slice that the kernel covers.
-    /// If the kernel is hanging over the edge of the tensor, then only the bits of the tensor that fit are included.
-    /// This is reflected in the shape of the input tensor.
-    /// Default functions for `max` and `avg` are given as well.
-    pub fn pool_mut<O: Default + Clone>(&self, mut pool_fn: impl FnMut(Tensor<T>) -> O, kernel_shape: &Shape, stride_shape: &Shape) -> Tensor<O> {
-        assert_eq!(
-            kernel_shape.rank(),
-            self.rank(),
-            "Kernel shape rank and tensor shape rank are not the same"
-        );
-        assert_eq!(
-            stride_shape.rank(),
-            self.rank(),
-            "Stride shape rank and tensor shape rank are not the same"
-        );
-
-        let res_shape = &Shape::new(
-            self.shape()
-                .0
-                .iter()
-                .cloned()
-                .zip(stride_shape.0.iter().cloned())
-                .map(|(x, y)| x.div_ceil(y))
-                .collect::<Vec<usize>>(),
-        )
-            .unwrap();
-
-        let mut result = Tensor::<O>::from_shape(res_shape);
-
-        for (pos, val) in result.enumerated_iter_mut() {
-            let start_pos = pos
-                .iter()
-                .zip(stride_shape.0.iter())
-                .map(|(x, y)| x * y)
-                .collect::<Vec<usize>>();
-            let end_pos = start_pos
-                .iter()
-                .zip(kernel_shape.0.iter())
-                .enumerate()
-                .map(|(i, (x, y))| {
-                    let shape_val = self.shape[i];
-
-                    if x + y < shape_val {
-                        x + y
-                    } else {
-                        shape_val
-                    }
-                })
-                .collect::<Vec<usize>>();
-
-            let indices = end_pos
-                .iter()
-                .zip(start_pos.iter())
-                .map(|(x, y)| *y..*x)
-                .collect::<Vec<_>>();
-
-            *val = pool_fn(self.slice(indices.as_slice()));
-        }
-
-        result
-    }
-
     /// Pools a `Tensor<T>` into a `Tensor<O>` using a custom pooling function with the index.
     /// The custom function will take a `Tensor<T>` that corresponds to the slice that the kernel covers.
     /// If the kernel is hanging over the edge of the tensor, then only the bits of the tensor that fit are included.
     /// This is reflected in the shape of the input tensor.
     /// Default functions for `max` and `avg` are given as well.
     pub fn pool_indexed<O: Default + Clone>(&self, pool_fn: impl Fn(Vec<usize>, Tensor<T>) -> O, kernel_shape: &Shape, stride_shape: &Shape) -> Tensor<O> {
-        assert_eq!(
-            kernel_shape.rank(),
-            self.rank(),
-            "Kernel shape rank and tensor shape rank are not the same"
-        );
-        assert_eq!(
-            stride_shape.rank(),
-            self.rank(),
-            "Stride shape rank and tensor shape rank are not the same"
-        );
-
-        let res_shape = &Shape::new(
-            self.shape()
-                .0
-                .iter()
-                .cloned()
-                .zip(stride_shape.0.iter().cloned())
-                .map(|(x, y)| x.div_ceil(y))
-                .collect::<Vec<usize>>(),
-        )
-            .unwrap();
-
-        let mut result = Tensor::<O>::from_shape(res_shape);
-
-        for (pos, val) in result.enumerated_iter_mut() {
-            let start_pos = pos
-                .iter()
-                .zip(stride_shape.0.iter())
-                .map(|(x, y)| x * y)
-                .collect::<Vec<usize>>();
-            let end_pos = start_pos
-                .iter()
-                .zip(kernel_shape.0.iter())
-                .enumerate()
-                .map(|(i, (x, y))| {
-                    let shape_val = self.shape[i];
-
-                    if x + y < shape_val {
-                        x + y
-                    } else {
-                        shape_val
-                    }
-                })
-                .collect::<Vec<usize>>();
-
-            let indices = end_pos
-                .iter()
-                .zip(start_pos.iter())
-                .map(|(x, y)| *y..*x)
-                .collect::<Vec<_>>();
-
-            *val = pool_fn(start_pos, self.slice(indices.as_slice()));
-        }
-
-        result
-    }
-
-    /// Pools a `Tensor<T>` into a `Tensor<O>` using a mutable-borrowing custom pooling function with the index.
-    /// The custom function will take a `Tensor<T>` that corresponds to the slice that the kernel covers.
-    /// If the kernel is hanging over the edge of the tensor, then only the bits of the tensor that fit are included.
-    /// This is reflected in the shape of the input tensor.
-    /// Default functions for `max` and `avg` are given as well.
-    pub fn pool_indexed_mut<O: Default + Clone>(&self, mut pool_fn: impl FnMut(Vec<usize>, Tensor<T>) -> O, kernel_shape: &Shape, stride_shape: &Shape) -> Tensor<O> {
         assert_eq!(
             kernel_shape.rank(),
             self.rank(),
@@ -1032,62 +906,12 @@ impl<T: Default + Clone> Matrix<T> {
         res
     }
 
-    /// Pools a `Matrix<T>` into a `Matrix<O>` using a mutable-borrowing custom pooling function.
-    /// The custom function will take a `Matrix<T>` that corresponds to the slice that the kernel covers.
-    /// If the kernel is hanging over the edge of the tensor, then only the bits of the tensor that fit are included.
-    /// This is reflected in the shape of the input tensor.
-    /// Default functions for `max` and `avg` are given as well.
-    pub fn pool_mut<O: Default + Clone>(&self, mut pool_fn: impl FnMut(Matrix<T>) -> O, kernel_shape: (usize, usize), stride_shape: (usize, usize)) -> Matrix<O> {
-        assert!(kernel_shape.0 != 0 || kernel_shape.1 != 0, "Invalid kernel shape");
-        assert!(stride_shape.0 != 0 || stride_shape.1 != 0, "Invalid stride shape");
-
-        let res_shape = (self.rows.div_ceil(stride_shape.0), self.cols.div_ceil(stride_shape.1));
-        let mut res = Matrix::<O>::from_shape(res_shape.0, res_shape.1);
-
-        for (pos, val) in res.enumerated_iter_mut() {
-            let start_pos = (pos.0 * stride_shape.0, pos.1 * stride_shape.1);
-            let end_pos = (min(start_pos.0 + kernel_shape.0, self.rows), min(start_pos.1 + kernel_shape.1, self.cols));
-
-            let indices = (start_pos.0..end_pos.0, start_pos.1..end_pos.1);
-            let value = pool_fn(self.slice(indices.0, indices.1));
-
-            *val = value;
-        }
-
-        res
-    }
-
     /// Pools a `Matrix<T>` into a `Matrix<O>` using a custom pooling function with the index.
     /// The custom function will take a `Matrix<T>` that corresponds to the slice that the kernel covers.
     /// If the kernel is hanging over the edge of the tensor, then only the bits of the tensor that fit are included.
     /// This is reflected in the shape of the input tensor.
     /// Default functions for `max` and `avg` are given as well.
     pub fn pool_indexed<O: Default + Clone>(&self, pool_fn: impl Fn((usize, usize), Matrix<T>) -> O, kernel_shape: (usize, usize), stride_shape: (usize, usize)) -> Matrix<O> {
-        assert!(kernel_shape.0 != 0 || kernel_shape.1 != 0, "Invalid kernel shape");
-        assert!(stride_shape.0 != 0 || stride_shape.1 != 0, "Invalid stride shape");
-
-        let res_shape = (self.rows.div_ceil(stride_shape.0), self.cols.div_ceil(stride_shape.1));
-        let mut res = Matrix::<O>::from_shape(res_shape.0, res_shape.1);
-
-        for (pos, val) in res.enumerated_iter_mut() {
-            let start_pos = (pos.0 * stride_shape.0, pos.1 * stride_shape.1);
-            let end_pos = (min(start_pos.0 + kernel_shape.0, self.rows), min(start_pos.1 + kernel_shape.1, self.cols));
-
-            let indices = (start_pos.0..end_pos.0, start_pos.1..end_pos.1);
-            let value = pool_fn(start_pos, self.slice(indices.0, indices.1));
-
-            *val = value;
-        }
-
-        res
-    }
-
-    /// Pools a `Matrix<T>` into a `Matrix<O>` using a mutable-borrowing custom pooling function with the index.
-    /// The custom function will take a `Matrix<T>` that corresponds to the slice that the kernel covers.
-    /// If the kernel is hanging over the edge of the tensor, then only the bits of the tensor that fit are included.
-    /// This is reflected in the shape of the input tensor.
-    /// Default functions for `max` and `avg` are given as well.
-    pub fn pool_indexed_mut<O: Default + Clone>(&self, mut pool_fn: impl FnMut((usize, usize), Matrix<T>) -> O, kernel_shape: (usize, usize), stride_shape: (usize, usize)) -> Matrix<O> {
         assert!(kernel_shape.0 != 0 || kernel_shape.1 != 0, "Invalid kernel shape");
         assert!(stride_shape.0 != 0 || stride_shape.1 != 0, "Invalid stride shape");
 
@@ -1641,6 +1465,106 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Send + Sync> Matrix<T> {
     }
 }
 impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Default> Tensor<T> {
+    /// Computes the correlation of two tensors across specified axes
+    pub fn corr_axes(&self, other: &Tensor<T>, axes: &HashSet<usize>) -> Tensor<T> {
+        assert_eq!(self.rank(), other.rank());
+
+        let rank = self.rank();
+
+        for &axis in axes {
+            assert!(axis < rank, "Axis {axis} out of bounds for tensors of rank {rank}");
+        }
+
+        let mut perm_vec = Vec::with_capacity(rank);
+
+        for i in 0..rank {
+            if !axes.contains(&i) {
+                perm_vec.push(i);
+                assert_eq!(self.shape[i], other.shape[i], "Tensor shapes do not match on channel axis {i}")
+            }
+        }
+
+        perm_vec.extend(axes.iter());
+        let perm = Transpose::new(&perm_vec).unwrap();
+        let inv_perm = perm.inverse();
+
+        let self_perm = self.transpose(&perm).unwrap();
+        let other_perm = other.transpose(&perm).unwrap();
+
+        let padded_shape_vec = self_perm
+            .shape
+            .0
+            .iter()
+            .zip(other_perm.shape.0.iter())
+            .enumerate()
+            .map(|(i, (&s, &o))| if i >= rank - axes.len() { s + 2 * (o - 1) } else { s })
+            .collect::<Vec<_>>();
+
+        let padded_shape = Shape::new(padded_shape_vec).unwrap();
+
+        let res_shape_vec = self_perm
+            .shape
+            .0
+            .iter()
+            .zip(other_perm.shape.0.iter())
+            .enumerate()
+            .map(|(i, (&s, &o))| if i >= rank - axes.len() { s + o - 1 } else { s })
+            .collect::<Vec<_>>();
+
+        let kernel_shape_vec = other_perm
+            .shape
+            .0
+            .iter()
+            .enumerate()
+            .map(|(i, &o)| if i >= rank - axes.len() { o } else { 1 })
+            .collect::<Vec<_>>();
+
+        let kernel_shape = Shape::new(kernel_shape_vec).unwrap();
+
+        let mut self_padded = Self::zeros(&padded_shape);
+        self_padded.slice_mut(
+            &self_perm
+                .shape
+                .0
+                .iter()
+                .zip(other_perm.shape.0.iter())
+                .enumerate()
+                .map(|(i, (&s, &o))| {
+                        if i >= rank - axes.len() {
+                            o - 1..o - 1 + s
+                        } else { 0..s }
+                    }
+                )
+                .collect::<Vec<_>>()
+        ).set_all(&self_perm);
+
+        self_padded.pool_indexed(
+            |index, t| {
+                if t.shape == kernel_shape {
+                    (other_perm.slice(
+                        &other_perm
+                            .shape
+                            .0
+                            .iter()
+                            .enumerate()
+                            .map(|(i, &o)| {
+                                if i >= rank - axes.len() {
+                                    0..o
+                                } else {
+                                    index[i]..index[i] + 1
+                                }
+                            })
+                            .collect::<Vec<_>>()
+                    ) * t).sum()
+                } else {
+                    T::zero()
+                }
+            },
+            &kernel_shape,
+            &Shape::new(vec![1; rank]).unwrap(),
+        ).slice(&res_shape_vec.iter().map(|&x| 0..x).collect::<Vec<_>>()).transpose(&inv_perm).unwrap()
+    }
+
     /// Computes the correlation of two tensors across all axes
     pub fn corr(&self, other: &Tensor<T>) -> Tensor<T> {
         assert_eq!(self.rank(), other.rank());
@@ -1689,6 +1613,50 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Default> Tensor<T> {
     }
 }
 impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Default> Matrix<T> {
+    /// Computes the correlations of two matrices across the columns
+    pub fn corr_cols(&self, other: &Matrix<T>) -> Matrix<T> {
+        assert_eq!(self.cols, other.cols);
+
+        let mut self_padded = Self::zeros(self.rows + 2 * (other.rows - 1), self.cols);
+        self_padded
+            .slice_mut(other.rows - 1..other.rows - 1 + self.rows, 0..self.cols)
+            .set_all(&self);
+
+        self_padded.pool_indexed(
+            |(_, c), m| {
+                if m.shape == shape![other.rows, 1] {
+                    (m * other.slice(0..other.rows, c..c+1)).sum()
+                } else {
+                    T::zero()
+                }
+            },
+            (other.rows, 1),
+            (1, 1),
+        ).slice(0..self.rows + other.rows - 1, 0..self.cols)
+    }
+
+    /// Computes the correlations of two matrices across the rows
+    pub fn corr_rows(&self, other: &Matrix<T>) -> Matrix<T> {
+        assert_eq!(self.rows, other.rows);
+
+        let mut self_padded = Self::zeros(self.rows, self.cols + 2 * (other.cols - 1));
+        self_padded
+            .slice_mut(0..self.rows, other.cols - 1..other.cols - 1 + self.cols)
+            .set_all(&self);
+
+        self_padded.pool_indexed(
+            |(r, _), m| {
+                if m.shape == shape![1, other.cols] {
+                    (m * other.slice(r..r+1, 0..other.cols)).sum()
+                } else {
+                    T::zero()
+                }
+            },
+            (1, other.cols),
+            (1, 1),
+        ).slice(0..self.rows, 0..self.cols + other.cols - 1)
+    }
+
     /// Computes the correlation of two matrices across rows and columns
     pub fn corr(&self, other: &Matrix<T>) -> Matrix<T> {
         let (padded_rows, padded_cols) = (self.rows + 2 * (other.rows - 1), self.cols + 2 * (other.cols - 1));
@@ -1719,6 +1687,106 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Default> Matrix<T> {
     }
 }
 impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Default + Send + Sync> Tensor<T> {
+    /// Computes the correlation of two tensors across specified axes on multiple threads
+    pub fn corr_axes_mt(&self, other: &Tensor<T>, axes: &HashSet<usize>) -> Tensor<T> {
+        assert_eq!(self.rank(), other.rank());
+
+        let rank = self.rank();
+
+        for &axis in axes {
+            assert!(axis < rank, "Axis {axis} out of bounds for tensors of rank {rank}");
+        }
+
+        let mut perm_vec = Vec::with_capacity(rank);
+
+        for i in 0..rank {
+            if !axes.contains(&i) {
+                perm_vec.push(i);
+                assert_eq!(self.shape[i], other.shape[i], "Tensor shapes do not match on channel axis {i}")
+            }
+        }
+
+        perm_vec.extend(axes.iter());
+        let perm = Transpose::new(&perm_vec).unwrap();
+        let inv_perm = perm.inverse();
+
+        let self_perm = self.transpose(&perm).unwrap();
+        let other_perm = other.transpose(&perm).unwrap();
+
+        let padded_shape_vec = self_perm
+            .shape
+            .0
+            .iter()
+            .zip(other_perm.shape.0.iter())
+            .enumerate()
+            .map(|(i, (&s, &o))| if i >= rank - axes.len() { s + 2 * (o - 1) } else { s })
+            .collect::<Vec<_>>();
+
+        let padded_shape = Shape::new(padded_shape_vec).unwrap();
+
+        let res_shape_vec = self_perm
+            .shape
+            .0
+            .iter()
+            .zip(other_perm.shape.0.iter())
+            .enumerate()
+            .map(|(i, (&s, &o))| if i >= rank - axes.len() { s + o - 1 } else { s })
+            .collect::<Vec<_>>();
+
+        let kernel_shape_vec = other_perm
+            .shape
+            .0
+            .iter()
+            .enumerate()
+            .map(|(i, &o)| if i >= rank - axes.len() { o } else { 1 })
+            .collect::<Vec<_>>();
+
+        let kernel_shape = Shape::new(kernel_shape_vec).unwrap();
+
+        let mut self_padded = Self::zeros(&padded_shape);
+        self_padded.slice_mut(
+            &self_perm
+                .shape
+                .0
+                .iter()
+                .zip(other_perm.shape.0.iter())
+                .enumerate()
+                .map(|(i, (&s, &o))| {
+                    if i >= rank - axes.len() {
+                        o - 1..o - 1 + s
+                    } else { 0..s }
+                }
+                )
+                .collect::<Vec<_>>()
+        ).set_all(&self_perm);
+
+        self_padded.pool_indexed_mt(
+            &|index, t| {
+                if t.shape == kernel_shape {
+                    (other_perm.slice(
+                        &other_perm
+                            .shape
+                            .0
+                            .iter()
+                            .enumerate()
+                            .map(|(i, &o)| {
+                                if i >= rank - axes.len() {
+                                    0..o
+                                } else {
+                                    index[i]..index[i] + 1
+                                }
+                            })
+                            .collect::<Vec<_>>()
+                    ) * t).sum()
+                } else {
+                    T::zero()
+                }
+            },
+            &kernel_shape,
+            &Shape::new(vec![1; rank]).unwrap(),
+        ).slice(&res_shape_vec.iter().map(|&x| 0..x).collect::<Vec<_>>()).transpose(&inv_perm).unwrap()
+    }
+
     /// Computes the correlation of two tensors across all axes on multiple threads
     pub fn corr_mt(&self, other: &Tensor<T>) -> Tensor<T> {
         assert_eq!(self.rank(), other.rank());
@@ -1794,6 +1862,50 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Default + Send + Sync
     /// Computes the convolution of two matrices across rows and columns\
     pub fn conv_mt(&self, other: &Matrix<T>) -> Matrix<T> {
         self.corr_mt(&other.flip())
+    }
+
+    /// Computes the correlations of two matrices across the columns
+    pub fn corr_cols_mt(&self, other: &Matrix<T>) -> Matrix<T> {
+        assert_eq!(self.cols, other.cols);
+
+        let mut self_padded = Self::zeros(self.rows + 2 * (other.rows - 1), self.cols);
+        self_padded
+            .slice_mut(other.rows - 1..other.rows - 1 + self.rows, 0..self.cols)
+            .set_all(&self);
+
+        self_padded.pool_indexed_mt(
+            &|(_, c), m| {
+                if m.shape == shape![other.rows, 1] {
+                    (m * other.slice(0..other.rows, c..c+1)).sum()
+                } else {
+                    T::zero()
+                }
+            },
+            (other.rows, 1),
+            (1, 1),
+        ).slice(0..self.rows + other.rows - 1, 0..self.cols)
+    }
+
+    /// Computes the correlations of two matrices across the rows
+    pub fn corr_rows_mt(&self, other: &Matrix<T>) -> Matrix<T> {
+        assert_eq!(self.rows, other.rows);
+
+        let mut self_padded = Self::zeros(self.rows, self.cols + 2 * (other.cols - 1));
+        self_padded
+            .slice_mut(0..self.rows, other.cols - 1..other.cols - 1 + self.cols)
+            .set_all(&self);
+
+        self_padded.pool_indexed_mt(
+            &|(r, _), m| {
+                if m.shape == shape![1, other.cols] {
+                    (m * other.slice(r..r+1, 0..other.cols)).sum()
+                } else {
+                    T::zero()
+                }
+            },
+            (1, other.cols),
+            (1, 1),
+        ).slice(0..self.rows, 0..self.cols + other.cols - 1)
     }
 }
 
@@ -2075,7 +2187,6 @@ impl Matrix<f64> {
 
         while pivot.0 < self.rows && pivot.1 < self.cols {
             let pivot_val = self[pivot];
-            let mut normal_pivot = false;
 
             // Note everything below must be 0
             if pivot.0 < self.rows - 1 {
@@ -2112,8 +2223,6 @@ impl Matrix<f64> {
                         return self.slice(pivot.1 + 1..self.rows, 0..self.cols).iter().all(|x| approx_eq!(f64, *x, 0.0));
                     }
                 }
-            } else {
-                normal_pivot = true;
             }
 
             // Note everything to the left should be 0
@@ -2134,10 +2243,8 @@ impl Matrix<f64> {
                 }
             }
 
-            if normal_pivot {
-                // Move pivot by 1 diagonally
-                pivot = (pivot.0 + 1, pivot.1 + 1);
-            }
+            // Move pivot by 1 diagonally since as we have reached here this is a normal pivot
+            pivot = (pivot.0 + 1, pivot.1 + 1);
         }
 
         true
@@ -2216,7 +2323,6 @@ impl Matrix<f64> {
         while pivot.0 < res.rows && pivot.1 < res.cols {
             // Identify if we can use this position as a pivot value
             let pivot_val = res[pivot];
-            let mut normal_pivot = false;
 
             if approx_eq!(f64, pivot_val, 0.0) {
                 // The pivot value is 0
@@ -2269,8 +2375,6 @@ impl Matrix<f64> {
                 // Normalise the row
                 let norm_row = res.slice(pivot.0 .. pivot.0 + 1, pivot.1 .. res.cols) / pivot_val;
                 res.slice_mut(pivot.0 .. pivot.0 + 1, pivot.1 .. res.cols).set_all(&norm_row);
-
-                normal_pivot = true; // Use this to increment the pivot after eliminating the rows
             }
 
             // Eliminate all other rows
@@ -2284,10 +2388,8 @@ impl Matrix<f64> {
                 res.slice_mut(i..i+1, pivot.1..res.cols).set_all(&new_row);
             }
 
-            if normal_pivot {
-                // We slide the pivot one down and to the right in the normal case
-                pivot = (pivot.0 + 1, pivot.1 + 1);
-            }
+            // We slide the pivot one down and to the right as we are in the normal case
+            pivot = (pivot.0 + 1, pivot.1 + 1);
         }
 
         res
@@ -3009,7 +3111,6 @@ impl Matrix<Complex64> {
 
         while pivot.0 < self.rows && pivot.1 < self.cols {
             let pivot_val = self[pivot];
-            let mut normal_pivot = false;
 
             // Note everything below must be 0
             if pivot.0 < self.rows - 1 {
@@ -3046,8 +3147,6 @@ impl Matrix<Complex64> {
                         return self.slice(pivot.1 + 1..self.rows, 0..self.cols).iter().all(|x| approx_eq!(f64, (*x).abs(), 0.0));
                     }
                 }
-            } else {
-                normal_pivot = true;
             }
 
             // Note everything to the left should be 0
@@ -3068,10 +3167,8 @@ impl Matrix<Complex64> {
                 }
             }
 
-            if normal_pivot {
-                // Move pivot by 1 diagonally
-                pivot = (pivot.0 + 1, pivot.1 + 1);
-            }
+            // Move pivot by 1 diagonally since as we have reached here this is a normal pivot
+            pivot = (pivot.0 + 1, pivot.1 + 1);
         }
 
         true
@@ -3153,7 +3250,6 @@ impl Matrix<Complex64> {
         while pivot.0 < res.rows && pivot.1 < res.cols {
             // Identify if we can use this position as a pivot value
             let pivot_val = res[pivot];
-            let mut normal_pivot = false;
 
             if approx_eq!(f64, pivot_val.abs(), 0.0) {
                 // The pivot value is 0
@@ -3206,8 +3302,6 @@ impl Matrix<Complex64> {
                 // Normalise the row
                 let norm_row = res.slice(pivot.0 .. pivot.0 + 1, pivot.1 .. res.cols) / pivot_val;
                 res.slice_mut(pivot.0 .. pivot.0 + 1, pivot.1 .. res.cols).set_all(&norm_row);
-
-                normal_pivot = true; // Use this to increment the pivot after eliminating the rows
             }
 
             // Eliminate all other rows
@@ -3221,10 +3315,8 @@ impl Matrix<Complex64> {
                 res.slice_mut(i..i+1, pivot.1..res.cols).set_all(&new_row);
             }
 
-            if normal_pivot {
-                // We slide the pivot one down and to the right in the normal case
-                pivot = (pivot.0 + 1, pivot.1 + 1);
-            }
+            // We slide the pivot one down and to the right as we are in the normal case
+            pivot = (pivot.0 + 1, pivot.1 + 1);
         }
 
         res
