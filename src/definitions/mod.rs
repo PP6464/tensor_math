@@ -1,0 +1,9 @@
+pub mod shape;
+pub mod errors;
+pub(crate) mod strides;
+pub mod tensor;
+pub mod tensor_slice_mut;
+pub mod traits;
+pub mod matrix;
+pub mod matrix_slice_mut;
+pub mod transpose;

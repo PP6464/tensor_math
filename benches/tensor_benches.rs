@@ -1,9 +1,13 @@
-use std::hint::black_box;
 use criterion::{criterion_group, criterion_main, Criterion};
 use num::complex::Complex64;
-use tensor_math::tensor::tensor::{Tensor, Shape, Matrix};
-use tensor_math::tensor::tensor_math::{identity, pool_avg, pool_avg_mat, Transpose};
+use std::hint::black_box;
+use tensor_math::definitions::matrix::Matrix;
+use tensor_math::definitions::shape::Shape;
+use tensor_math::definitions::tensor::Tensor;
+use tensor_math::definitions::transpose::Transpose;
 use tensor_math::shape;
+use tensor_math::utilities::matrix::{eye, pool_avg_mat};
+use tensor_math::utilities::tensor::pool_avg;
 
 pub fn bench_concat_mt(c: &mut Criterion) {
     let t1: Tensor<f64> = Tensor::rand(&shape![100, 100, 100]);
@@ -32,7 +36,8 @@ pub fn bench_transpose_mt(c: &mut Criterion) {
 
     c.bench_function("transpose_mt", |b| {
         b.iter(|| {
-            t1.transpose_mt(black_box(&Transpose::new(&vec![2, 0, 1]).unwrap())).unwrap();
+            t1.transpose_mt(black_box(&Transpose::new(&vec![2, 0, 1]).unwrap()))
+                .unwrap();
         })
     });
 }
@@ -60,7 +65,7 @@ pub fn bench_contract_mul_mt(c: &mut Criterion) {
 
 pub fn bench_contract_mul_mat_mt(c: &mut Criterion) {
     let m1 = Matrix::<f64>::rand(100, 50);
-    let m2= Matrix::<f64>::rand(50, 200);
+    let m2 = Matrix::<f64>::rand(50, 200);
 
     c.bench_function("contract_mul_mt_mat", |b| {
         b.iter(|| {
@@ -96,7 +101,12 @@ pub fn bench_pool_mt(c: &mut Criterion) {
 
     c.bench_function("pool_mt", |b| {
         b.iter(|| {
-            t1.pool_mt(black_box(&pool_avg), black_box(&shape![11, 13, 17]), black_box(&shape![5, 7, 3]));
+            t1.pool_mt(
+                black_box(&pool_avg),
+                black_box(&shape![11, 13, 17]),
+                black_box(&shape![5, 7, 3]),
+                black_box(0.0),
+            );
         });
     });
 }
@@ -106,7 +116,13 @@ pub fn bench_pool_mat_mt(c: &mut Criterion) {
 
     c.bench_function("pool_mat_mt", |b| {
         b.iter(|| {
-            m1.pool_mt(&black_box(pool_avg_mat), black_box((20, 15)), black_box((10, 5)))
+            m1.pool_mt(
+                &black_box(pool_avg_mat),
+                black_box((20, 15)),
+                black_box((10, 5)),
+                black_box(0.0),
+            )
+            .unwrap()
         });
     });
 }
@@ -124,8 +140,8 @@ pub fn bench_det(c: &mut Criterion) {
 pub fn bench_inv(c: &mut Criterion) {
     let mut m1 = Matrix::<f64>::rand(100, 100);
 
-    if m1.det() == 0.0 {
-        m1 = m1 + identity(100);
+    if m1.det().unwrap() == 0.0 {
+        m1 = m1 + eye(100).unwrap();
     }
 
     c.bench_function("inv", |b| {
@@ -136,8 +152,8 @@ pub fn bench_inv(c: &mut Criterion) {
 }
 
 pub fn bench_eigendecompose(c: &mut Criterion) {
-    let m1 = Matrix::<f64>::rand(10, 10).transform_elementwise(|x| Complex64 { re: x, im: 0.0 });
-    let m2 = Matrix::<f64>::rand(10, 10).transform_elementwise(|x| Complex64 { re: 0.0, im: x });
+    let m1 = Matrix::<f64>::rand(10, 10).map(|x| Complex64 { re: x, im: 0.0 });
+    let m2 = Matrix::<f64>::rand(10, 10).map(|x| Complex64 { re: 0.0, im: x });
     let m = &m1 + &m2;
 
     c.bench_function("eigendecompose", |b| {
@@ -148,8 +164,10 @@ pub fn bench_eigendecompose(c: &mut Criterion) {
 }
 
 pub fn bench_tensor_fft(c: &mut Criterion) {
-    let t1 = Tensor::<f64>::rand(&shape![256, 50, 20]).transform_elementwise(|x| Complex64 { re: x, im: 0.0 });
-    let t2 = Tensor::<f64>::rand(&shape![256, 50, 20]).transform_elementwise(|x| Complex64 { re: 0.0, im: x });
+    let t1 = Tensor::<f64>::rand(&shape![256, 50, 20])
+        .map(|x| Complex64 { re: x, im: 0.0 });
+    let t2 = Tensor::<f64>::rand(&shape![256, 50, 20])
+        .map(|x| Complex64 { re: 0.0, im: x });
     let t = &t1 + &t2;
 
     c.bench_function("tensor_fft", |b| {
@@ -160,8 +178,8 @@ pub fn bench_tensor_fft(c: &mut Criterion) {
 }
 
 pub fn bench_mat_fft(c: &mut Criterion) {
-    let m1 = Matrix::<f64>::rand(256, 100).transform_elementwise(|x| Complex64 { re: x, im: 0.0 });
-    let m2 = Matrix::<f64>::rand(256, 100).transform_elementwise(|x| Complex64 { re: 0.0, im: x });
+    let m1 = Matrix::<f64>::rand(256, 100).map(|x| Complex64 { re: x, im: 0.0 });
+    let m2 = Matrix::<f64>::rand(256, 100).map(|x| Complex64 { re: 0.0, im: x });
     let m = &m1 + &m2;
 
     c.bench_function("mat_fft", |b| {
@@ -196,7 +214,9 @@ pub fn bench_normal_conv_mat_mt(c: &mut Criterion) {
     let m2 = Matrix::<f64>::rand(200, 100).clip(-100.0, 100.0);
 
     c.bench_function("normal_conv_mat_mt", |b| {
-        b.iter(|| { m1.conv_mt(&m2); });
+        b.iter(|| {
+            m1.conv_mt(&m2);
+        });
     });
 }
 
@@ -205,17 +225,19 @@ pub fn bench_normal_conv_tensor_mt(c: &mut Criterion) {
     let t2 = Tensor::<f64>::rand(&shape![200, 100]).clip(-100.0, 100.0);
 
     c.bench_function("normal_conv_tensor_mt", |b| {
-        b.iter(|| { t1.conv_mt(&t2); });
+        b.iter(|| {
+            t1.conv_mt(&t2);
+        });
     });
 }
 
 pub fn bench_fft_conv_mat(c: &mut Criterion) {
-    let m1 = Matrix::<f64>::rand(256, 100).transform_elementwise(|x| Complex64 { re: x, im: 0.0 });
-    let m2 = Matrix::<f64>::rand(256, 100).transform_elementwise(|x| Complex64 { re: 0.0, im: x });
+    let m1 = Matrix::<f64>::rand(256, 100).map(|x| Complex64 { re: x, im: 0.0 });
+    let m2 = Matrix::<f64>::rand(256, 100).map(|x| Complex64 { re: 0.0, im: x });
     let in1 = &m1 + &m2;
 
-    let m1 = Matrix::<f64>::rand(256, 100).transform_elementwise(|x| Complex64 { re: x, im: 0.0 });
-    let m2 = Matrix::<f64>::rand(256, 100).transform_elementwise(|x| Complex64 { re: 0.0, im: x });
+    let m1 = Matrix::<f64>::rand(256, 100).map(|x| Complex64 { re: x, im: 0.0 });
+    let m2 = Matrix::<f64>::rand(256, 100).map(|x| Complex64 { re: 0.0, im: x });
     let in2 = &m1 + &m2;
 
     c.bench_function("fft_conv_mat", |b| {
@@ -226,12 +248,16 @@ pub fn bench_fft_conv_mat(c: &mut Criterion) {
 }
 
 pub fn bench_fft_conv_tensor(c: &mut Criterion) {
-    let t1 = Tensor::<f64>::rand(&shape![16, 20, 8]).transform_elementwise(|x| Complex64 { re: x, im: 0.0 });
-    let t2 = Tensor::<f64>::rand(&shape![16, 20, 8]).transform_elementwise(|x| Complex64 { re: 0.0, im: x });
+    let t1 = Tensor::<f64>::rand(&shape![16, 20, 8])
+        .map(|x| Complex64 { re: x, im: 0.0 });
+    let t2 = Tensor::<f64>::rand(&shape![16, 20, 8])
+        .map(|x| Complex64 { re: 0.0, im: x });
     let in1 = &t1 + &t2;
 
-    let t1 = Tensor::<f64>::rand(&shape![16, 20, 8]).transform_elementwise(|x| Complex64 { re: x, im: 0.0 });
-    let t2 = Tensor::<f64>::rand(&shape![16, 20, 8]).transform_elementwise(|x| Complex64 { re: 0.0, im: x });
+    let t1 = Tensor::<f64>::rand(&shape![16, 20, 8])
+        .map(|x| Complex64 { re: x, im: 0.0 });
+    let t2 = Tensor::<f64>::rand(&shape![16, 20, 8])
+        .map(|x| Complex64 { re: 0.0, im: x });
     let in2 = &t1 + &t2;
 
     c.bench_function("fft_conv_tensor", |b| {

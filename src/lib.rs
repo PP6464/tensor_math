@@ -1,2 +1,4 @@
 pub mod tests;
-pub mod tensor;
+pub mod utilities;
+pub mod definitions;
+mod math;

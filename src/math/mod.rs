@@ -1,0 +1,16 @@
+pub mod elementwise_ops;
+pub mod sum;
+pub mod kronecker;
+pub mod contract_mul;
+pub mod corr_conv;
+pub mod f64_c64_ops;
+pub mod row_echelon;
+pub mod det_inv;
+pub mod approx_eq;
+pub mod householder;
+pub mod transformation_rank;
+pub mod hessenberg;
+pub mod fft_ops;
+pub mod eigen;
+pub mod polynomials;
+pub mod gaussian;

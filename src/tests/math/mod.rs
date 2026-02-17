@@ -1,0 +1,14 @@
+mod contract_mul;
+mod kronecker;
+mod det_inv;
+mod f64_c64_ops;
+mod gaussian;
+mod polynomials;
+mod row_echelon;
+mod hessenberg;
+mod householder;
+mod eigen;
+mod transformation_rank;
+mod fft_ops;
+mod corr_conv;
+mod elementwise_ops;
