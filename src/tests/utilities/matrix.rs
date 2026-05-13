@@ -358,6 +358,32 @@ mod matrix_utils_tests {
             TensorErrors::ShapeContainsZero => {}
             _ => panic!("Incorrect error"),
         }
+        
+        let m2 = Matrix::<f64>::new(0, 3, vec![]).unwrap();
+        
+        let err = m2.pool(pool_avg_mat, (1, 1), (1, 1), 0.0).unwrap_err();
+        match err {
+            TensorErrors::TensorEmpty { .. } => {}
+            _ => panic!("Incorrect error"),
+        }
+
+        let err = m2.pool_indexed(&|_, m| pool_sum_mat(m), (1, 1), (1, 1), 0.0).unwrap_err();
+        match err {
+            TensorErrors::TensorEmpty { .. } => {}
+            _ => panic!("Incorrect error"),
+        }
+
+        let err = m2.pool_mt(&pool_min_mat, (1, 1), (1, 1), 0.0).unwrap_err();
+        match err {
+            TensorErrors::TensorEmpty { .. } => {}
+            _ => panic!("Incorrect error"),
+        }
+
+        let err = m2.pool_indexed_mt(&|_, m| pool_max_mat(m), (1, 1), (1, 1), 0.0).unwrap_err();
+        match err {
+            TensorErrors::TensorEmpty { .. } => {}
+            _ => panic!("Incorrect error"),
+        }
     }
 
     #[test]

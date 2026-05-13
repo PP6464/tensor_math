@@ -59,4 +59,6 @@ pub enum TensorErrors {
     ShapeContainsZero,
     #[error("Tensor has rank zero which is not allowed for the operation {op}")]
     RankZero { op: &'static str },
+    #[error("Tensor is empty which is not allowed for the operation {op}")]
+    TensorEmpty { op: &'static str },
 }

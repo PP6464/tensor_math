@@ -336,6 +336,10 @@ impl<T: Clone> Tensor<T> {
             return Err(TensorErrors::RankZero { op: "Pooling" });
         }
 
+        if self.elements.is_empty() {
+            return Err(TensorErrors::TensorEmpty { op: "Pooling" });
+        }
+
         if kernel_shape.rank() != self.rank() {
             return Err(TensorErrors::RanksDoNotMatch(
                 kernel_shape.rank(),
@@ -414,6 +418,10 @@ impl<T: Clone> Tensor<T> {
     ) -> Result<Tensor<O>, TensorErrors> {
         if self.rank() == 0 {
             return Err(TensorErrors::RankZero { op: "Pooling" });
+        }
+
+        if self.elements.is_empty() {
+            return Err(TensorErrors::TensorEmpty { op: "Pooling" });
         }
 
         if kernel_shape.rank() != self.rank() {
@@ -677,6 +685,10 @@ impl<T: Clone + Send + Sync> Tensor<T> {
             return Err(TensorErrors::RankZero { op: "Pooling" });
         }
 
+        if self.elements.is_empty() {
+            return Err(TensorErrors::TensorEmpty { op: "Pooling" });
+        }
+
         if kernel_shape.rank() != self.rank() {
             return Err(TensorErrors::RanksDoNotMatch(
                 kernel_shape.rank(),
@@ -756,6 +768,10 @@ impl<T: Clone + Send + Sync> Tensor<T> {
     ) -> Result<Tensor<O>, TensorErrors> {
         if self.rank() == 0 {
             return Err(TensorErrors::RankZero { op: "Pooling" });
+        }
+
+        if self.elements.is_empty() {
+            return Err(TensorErrors::TensorEmpty { op: "Pooling" });
         }
 
         if kernel_shape.rank() != self.rank() {

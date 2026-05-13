@@ -228,6 +228,10 @@ impl<T: Clone> Matrix<T> {
             return Err(TensorErrors::ShapeContainsZero);
         }
 
+        if self.elements.is_empty() {
+            return Err(TensorErrors::TensorEmpty { op: "Pooling" });
+        }
+
         let res_shape = (
             self.rows.div_ceil(stride_shape.0),
             self.cols.div_ceil(stride_shape.1),
@@ -263,6 +267,10 @@ impl<T: Clone> Matrix<T> {
         if kernel_shape.0 == 0 || kernel_shape.1 == 0 || stride_shape.0 == 0 || stride_shape.1 == 0
         {
             return Err(TensorErrors::ShapeContainsZero);
+        }
+
+        if self.elements.is_empty() {
+            return Err(TensorErrors::TensorEmpty { op: "Pooling" });
         }
 
         let res_shape = (
@@ -410,6 +418,10 @@ impl<T: Clone + Send + Sync> Matrix<T> {
             return Err(TensorErrors::ShapeContainsZero);
         }
 
+        if self.elements.is_empty() {
+            return Err(TensorErrors::TensorEmpty { op: "Pooling" });
+        }
+
         let res_shape = (
             self.rows.div_ceil(stride_shape.0),
             self.cols.div_ceil(stride_shape.1),
@@ -453,6 +465,10 @@ impl<T: Clone + Send + Sync> Matrix<T> {
         if kernel_shape.0 == 0 || kernel_shape.1 == 0 || stride_shape.0 == 0 || stride_shape.1 == 0
         {
             return Err(TensorErrors::ShapeContainsZero);
+        }
+
+        if self.elements.is_empty() {
+            return Err(TensorErrors::TensorEmpty { op: "Pooling" });
         }
 
         let res_shape = (
