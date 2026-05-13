@@ -20,6 +20,11 @@ pub(crate) fn dot_vectors<T: Add<Output = T> + Mul<Output = T> + Zero + Clone>(
 /// where the length of the vector is a power of 2. This
 pub(crate) fn radix_2_fft_vec(x: &Vec<Complex64>) -> Vec<Complex64> {
     let n = x.len();
+
+    if n == 0 {
+        return vec![];
+    }
+
     let log2_n = n.trailing_zeros() as usize;
     let mut res = x.clone();
 
@@ -85,6 +90,9 @@ pub(crate) fn radix_2_fft_vec(x: &Vec<Complex64>) -> Vec<Complex64> {
 /// Computes an FFT for an arbitrarily long vector using the Bluestein method.
 pub(crate) fn bluestein_fft_vec(x: &Vec<Complex64>) -> Vec<Complex64> {
     let n = x.len();
+    if n == 0 {
+        return vec![];
+    }
 
     let l = ((n << 1) - 1).next_power_of_two();
 
@@ -124,6 +132,9 @@ pub(crate) fn bluestein_fft_vec(x: &Vec<Complex64>) -> Vec<Complex64> {
 /// directly where appropriate, otherwise using the Bluestein method.
 pub(crate) fn fft_vec(x: &Vec<Complex64>) -> Vec<Complex64> {
     let n = x.len();
+    if n == 0 {
+        return vec![];
+    }
 
     if n & n - 1 == 0 {
         radix_2_fft_vec(x)
@@ -137,5 +148,8 @@ pub(crate) fn fft_vec(x: &Vec<Complex64>) -> Vec<Complex64> {
 /// and N is the size of the list x.
 pub(crate) fn ifft_vec(x: &Vec<Complex64>) -> Vec<Complex64> {
     let n = x.len() as f64;
+    if n == 0.0 {
+        return vec![];
+    }
     fft_vec(&x.iter().map(|z| z.conj()).collect()).iter().map(|z| z.conj() / n).collect()
 }

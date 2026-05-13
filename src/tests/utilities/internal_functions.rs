@@ -304,4 +304,13 @@ mod internal_functions_tests {
         let res = dot_vectors(&v5, &v6);
         assert_eq!(res, 0);
     }
+    
+    #[test]
+    fn fft_empty_vec() {
+        let v: Vec<Complex64> = vec![];
+        assert_eq!(fft_vec(&v).len(), 0);
+        assert_eq!(ifft_vec(&v).len(), 0);
+        assert_eq!(radix_2_fft_vec(&v).len(), 0);
+        assert_eq!(bluestein_fft_vec(&v).len(), 0);
+    }
 }
