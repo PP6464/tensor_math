@@ -19,6 +19,14 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Tensor<T> {
             return Err(TensorErrors::RanksDoNotMatch(self.rank(), other.rank()));
         }
 
+        if self.rank() == 0 {
+            return Err(TensorErrors::RankZero { op: "Correlation" });
+        }
+
+        if self.is_empty() || other.is_empty() {
+            return Err(TensorErrors::TensorEmpty { op: "Correlation" });
+        }
+
         let rank = self.rank();
 
         for &axis in axes {
@@ -143,6 +151,14 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Tensor<T> {
             return Err(TensorErrors::RanksDoNotMatch(self.rank(), other.rank()));
         }
 
+        if self.rank() == 0 {
+            return Err(TensorErrors::RankZero { op: "Correlation" });
+        }
+
+        if self.is_empty() || other.is_empty() {
+            return Err(TensorErrors::TensorEmpty { op: "Correlation" });
+        }
+
         let res_shape = Shape::new(
             self.shape
                 .0
@@ -200,6 +216,10 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Matrix<T> {
             return Err(TensorErrors::ShapesIncompatible);
         }
 
+        if self.is_empty() || other.is_empty() {
+            return Err(TensorErrors::TensorEmpty { op: "Correlation" });
+        }
+
         let mut self_padded = Self::zeros(self.rows + 2 * (other.rows - 1), self.cols);
         self_padded
             .slice_mut(other.rows - 1..other.rows - 1 + self.rows, 0..self.cols)?
@@ -227,6 +247,10 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Matrix<T> {
             return Err(TensorErrors::ShapesIncompatible);
         }
 
+        if self.is_empty() || other.is_empty() {
+            return Err(TensorErrors::TensorEmpty { op: "Correlation" });
+        }
+
         let mut self_padded = Self::zeros(self.rows, self.cols + 2 * (other.cols - 1));
         self_padded
             .slice_mut(0..self.rows, other.cols - 1..other.cols - 1 + self.cols)?
@@ -249,7 +273,11 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Matrix<T> {
     }
 
     /// Computes the correlation of two matrices across rows and columns
-    pub fn corr(&self, other: &Matrix<T>) -> Matrix<T> {
+    pub fn corr(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
+        if self.is_empty() || other.is_empty() {
+            return Err(TensorErrors::TensorEmpty { op: "Correlation" });
+        }
+        
         let (padded_rows, padded_cols) = (
             self.rows + 2 * (other.rows - 1),
             self.cols + 2 * (other.cols - 1),
@@ -262,12 +290,10 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Matrix<T> {
             .slice_mut(
                 other.rows - 1..other.rows - 1 + self.rows,
                 other.cols - 1..other.cols - 1 + self.cols,
-            )
-            .unwrap()
-            .set_all(self)
-            .unwrap();
+            )?
+            .set_all(self)?;
 
-        self_padded
+        Ok(self_padded
             .pool(
                 |t| {
                     if t.shape == other.shape {
@@ -279,14 +305,12 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Matrix<T> {
                 (other.rows, other.cols),
                 (1, 1),
                 T::zero(),
-            )
-            .unwrap()
-            .slice(0..res_rows, 0..res_cols)
-            .unwrap()
+            )?
+            .slice(0..res_rows, 0..res_cols)?)
     }
 
     /// Computes the convolution of two matrices across rows and columns
-    pub fn conv(&self, other: &Matrix<T>) -> Matrix<T> {
+    pub fn conv(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
         self.corr(&other.flip())
     }
 }
@@ -300,6 +324,14 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Send + Sync> Tensor<T
     ) -> Result<Tensor<T>, TensorErrors> {
         if self.rank() != other.rank() {
             return Err(TensorErrors::RanksDoNotMatch(self.rank(), other.rank()));
+        }
+
+        if self.rank() == 0 {
+            return Err(TensorErrors::RankZero { op: "Correlation" });
+        }
+
+        if self.is_empty() || other.is_empty() {
+            return Err(TensorErrors::TensorEmpty { op: "Correlation" });
         }
 
         let rank = self.rank();
@@ -425,6 +457,14 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Send + Sync> Tensor<T
             return Err(TensorErrors::RanksDoNotMatch(self.rank(), other.rank()));
         }
 
+        if self.rank() == 0 {
+            return Err(TensorErrors::RankZero { op: "Correlation" });
+        }
+
+        if self.is_empty() || other.is_empty() {
+            return Err(TensorErrors::TensorEmpty { op: "Correlation" });
+        }
+
         let res_shape = Shape::new(
             self.shape
                 .0
@@ -477,7 +517,11 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Send + Sync> Tensor<T
 
 impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Send + Sync> Matrix<T> {
     /// Computes the correlation of two tensors across all axes on multiple threads
-    pub fn corr_mt(&self, other: &Matrix<T>) -> Matrix<T> {
+    pub fn corr_mt(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
+        if self.is_empty() || other.is_empty() {
+            return Err(TensorErrors::TensorEmpty { op: "Correlation" });
+        }
+        
         let (padded_rows, padded_cols) = (
             self.rows + 2 * (other.rows - 1),
             self.cols + 2 * (other.cols - 1),
@@ -490,12 +534,10 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Send + Sync> Matrix<T
             .slice_mut(
                 other.rows - 1..other.rows - 1 + self.rows,
                 other.cols - 1..other.cols - 1 + self.cols,
-            )
-            .unwrap()
-            .set_all(self)
-            .unwrap();
+            )?
+            .set_all(self)?;
 
-        self_padded
+        Ok(self_padded
             .pool_mt(
                 &|t| {
                     if t.shape == other.shape {
@@ -507,14 +549,12 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Send + Sync> Matrix<T
                 (other.rows, other.cols),
                 (1, 1),
                 T::zero(),
-            )
-            .unwrap()
-            .slice(0..res_rows, 0..res_cols)
-            .unwrap()
+            )?
+            .slice(0..res_rows, 0..res_cols)?)
     }
 
     /// Computes the convolution of two matrices across rows and columns\
-    pub fn conv_mt(&self, other: &Matrix<T>) -> Matrix<T> {
+    pub fn conv_mt(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
         self.corr_mt(&other.flip())
     }
 
@@ -522,6 +562,10 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Send + Sync> Matrix<T
     pub fn corr_cols_mt(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
         if self.cols != other.cols {
             return Err(TensorErrors::ShapesIncompatible);
+        }
+
+        if self.is_empty() || other.is_empty() {
+            return Err(TensorErrors::TensorEmpty { op: "Correlation" });
         }
 
         let mut self_padded = Self::zeros(self.rows + 2 * (other.rows - 1), self.cols);
@@ -549,6 +593,10 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Send + Sync> Matrix<T
     pub fn corr_rows_mt(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
         if self.rows != other.rows {
             return Err(TensorErrors::ShapesIncompatible);
+        }
+
+        if self.is_empty() || other.is_empty() {
+            return Err(TensorErrors::TensorEmpty { op: "Correlation" });
         }
 
         let mut self_padded = Self::zeros(self.rows, self.cols + 2 * (other.cols - 1));

@@ -9,6 +9,75 @@ mod corr_conv_tests {
     use std::collections::HashSet;
     use num::ToPrimitive;
     use crate::definitions::errors::TensorErrors;
+    
+    #[test]
+    fn cannot_corr_conv_empty_tensors() {
+        let empty = Tensor::<f64>::new(&shape![0, 5], vec![]).unwrap();
+        let normal = Tensor::<f64>::new(&shape![2, 5], vec![1.0; 10]).unwrap();
+
+        assert!(matches!(empty.corr(&normal).unwrap_err(), TensorErrors::TensorEmpty { .. }));
+        assert!(matches!(normal.corr(&empty).unwrap_err(), TensorErrors::TensorEmpty { .. }));
+        assert!(matches!(empty.conv(&normal).unwrap_err(), TensorErrors::TensorEmpty { .. }));
+        assert!(matches!(empty.corr_axes(&normal, &HashSet::from([1])).unwrap_err(), TensorErrors::TensorEmpty { .. }));
+    }
+    
+    #[test]
+    fn cannot_corr_conv_mt_empty_tensors() {
+        let empty = Tensor::<f64>::new(&shape![0, 5], vec![]).unwrap();
+        let normal = Tensor::<f64>::new(&shape![2, 5], vec![1.0; 10]).unwrap();
+
+        assert!(matches!(empty.corr_mt(&normal).unwrap_err(), TensorErrors::TensorEmpty { .. }));
+        assert!(matches!(empty.conv_mt(&normal).unwrap_err(), TensorErrors::TensorEmpty { .. }));
+        assert!(matches!(empty.corr_axes_mt(&normal, &HashSet::from([1])).unwrap_err(), TensorErrors::TensorEmpty { .. }));
+    }
+
+    #[test]
+    fn cannot_corr_conv_empty_matrices() {
+        let empty = Matrix::<f64>::new(0, 5, vec![]).unwrap();
+        let empty2 = Matrix::<f64>::new(5, 0, vec![]).unwrap();
+        let normal = Matrix::<f64>::new(2, 5, vec![1.0; 10]).unwrap();
+        let normal2 = Matrix::<f64>::new(5, 2, vec![1.0; 10]).unwrap();
+
+        assert!(matches!(empty.corr(&normal).unwrap_err(), TensorErrors::TensorEmpty { .. }));
+        assert!(matches!(empty.conv(&normal).unwrap_err(), TensorErrors::TensorEmpty { .. }));
+        assert!(matches!(empty2.corr_rows(&normal2).unwrap_err(), TensorErrors::TensorEmpty { .. }));
+        assert!(matches!(empty.corr_cols(&normal).unwrap_err(), TensorErrors::TensorEmpty { .. }));
+    }
+    
+    #[test]
+    fn cannot_corr_conv_mt_empty_matrices() {
+        let empty = Matrix::<f64>::new(0, 5, vec![]).unwrap();
+        let empty2 = Matrix::<f64>::new(5, 0, vec![]).unwrap();
+        let normal = Matrix::<f64>::new(2, 5, vec![1.0; 10]).unwrap();
+        let normal2 = Matrix::<f64>::new(5, 2, vec![1.0; 10]).unwrap();
+
+        assert!(matches!(empty.corr_mt(&normal).unwrap_err(), TensorErrors::TensorEmpty { .. }));
+        assert!(matches!(empty.conv(&normal).unwrap_err(), TensorErrors::TensorEmpty { .. }));
+        assert!(matches!(empty2.corr_rows_mt(&normal2).unwrap_err(), TensorErrors::TensorEmpty { .. }));
+        assert!(matches!(empty.corr_cols_mt(&normal).unwrap_err(), TensorErrors::TensorEmpty { .. }));
+    }
+
+    #[test]
+    fn cannot_corr_conv_scalar_tensors() {
+        let scalar = Tensor::<f64>::new(&shape![], vec![1.0]).unwrap();
+        let normal = Tensor::<f64>::new(&shape![1], vec![1.0]).unwrap();
+
+        assert!(matches!(scalar.corr(&scalar).unwrap_err(), TensorErrors::RankZero { .. }));
+        assert!(matches!(scalar.corr_mt(&scalar).unwrap_err(), TensorErrors::RankZero { .. }));
+        // Rank mismatch is checked first if ranks differ
+        assert!(matches!(scalar.corr(&normal).unwrap_err(), TensorErrors::RanksDoNotMatch(..)));
+    }
+    
+    #[test]
+    fn cannot_corr_conv_mt_scalar_tensors() {
+        let scalar = Tensor::<f64>::new(&shape![], vec![1.0]).unwrap();
+        let normal = Tensor::<f64>::new(&shape![1], vec![1.0]).unwrap();
+
+        assert!(matches!(scalar.corr_mt(&scalar).unwrap_err(), TensorErrors::RankZero { .. }));
+        assert!(matches!(scalar.conv_mt(&scalar).unwrap_err(), TensorErrors::RankZero { .. }));
+        assert!(matches!(scalar.corr_axes_mt(&scalar, &HashSet::from([])).unwrap_err(), TensorErrors::RankZero { .. }));
+        assert!(matches!(scalar.corr_mt(&normal).unwrap_err(), TensorErrors::RanksDoNotMatch(..)));
+    }
 
     #[test]
     fn invalid_corr_tensors() {
@@ -66,7 +135,7 @@ mod corr_conv_tests {
             (0..6).collect(),
         ).unwrap();
 
-        let res = m1.corr(&m2);
+        let res = m1.corr(&m2).unwrap();
         let ans = m1
             .map(|x| Complex64::new(x as f64, 0.0))
             .fft_conv(&m2.map(|x| Complex64::new(x as f64, 0.0)).flip_mt())
@@ -139,7 +208,7 @@ mod corr_conv_tests {
         let in1 = m1.map(|x| Complex64::new(x, 0.0)) + m2.map(|x| Complex64::new(0.0, x));
         let in2 = m3.map(|x| Complex64::new(x, 0.0)) + m4.map(|x| Complex64::new(0.0, x));
 
-        assert!(approx_eq!(Matrix<Complex64>, in1.conv(&in2), in1.fft_conv(&in2), epsilon = 1e-10));
+        assert!(approx_eq!(Matrix<Complex64>, in1.conv(&in2).unwrap(), in1.fft_conv(&in2), epsilon = 1e-10));
     }
 
     #[test]
@@ -229,7 +298,7 @@ mod corr_conv_tests {
 
         assert!(approx_eq!(Matrix<Complex64>, in1.fft_corr_rows(&in2).unwrap(), in1.corr_rows(&in2).unwrap(), epsilon = 1e-10));
         assert!(approx_eq!(Matrix<Complex64>, in1.fft_corr_cols(&in2).unwrap(), in1.corr_cols(&in2).unwrap(), epsilon = 1e-10));
-        assert!(approx_eq!(Matrix<Complex64>, in1.fft_corr(&in2), in1.corr(&in2), epsilon = 1e-10));
+        assert!(approx_eq!(Matrix<Complex64>, in1.fft_corr(&in2), in1.corr(&in2).unwrap(), epsilon = 1e-10));
     }
 
     #[test]
@@ -244,7 +313,7 @@ mod corr_conv_tests {
 
         assert!(approx_eq!(Matrix<Complex64>, in1.fft_corr_rows(&in2).unwrap(), in1.corr_rows_mt(&in2).unwrap(), epsilon = 1e-10));
         assert!(approx_eq!(Matrix<Complex64>, in1.fft_corr_cols(&in2).unwrap(), in1.corr_cols_mt(&in2).unwrap(), epsilon = 1e-10));
-        assert!(approx_eq!(Matrix<Complex64>, in1.fft_corr(&in2), in1.corr_mt(&in2), epsilon = 1e-10));
+        assert!(approx_eq!(Matrix<Complex64>, in1.fft_corr(&in2), in1.corr_mt(&in2).unwrap(), epsilon = 1e-10));
     }
 
     #[test]
