@@ -31,7 +31,6 @@ impl Shape {
     }
 
     /// Sets the value at a given axis.
-    ///
     /// This fails if the axis is out of bounds.
     pub fn set(&mut self, axis: usize, value: usize) -> Result<(), TensorErrors> {
         if axis >= self.rank() {
@@ -52,7 +51,6 @@ impl Shape {
     }
 
     /// This gives the address for a corresponding shape index.
-    ///
     /// This fails if the index is out of bounds.
     pub fn address(&self, index: Vec<usize>) -> Result<usize, TensorErrors> {
         if index.len() != self.rank() {
@@ -76,7 +74,6 @@ impl Shape {
     }
 
     /// Computes the tensor index for a given address.
-    ///
     /// This fails if the address is out of bounds.
     pub fn tensor_index(&self, address: usize) -> Result<Vec<usize>, TensorErrors> {
         if address >= self.element_count() {

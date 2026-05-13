@@ -8,7 +8,6 @@ pub struct Transpose {
 
 impl Transpose {
     /// Constructs a new transpose.
-    ///
     /// This will fail if the permutation is not a rearrangement of `(0..n)`.
     pub fn new(permutation: &Vec<usize>) -> Result<Self, TensorErrors> {
         let mut perm_copy = permutation.to_vec();
@@ -34,7 +33,6 @@ impl Transpose {
     }
 
     /// Swaps two axes.
-    ///
     /// This fails if either axis is out of bounds.
     pub fn swap_axes(&self, axis1: usize, axis2: usize) -> Result<Self, TensorErrors> {
         if axis1 >= self.permutation.len() || axis2 >= self.permutation.len() {
@@ -48,7 +46,6 @@ impl Transpose {
     }
 
     /// Returns this transpose applied to `old_shape`.
-    ///
     /// This fails if `old_shape.rank() != self.permutation().len()`.
     pub fn new_shape(&self, old_shape: &Shape) -> Result<Shape, TensorErrors> {
         if old_shape.rank() != self.permutation.len() {
@@ -68,7 +65,6 @@ impl Transpose {
     }
 
     /// Returns the old shape that would have been transformed into `new_shape` by this transpose.
-    /// 
     /// This fails if `new_shape.rank() != self.permutation().len()`.
     pub fn old_shape(&self, new_shape: &Shape) -> Result<Shape, TensorErrors> {
         if new_shape.rank() != self.permutation.len() {
@@ -90,7 +86,6 @@ impl Transpose {
     }
 
     /// Returns this transpose applied to `old_index`.
-    /// 
     /// This fails if `old_index.len() != self.permutation().len()`.
     pub fn new_index(&self, old_index: &[usize]) -> Result<Vec<usize>, TensorErrors> {
         if old_index.len() != self.permutation.len() {
@@ -110,7 +105,6 @@ impl Transpose {
     }
 
     /// Returns the old index that would have been transformed into `new_index` by this transpose.
-    /// 
     /// This fails if `new_index.len() != self.permutation().len()`.
     pub fn old_index(&self, new_index: &[usize]) -> Result<Vec<usize>, TensorErrors> {
         if new_index.len() != self.permutation.len() {

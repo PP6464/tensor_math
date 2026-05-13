@@ -17,7 +17,6 @@ pub struct Matrix<T> {
 
 impl<T> Matrix<T> {
     /// Returns a new matrix with the given rows and columns and specified elements.
-    ///
     /// This fails if `elements.len() != rows * cols`.
     pub fn new(rows: usize, cols: usize, elements: Vec<T>) -> Result<Matrix<T>, TensorErrors> {
         Ok(Matrix {
@@ -63,7 +62,6 @@ impl<T> TryFrom<Tensor<T>> for Matrix<T> {
     type Error = TensorErrors;
 
     /// Converts the tensor into a matrix.
-    ///
     /// This fails if `tensor.rank() != 2`.
     fn try_from(tensor: Tensor<T>) -> Result<Self, Self::Error> {
         if tensor.rank() != 2 {

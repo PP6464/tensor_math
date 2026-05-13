@@ -15,8 +15,8 @@ use crate::definitions::errors::TensorErrors;
 
     #[test]
     fn is_square() {
-        let m1 = Matrix::<i32>::from_shape(2, 2).unwrap();
-        let m2 = Matrix::<i32>::from_shape(2, 3).unwrap();
+        let m1 = Matrix::<i32>::from_shape(2, 2);
+        let m2 = Matrix::<i32>::from_shape(2, 3);
 
         assert!(m1.is_square());
         assert!(!m2.is_square());
@@ -25,7 +25,7 @@ use crate::definitions::errors::TensorErrors;
     #[test]
     #[should_panic]
     fn invalid_index() {
-        let m1 = Matrix::<i32>::from_shape(2, 2).unwrap();
+        let m1 = Matrix::<i32>::from_shape(2, 2);
         m1[(2, 2)];
     }
 

@@ -28,7 +28,7 @@ impl Matrix<f64> {
                 0.0 => 1.0,
                 x => x.signum(),
             } * vec_bottom.iter().map(|x| x * x).sum::<f64>().sqrt();
-            let mut e1 = Matrix::<f64>::from_shape(vec_bottom.rows, vec_bottom.cols)?;
+            let mut e1 = Matrix::<f64>::from_shape(vec_bottom.rows, vec_bottom.cols);
             e1[&[0, 0]] = 1.0;
             let v = vec_bottom - e1 * alpha;
 
@@ -100,7 +100,7 @@ impl Matrix<Complex64> {
                 Complex64::ZERO => Complex64::ONE,
                 x => x / Complex64::abs(x),
             } * vec_bottom.iter().map(|x| <f64 as Into<Complex64>>::into((x * x).abs())).sum::<Complex64>().sqrt();
-            let mut e1 = Matrix::<Complex64>::from_shape(vec_bottom.rows, vec_bottom.cols)?;
+            let mut e1 = Matrix::<Complex64>::from_shape(vec_bottom.rows, vec_bottom.cols);
             e1[&[0, 0]] = Complex64::ONE;
             let v = vec_bottom - e1 * alpha;
 

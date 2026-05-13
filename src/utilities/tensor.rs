@@ -17,7 +17,6 @@ use std::thread::scope;
 
 impl<T> Tensor<T> {
     /// Reshapes the tensor.
-    ///
     /// This fails if `new_shape.element_count() != self.shape().element_count()`.
     pub fn reshape(self, new_shape: &Shape) -> Result<Tensor<T>, TensorErrors> {
         if new_shape.element_count() != self.shape.element_count() {
@@ -28,7 +27,6 @@ impl<T> Tensor<T> {
     }
 
     /// Flatten a tensor on a given dimension.
-    ///
     /// This fails if the shape of the tensor at the given axis is not 1,
     /// or if the axis is out-of-bounds.
     pub fn flatten(self, axis: usize) -> Result<Tensor<T>, TensorErrors> {
@@ -71,7 +69,6 @@ impl<T: Clone> Tensor<T> {
     }
 
     /// Concatenates a tensor with another tensor along the specified dimension.
-    ///
     /// This fails if `self.shape()[i] != other.shape()[i]` for all `i` that is not `axis`,
     /// or if the ranks do not match.
     pub fn concat(&self, other: &Tensor<T>, axis: usize) -> Result<Tensor<T>, TensorErrors> {
@@ -153,7 +150,6 @@ impl<T: Clone> Tensor<T> {
     }
 
     /// Returns a cloned immutable slice to a specified region in the tensor.
-    ///
     /// This fails if `range.start > range.end` for any index range,
     /// or if the region includes an out-of-bounds index.
     pub fn slice(&self, indices: &[Range<usize>]) -> Result<Tensor<T>, TensorErrors> {
@@ -212,7 +208,6 @@ impl<T: Clone> Tensor<T> {
     }
 
     /// Returns a mutable slice of a specified region in the tensor.
-    ///
     /// This fails if `range.start > range.end` for any index range,
     /// or if the region includes an out-of-bounds index.
     pub fn slice_mut(
@@ -261,7 +256,6 @@ impl<T: Clone> Tensor<T> {
     }
 
     /// Flips a tensor along a list of specified axes.
-    ///
     /// This fails if any of the axes are out-of-bounds.
     pub fn flip_axes(&self, axes: &HashSet<usize>) -> Result<Tensor<T>, TensorErrors> {
         for &axis in axes.iter() {
@@ -294,7 +288,6 @@ impl<T: Clone> Tensor<T> {
     }
 
     /// Transposes a tensor and returns the result.
-    ///
     /// This fails if `self.rank() != transpose.permutation().len()`.
     pub fn transpose(&self, transpose: &Transpose) -> Result<Tensor<T>, TensorErrors> {
         if transpose.permutation.len() != self.shape().rank() {
@@ -322,9 +315,8 @@ impl<T: Clone> Tensor<T> {
     /// The custom function will take a `Tensor<T>` that corresponds to the slice
     /// that the kernel covers. If the kernel is hanging over the edge of the tensor,
     /// then only the bit of the tensor that fits is included.
-    ///
     /// This fails if the kernel shape or stride shape contains 0, or if either of their ranks
-    /// do not match the rank of the input tensor.
+    /// do not match the rank of the input tensor, or if the tensor is empty or has rank 0.
     pub fn pool<O: Clone>(
         &self,
         pool_fn: impl Fn(Tensor<T>) -> O,
@@ -406,9 +398,8 @@ impl<T: Clone> Tensor<T> {
     /// The custom function will take a `Tensor<T>` that corresponds to the slice
     /// that the kernel covers. If the kernel is hanging over the edge of the tensor,
     /// then only the bit of the tensor that fits is included.
-    ///
     /// This fails if the kernel shape or stride shape contains 0, or if either of their ranks
-    /// do not match the rank of the input tensor.
+    /// do not match the rank of the input tensor, or if the tensor is empty or has rank 0.
     pub fn pool_indexed<O: Clone>(
         &self,
         pool_fn: impl Fn(Vec<usize>, Tensor<T>) -> O,
@@ -489,7 +480,6 @@ impl<T: Clone> Tensor<T> {
 
 impl<T: Clone + Send + Sync> Tensor<T> {
     /// Concatenates a tensor with another tensor along the specified dimension (using multiple threads).
-    ///
     /// This fails if `self.shape()[i] != other.shape()[i]` for all `i` that is not `axis`,
     /// or if the ranks do not match.
     pub fn concat_mt(&self, other: &Tensor<T>, axis: usize) -> Result<Tensor<T>, TensorErrors> {
@@ -590,7 +580,6 @@ impl<T: Clone + Send + Sync> Tensor<T> {
     }
 
     /// Flips a tensor along specified axes (using multiple threads).
-    ///
     /// This fails if the axes are out of bounds.
     pub fn flip_axes_mt(&self, axes: &HashSet<usize>) -> Result<Tensor<T>, TensorErrors> {
         let mut res = self.clone();
@@ -630,6 +619,7 @@ impl<T: Clone + Send + Sync> Tensor<T> {
     }
 
     /// Transposes a tensor (using multiple threads).
+    /// This fails if `self.rank() != transpose.permutation().len()`.
     pub fn transpose_mt(&self, transpose: &Transpose) -> Result<Tensor<T>, TensorErrors> {
         if transpose.permutation.len() != self.shape().rank() {
             return Err(TensorErrors::TransposeIncompatibleRank {
@@ -671,9 +661,8 @@ impl<T: Clone + Send + Sync> Tensor<T> {
     /// that the kernel covers. If the kernel is hanging over the edge of the tensor,
     /// then only the bit of the tensor that fits is included.
     /// As this is multithreaded, a reference to the pooling function is expected.
-    ///
     /// This fails if the kernel shape or stride shape contains 0, or if either of their ranks
-    /// do not match the rank of the input tensor.
+    /// do not match the rank of the input tensor, or if the tensor is empty or has rank 0.
     pub fn pool_indexed_mt<O: Clone + Send + Sync>(
         &self,
         pool_fn: &(impl Fn(Vec<usize>, Tensor<T>) -> O + Sync),
@@ -756,9 +745,8 @@ impl<T: Clone + Send + Sync> Tensor<T> {
     /// that the kernel covers. If the kernel is hanging over the edge of the tensor,
     /// then only the bit of the tensor that fits is included.
     /// As this is multithreaded, a reference to the pooling function is expected.
-    ///
     /// This fails if the kernel shape or stride shape contains 0, or if either of their ranks
-    /// do not match the rank of the input tensor.
+    /// do not match the rank of the input tensor, or if the tensor is empty or has rank 0.
     pub fn pool_mt<O: Clone + Send + Sync>(
         &self,
         pool_fn: &(impl Fn(Tensor<T>) -> O + Sync),

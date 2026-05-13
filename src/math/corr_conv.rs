@@ -9,7 +9,8 @@ use std::collections::HashSet;
 use std::ops::{Add, Mul};
 
 impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Tensor<T> {
-    /// Computes the correlation of two tensors across specified axes
+    /// Computes the correlation of two tensors across specified axes.
+    /// This fails if the ranks of the tensors do not match, if the rank is zero, if either tensor is empty, if any axis is out of bounds, or if the shapes are incompatible on non-correlated axes.
     pub fn corr_axes(
         &self,
         other: &Tensor<T>,
@@ -145,7 +146,8 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Tensor<T> {
             .transpose(&inv_perm)?)
     }
 
-    /// Computes the correlation of two tensors across all axes
+    /// Computes the correlation of two tensors across all axes.
+    /// This fails if the ranks of the tensors do not match, if the rank is zero, or if either tensor is empty.
     pub fn corr(&self, other: &Tensor<T>) -> Result<Tensor<T>, TensorErrors> {
         if self.rank() != other.rank() {
             return Err(TensorErrors::RanksDoNotMatch(self.rank(), other.rank()));
@@ -203,14 +205,16 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Tensor<T> {
             .slice(&res_shape.0.iter().map(|&x| 0..x).collect::<Vec<_>>())?)
     }
 
-    /// Computes the convolution of two matrices across all axes
+    /// Computes the convolution of two matrices across all axes.
+    /// This fails if the underlying correlation fails, typically due to rank mismatch or empty tensors.
     pub fn conv(&self, other: &Tensor<T>) -> Result<Tensor<T>, TensorErrors> {
         self.corr(&other.flip())
     }
 }
 
 impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Matrix<T> {
-    /// Computes the correlations of two matrices across the columns
+    /// Computes the correlations of two matrices across the columns.
+    /// This fails if the number of columns in the two matrices do not match, or if either matrix is empty.
     pub fn corr_cols(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
         if self.cols != other.cols {
             return Err(TensorErrors::ShapesIncompatible);
@@ -241,7 +245,8 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Matrix<T> {
             .slice(0..self.rows + other.rows - 1, 0..self.cols)?)
     }
 
-    /// Computes the correlations of two matrices across the rows
+    /// Computes the correlations of two matrices across the rows.
+    /// This fails if the number of rows in the two matrices do not match, or if either matrix is empty.
     pub fn corr_rows(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
         if self.rows != other.rows {
             return Err(TensorErrors::ShapesIncompatible);
@@ -272,7 +277,8 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Matrix<T> {
             .slice(0..self.rows, 0..self.cols + other.cols - 1)?)
     }
 
-    /// Computes the correlation of two matrices across rows and columns
+    /// Computes the correlation of two matrices across rows and columns.
+    /// This fails if either matrix is empty.
     pub fn corr(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
         if self.is_empty() || other.is_empty() {
             return Err(TensorErrors::TensorEmpty { op: "Correlation" });
@@ -309,14 +315,16 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Matrix<T> {
             .slice(0..res_rows, 0..res_cols)?)
     }
 
-    /// Computes the convolution of two matrices across rows and columns
+    /// Computes the convolution of two matrices across rows and columns.
+    /// This fails if the underlying correlation fails, typically due to empty matrices.
     pub fn conv(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
         self.corr(&other.flip())
     }
 }
 
 impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Send + Sync> Tensor<T> {
-    /// Computes the correlation of two tensors across specified axes on multiple threads
+    /// Computes the correlation of two tensors across specified axes on multiple threads.
+    /// This fails if the ranks of the tensors do not match, if the rank is zero, if either tensor is empty, if any axis is out of bounds, or if the shapes are incompatible on non-correlated axes.
     pub fn corr_axes_mt(
         &self,
         other: &Tensor<T>,
@@ -451,7 +459,8 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Send + Sync> Tensor<T
             .transpose(&inv_perm)?)
     }
 
-    /// Computes the correlation of two tensors across all axes on multiple threads
+    /// Computes the correlation of two tensors across all axes on multiple threads.
+    /// This fails if the ranks of the tensors do not match, if the rank is zero, or if either tensor is empty.
     pub fn corr_mt(&self, other: &Tensor<T>) -> Result<Tensor<T>, TensorErrors> {
         if self.rank() != other.rank() {
             return Err(TensorErrors::RanksDoNotMatch(self.rank(), other.rank()));
@@ -509,14 +518,16 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Send + Sync> Tensor<T
             .slice(&res_shape.0.iter().map(|&x| 0..x).collect::<Vec<_>>())?)
     }
 
-    /// Computes the convolution of two tensors across all axes on multiple threads
+    /// Computes the convolution of two tensors across all axes on multiple threads.
+    /// This fails if the underlying correlation fails, typically due to rank mismatch or empty tensors.
     pub fn conv_mt(&self, other: &Tensor<T>) -> Result<Tensor<T>, TensorErrors> {
         self.corr_mt(&other.flip())
     }
 }
 
 impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Send + Sync> Matrix<T> {
-    /// Computes the correlation of two tensors across all axes on multiple threads
+    /// Computes the correlation of two tensors across all axes on multiple threads.
+    /// This fails if either matrix is empty.
     pub fn corr_mt(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
         if self.is_empty() || other.is_empty() {
             return Err(TensorErrors::TensorEmpty { op: "Correlation" });
@@ -553,12 +564,14 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Send + Sync> Matrix<T
             .slice(0..res_rows, 0..res_cols)?)
     }
 
-    /// Computes the convolution of two matrices across rows and columns\
+    /// Computes the convolution of two matrices across rows and columns.
+    /// This fails if the underlying correlation fails, typically due to empty matrices.
     pub fn conv_mt(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
         self.corr_mt(&other.flip())
     }
 
-    /// Computes the correlations of two matrices across the columns
+    /// Computes the correlations of two matrices across the columns.
+    /// This fails if the number of columns in the two matrices do not match, or if either matrix is empty.
     pub fn corr_cols_mt(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
         if self.cols != other.cols {
             return Err(TensorErrors::ShapesIncompatible);
@@ -589,7 +602,8 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Send + Sync> Matrix<T
             .slice(0..self.rows + other.rows - 1, 0..self.cols)?)
     }
 
-    /// Computes the correlations of two matrices across the rows
+    /// Computes the correlations of two matrices across the rows.
+    /// This fails if the number of rows in the two matrices do not match, or if either matrix is empty.
     pub fn corr_rows_mt(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
         if self.rows != other.rows {
             return Err(TensorErrors::ShapesIncompatible);

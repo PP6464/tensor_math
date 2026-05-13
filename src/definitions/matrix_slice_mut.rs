@@ -15,7 +15,6 @@ pub struct MatrixSliceMut<'a, T> {
 
 impl<'a, T: Clone> MatrixSliceMut<'a, T> {
     /// Sets all the values in the mutable slice to the values in the given input.
-    ///
     /// This fails if the input does not have the same shape as the slice.
     pub fn set_all(&mut self, values: &Matrix<T>) -> Result<(), TensorErrors> {
         if self.end.0 - self.start.0 != values.rows || self.end.1 - self.start.1 != values.cols {

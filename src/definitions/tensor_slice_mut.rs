@@ -14,7 +14,6 @@ pub struct TensorSliceMut<'a, T> {
 
 impl<'a, T: Clone> TensorSliceMut<'a, T> {
     /// Sets all the values in the mutable slice to the given values.
-    ///
     /// This fails if the shape of the values does not match the slice shape.
     pub fn set_all(&mut self, values: &Tensor<T>) -> Result<(), TensorErrors> {
         let slice_shape = Shape::new(

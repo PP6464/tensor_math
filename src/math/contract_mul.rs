@@ -17,6 +17,7 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Tensor<T> {
     /// E.g: A tensor of shape (a,b,c) multiplied in this way by a tensor of shape (c, d, e, f)
     /// will produce a tensor of shape (a, b, d, e, f) by the following formula:
     /// result[&[i, j, k, l, m\]\] = sum(x=0, x=c) { first[&[i, j, x\]\] * second[&[x, k, l, m\]\] }.
+    /// This fails if the tensors have shapes that are not compatible.
     pub fn contract_mul(&self, other: &Tensor<T>) -> Result<Tensor<T>, TensorErrors> {
         if self.rank() == 0 {
             return Ok(other.map_refs(|x| self.elements[0].clone() * x.clone()))
@@ -74,7 +75,8 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Tensor<T> {
         resultant_elements.into_tensor().reshape(&resultant_shape)
     }
 
-    /// Computes the dot product of two tensors, i.e. the element-wise product, then the sum of the result
+    /// Computes the dot product of two tensors, i.e. the element-wise product, then the sum of the result.
+    /// This fails if the tensors do not have the same shape.
     pub fn dot(&self, other: &Tensor<T>) -> Result<T, TensorErrors> {
         if self.shape != other.shape {
             return Err(TensorErrors::ShapesIncompatible);
@@ -86,16 +88,19 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Tensor<T> {
 
 impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Matrix<T> {
     /// Does matrix multiplication with another matrix.
+    /// This fails if the matrices are not multiplicatively compatible.
     pub fn contract_mul(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
         self.tensor.contract_mul(&other.tensor)?.try_into()
     }
 
     /// Does matrix multiplication with another matrix.
+    /// This fails if the matrices are not multiplicatively compatible.
     pub fn mat_mul(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
         self.contract_mul(other)
     }
     
     /// Computes the dot product of the two matrices, i.e. the elementwise product, then the sum of the result.
+    /// This fails if the matrices do not have the same shape.
     pub fn dot(&self, other: &Matrix<T>) -> Result<T, TensorErrors> {
         if self.shape != other.shape {
             return Err(TensorErrors::ShapesIncompatible);
@@ -111,6 +116,7 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Send + Sync> Tensor<T
     /// E.g: A tensor of shape (a,b,c) multiplied in this way by a tensor of shape (c, d, e, f)
     /// will produce a tensor of shape (a, b, d, e, f) by the following formula:
     /// result[&[i, j, k, l, m\]\] = sum(x=0, x=c) { first[&[i, j, x\]\] * second[&[x, k, l, m\]\] }.
+    /// This fails if the tensors have shapes that are not compatible.
     pub fn contract_mul_mt(&self, other: &Tensor<T>) -> Result<Tensor<T>, TensorErrors> {
         if self.rank() == 0 {
             return Ok(other.map_refs(|x| self.elements[0].clone() * x.clone()));
@@ -202,12 +208,14 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Send + Sync> Tensor<T
 }
 
 impl<T: Clone + Add<Output = T> + Mul<Output = T> + Send + Sync + Zero> Matrix<T> {
-    /// Does matrix multiplication on multiple threads
+    /// Does matrix multiplication on multiple threads.
+    /// This fails if the matrices are not multiplicatively compatible
     pub fn contract_mul_mt(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
         self.tensor.contract_mul_mt(&other.tensor)?.try_into()
     }
 
-    /// Does matrix multiplication on multiple threads. This is just an alternate name for the method
+    /// Does matrix multiplication on multiple threads.
+    /// This fails if the matrices are not multiplicatively compatible
     pub fn mat_mul_mt(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
         self.contract_mul_mt(other)
     }

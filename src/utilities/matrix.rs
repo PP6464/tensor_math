@@ -16,7 +16,6 @@ use std::thread::scope;
 
 impl<T> Matrix<T> {
     /// Reshapes the matrix.
-    ///
     /// This will fail if `new_rows * new_cols != self.element_count()`.
     pub fn reshape(self, new_rows: usize, new_cols: usize) -> Result<Matrix<T>, TensorErrors> {
         Ok(Matrix {
@@ -62,7 +61,6 @@ impl<T: Clone> Matrix<T> {
     }
 
     /// Concatenates two matrices along the columns.
-    ///
     /// This fails if the number of columns do not match.
     pub fn concat_cols(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
         let res = self.tensor.concat(&other.tensor, 1)?;
@@ -76,7 +74,6 @@ impl<T: Clone> Matrix<T> {
     }
 
     /// Concatenates two matrices along the rows.
-    ///
     /// This fails if the number of rows do not match.
     pub fn concat_rows(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
         let res = self.tensor.concat(&other.tensor, 0)?;
@@ -106,7 +103,6 @@ impl<T: Clone> Matrix<T> {
     }
 
     /// Returns an immutable cloned slice to a specified region of the matrix.
-    ///
     /// This fails if for either range, `range.start > range.end`,
     /// or if the indices include an out-of-bounds index.
     pub fn slice(
@@ -124,7 +120,6 @@ impl<T: Clone> Matrix<T> {
     }
 
     /// Returns a mutable slice to a specific region of the matrix.
-    ///
     /// This fails if for either range, `range.start > range.end`,
     /// or if the indices include an out-of-bounds index.
     pub fn slice_mut(
@@ -216,6 +211,7 @@ impl<T: Clone> Matrix<T> {
     /// Pools a `Matrix<T>` into a `Matrix<O>` using a custom pooling function.
     /// The custom function will take a `Matrix<T>` that corresponds to the slice that the kernel covers.
     /// If the kernel is hanging over the edge of the matrix, then only the bit of the matrix that fits is included.
+    /// This will fail if either the kernel or stride shape contains 0, or if the matrix is empty.
     pub fn pool<O: Clone>(
         &self,
         pool_fn: impl Fn(Matrix<T>) -> O,
@@ -257,6 +253,7 @@ impl<T: Clone> Matrix<T> {
     /// Pools a `Matrix<T>` into a `Matrix<O>` using a custom pooling function with the index.
     /// The custom function will take a `Matrix<T>` that corresponds to the slice that the kernel covers.
     /// If the kernel is hanging over the edge of the matrix, then only the bit of the matrix that fits is included.
+    /// This will fail if either the kernel or stride shape contains 0, or if the matrix is empty.
     pub fn pool_indexed<O: Clone>(
         &self,
         pool_fn: impl Fn((usize, usize), Matrix<T>) -> O,
@@ -298,7 +295,6 @@ impl<T: Clone> Matrix<T> {
 
 impl<T: Clone + Send + Sync> Matrix<T> {
     /// Concatenates two matrices along the columns.
-    ///
     /// This fails if the number of columns do not match.
     pub fn concat_cols_mt(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
         let res_tensor = self.tensor.concat_mt(&other.tensor, 1)?;
@@ -307,7 +303,6 @@ impl<T: Clone + Send + Sync> Matrix<T> {
     }
 
     /// Concatenates a matrix along the rows.
-    ///
     /// This fails if the number of rows do not match.
     pub fn concat_rows_mt(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
         let res_tensor = self.tensor.concat_mt(&other.tensor, 0)?;
@@ -406,6 +401,7 @@ impl<T: Clone + Send + Sync> Matrix<T> {
     /// The custom function will take a `Matrix<T>` that corresponds to the slice that the kernel covers.
     /// If the kernel is hanging over the edge of the matrix, then only the bit of the matrix that fits is included.
     /// As this is multithreaded, a reference to the pooling function is expected.
+    /// This will fail if either the kernel or stride shape contains 0, or if the matrix is empty.
     pub fn pool_mt<O: Clone + Send + Sync>(
         &self,
         pool_fn: &(impl Fn(Matrix<T>) -> O + Sync),
@@ -455,6 +451,7 @@ impl<T: Clone + Send + Sync> Matrix<T> {
     /// The custom function will take a `Matrix<T>` that corresponds to the slice that the kernel covers.
     /// If the kernel is hanging over the edge of the matrix, then only the bit of the matrix that fits is included.
     /// As this is multithreaded, a reference to the pooling function is expected.
+    /// This will fail if either the kernel or stride shape contains 0, or if the matrix is empty.
     pub fn pool_indexed_mt<O: Clone + Send + Sync>(
         &self,
         pool_fn: &(impl Fn((usize, usize), Matrix<T>) -> O + Sync),
@@ -503,12 +500,12 @@ impl<T: Clone + Send + Sync> Matrix<T> {
 
 impl<T: Default + Clone> Matrix<T> {
     /// Returns a matrix of the specified shape filled with `T::default()`.
-    pub fn from_shape(rows: usize, cols: usize) -> Result<Matrix<T>, TensorErrors> {
-        Ok(Matrix {
+    pub fn from_shape(rows: usize, cols: usize) -> Matrix<T> {
+        Matrix {
             tensor: Tensor::<T>::from_shape(&shape![rows, cols]),
             rows,
             cols,
-        })
+        }
     }
 }
 
