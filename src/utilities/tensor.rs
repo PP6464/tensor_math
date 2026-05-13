@@ -8,13 +8,17 @@ use crate::definitions::transpose::Transpose;
 use crate::shape;
 use crate::utilities::internal_functions::dot_vectors;
 use num::{ToPrimitive, Zero};
+use rand::distr::{Distribution, StandardUniform};
+use rand::{Fill, Rng};
 use std::collections::HashSet;
 use std::ops::{Add, Div, Range};
 use std::sync::Arc;
 use std::thread::scope;
 
 impl<T> Tensor<T> {
-    /// Reshape a `Tensor`, consuming it and returning the new one
+    /// Reshapes the tensor.
+    ///
+    /// This fails if `new_shape.element_count() != self.shape().element_count()`.
     pub fn reshape(self, new_shape: &Shape) -> Result<Tensor<T>, TensorErrors> {
         if new_shape.element_count() != self.shape.element_count() {
             return Err(TensorErrors::ShapeSizeDoesNotMatch);
@@ -23,32 +27,35 @@ impl<T> Tensor<T> {
         Ok(Tensor::new(new_shape, self.elements)?)
     }
 
-    /// Flatten a `Tensor` on a given dimension, consuming it and returning the new one
-    pub fn flatten(self, dim: usize) -> Result<Tensor<T>, TensorErrors> {
-        if dim >= self.rank() {
+    /// Flatten a tensor on a given dimension.
+    ///
+    /// This fails if the shape of the tensor at the given axis is not 1,
+    /// or if the axis is out-of-bounds.
+    pub fn flatten(self, axis: usize) -> Result<Tensor<T>, TensorErrors> {
+        if axis >= self.rank() {
             return Err(TensorErrors::AxisOutOfBounds {
-                axis: dim,
+                axis,
                 rank: self.rank(),
             });
         }
 
-        if self.shape[dim] != 1 {
-            return Err(TensorErrors::AxisIsNotOne(dim));
+        if self.shape[axis] != 1 {
+            return Err(TensorErrors::AxisIsNotOne(axis));
         }
 
         let mut copy = self.shape;
-        copy.0.remove(dim);
+        copy.0.remove(axis);
         Ok(Tensor::new(&copy, self.elements)?)
     }
 
-    /// Apply a transformation to a `Tensor` element-wise, consuming the original and returning the result
+    /// Applies the given function over the entire tensor elementwise by consuming the elements.
     pub fn map<O>(self, closure: impl FnMut(T) -> O) -> Tensor<O> {
         let shape = self.shape().clone();
         let new_elements = self.elements.into_iter().map(closure).collect();
         Tensor::new(&shape, new_elements).unwrap()
     }
 
-    /// Apply a transformation to a tensor element-wise, but not consuming the original tensor
+    /// Applies the given function over the entire tensor elementwise by reference.
     pub fn map_refs<O>(&self, closure: impl FnMut(&T) -> O) -> Tensor<O> {
         let shape = self.shape().clone();
         let new_elements = self.elements.iter().map(closure).collect();
@@ -57,22 +64,32 @@ impl<T> Tensor<T> {
 }
 
 impl<T: Clone> Tensor<T> {
-    /// Creates a tensor from a single value with specified shape
+    /// Creates a tensor from a single value with specified shape.
     pub fn from_value(shape: &Shape, value: T) -> Self {
         let elements = vec![value; shape.element_count()];
         Tensor::new(shape, elements).unwrap()
     }
 
-    /// Concatenates a `Tensor` with another `Tensor` along the specified dimension
-    pub fn concat(&self, other: &Tensor<T>, dim: usize) -> Result<Tensor<T>, TensorErrors> {
+    /// Concatenates a tensor with another tensor along the specified dimension.
+    ///
+    /// This fails if `self.shape()[i] != other.shape()[i]` for all `i` that is not `axis`,
+    /// or if the ranks do not match.
+    pub fn concat(&self, other: &Tensor<T>, axis: usize) -> Result<Tensor<T>, TensorErrors> {
         if self.rank() != other.rank() {
             return Err(TensorErrors::RanksDoNotMatch(self.rank(), other.rank()));
         }
         let mut resultant_shape: Vec<usize> = Vec::with_capacity(self.rank());
 
+        if axis >= self.rank() {
+            return Err(TensorErrors::AxisOutOfBounds {
+                axis,
+                rank: self.rank(),
+            });
+        }
+
         // Ensure shapes match on every dim that is not the dim along which to concatenate
         for i in 0..self.rank() {
-            if i == dim {
+            if i == axis {
                 resultant_shape.push(self.shape[i] + other.shape[i]);
                 continue;
             }
@@ -84,18 +101,25 @@ impl<T: Clone> Tensor<T> {
             resultant_shape.push(self.shape[i]);
         }
 
-        let resultant_shape: Shape = resultant_shape.try_into()?;
+        // Check for emptiness and short-circuit here as we have ensured shape compatibility.
+        if self.shape.0.iter().any(|&x| x == 0) {
+            return Ok(other.clone());
+        } else if other.shape.0.iter().any(|&x| x == 0) {
+            return Ok(self.clone());
+        }
+
+        let resultant_shape: Shape = resultant_shape.into();
         let mut resultant_elements: Vec<T> = Vec::with_capacity(resultant_shape.element_count());
 
-        if dim == 0 {
+        if axis == 0 {
             // If the dimension is 0 we can just merge the elements one after another
             resultant_elements = self.elements.clone();
             resultant_elements.extend(other.elements.clone());
             return Ok(Tensor::new(&resultant_shape, resultant_elements)?);
         }
 
-        let mut self_chunks = self.elements.chunks(self.strides[dim - 1]);
-        let mut other_chunks = other.elements.chunks(other.strides[dim - 1]);
+        let mut self_chunks = self.elements.chunks(self.strides[axis - 1]);
+        let mut other_chunks = other.elements.chunks(other.strides[axis - 1]);
 
         // Merge together chunks from self and other in the correct manner to get
         // the result for concatenating self and other (in that order)
@@ -111,39 +135,44 @@ impl<T: Clone> Tensor<T> {
         Ok(result)
     }
 
-    /// Give an iterable that is enumerated with tensor indices
+    /// Returns an iterator that is enumerated with tensor indices.
     pub fn enumerated_iter(&self) -> impl Iterator<Item = (Vec<usize>, T)> + '_ {
         self.elements
             .iter()
             .cloned()
             .enumerate()
-            .map(|(index, element)| (self.shape.tensor_index(index), element))
+            .map(|(index, element)| (self.shape.tensor_index(index).unwrap(), element))
     }
 
-    /// Give a mutable iterable that is enumerated with tensor indices
-    pub fn enumerated_iter_mut(&mut self) -> impl Iterator<Item = (Vec<usize>, &mut T)> + '_  {
+    /// Returns a mutable iterator that is enumerated with tensor indices.
+    pub fn enumerated_iter_mut(&mut self) -> impl Iterator<Item = (Vec<usize>, &mut T)> + '_ {
         self.elements
             .iter_mut()
             .enumerate()
-            .map(|(index, element)| (self.shape.tensor_index(index), element))
+            .map(|(index, element)| (self.shape.tensor_index(index).unwrap(), element))
     }
 
-    /// Gives a cloned immutable slice to a region in the tensor specified
-    /// by an array of range of indices for each dimension of the tensor
+    /// Returns a cloned immutable slice to a specified region in the tensor.
+    ///
+    /// This fails if `range.start > range.end` for any index range,
+    /// or if the region includes an out-of-bounds index.
     pub fn slice(&self, indices: &[Range<usize>]) -> Result<Tensor<T>, TensorErrors> {
-        // We have to check this up front because otherwise we would have subtraction with overflow
+        // We have to check this up front because otherwise we would have subtraction with underflow
         for range in indices.iter() {
-            if range.start >= range.end {
-                return Err(TensorErrors::InvalidNonEmptyInterval {
+            if range.start > range.end {
+                return Err(TensorErrors::InvalidInterval {
                     max: range.end as f64,
                     min: range.start as f64,
-                })
+                });
             }
         }
 
-        let start = indices.iter().map(|range| range.start).collect::<Vec<usize>>();
+        let start = indices
+            .iter()
+            .map(|range| range.start)
+            .collect::<Vec<usize>>();
 
-        let res_shape = Shape::new(indices.iter().map(|r| { r.end - r.start }).collect())?;
+        let res_shape = indices.iter().map(|r| r.end - r.start).collect();
 
         if indices.len() != self.rank() {
             return Err(TensorErrors::SliceIncompatibleShape {
@@ -163,10 +192,18 @@ impl<T: Clone> Tensor<T> {
             }
         }
 
-        let mut res = Tensor::<T>::from_value(&res_shape, self.first().unwrap().clone());
+        let mut res = if self.elements.is_empty() {
+            Tensor::<T>::new(&res_shape, vec![])?
+        } else {
+            Tensor::<T>::from_value(&res_shape, self.first().unwrap().clone())
+        };
 
         for (pos, val) in res.enumerated_iter_mut() {
-            let orig_index = pos.iter().zip(start.iter()).map(|(x, y)| x + y).collect::<Vec<usize>>();
+            let orig_index = pos
+                .iter()
+                .zip(start.iter())
+                .map(|(x, y)| x + y)
+                .collect::<Vec<usize>>();
 
             *val = self[&orig_index.as_slice()].clone();
         }
@@ -174,11 +211,17 @@ impl<T: Clone> Tensor<T> {
         Ok(res)
     }
 
-    /// Gives a mutable slice to a tensor in the specified range of indices.
-    pub fn slice_mut(&'_ mut self, indices: &[Range<usize>]) -> Result<TensorSliceMut<'_, T>, TensorErrors> {
+    /// Returns a mutable slice of a specified region in the tensor.
+    ///
+    /// This fails if `range.start > range.end` for any index range,
+    /// or if the region includes an out-of-bounds index.
+    pub fn slice_mut(
+        &'_ mut self,
+        indices: &[Range<usize>],
+    ) -> Result<TensorSliceMut<'_, T>, TensorErrors> {
         if indices.len() != self.rank() {
             return Err(TensorErrors::SliceIncompatibleShape {
-                slice_shape: Shape::new(indices.iter().map(|r| r.end - r.start).collect())?,
+                slice_shape: indices.iter().map(|r| r.end - r.start).collect(),
                 tensor_shape: self.shape.clone(),
             });
         }
@@ -192,17 +235,23 @@ impl<T: Clone> Tensor<T> {
                     length: self.shape[i],
                 });
             }
-            
-            if range.start >= range.end {
-                return Err(TensorErrors::InvalidNonEmptyInterval {
+
+            if range.start > range.end {
+                return Err(TensorErrors::InvalidInterval {
                     max: range.end as f64,
                     min: range.start as f64,
                 });
             }
         }
 
-        let start = indices.iter().map(|range| range.start).collect::<Vec<usize>>();
-        let end = indices.iter().map(|range| range.end).collect::<Vec<usize>>();
+        let start = indices
+            .iter()
+            .map(|range| range.start)
+            .collect::<Vec<usize>>();
+        let end = indices
+            .iter()
+            .map(|range| range.end)
+            .collect::<Vec<usize>>();
 
         Ok(TensorSliceMut {
             start,
@@ -211,7 +260,9 @@ impl<T: Clone> Tensor<T> {
         })
     }
 
-    /// Flips a tensor along a list of specified axes
+    /// Flips a tensor along a list of specified axes.
+    ///
+    /// This fails if any of the axes are out-of-bounds.
     pub fn flip_axes(&self, axes: &HashSet<usize>) -> Result<Tensor<T>, TensorErrors> {
         for &axis in axes.iter() {
             if axis >= self.rank() {
@@ -237,12 +288,14 @@ impl<T: Clone> Tensor<T> {
         Ok(res)
     }
 
-    /// Flips a tensor along all axes
+    /// Flips a tensor along all axes.
     pub fn flip(&self) -> Tensor<T> {
         self.flip_axes(&(0..self.rank()).collect()).unwrap()
     }
 
-    /// Transposes a tensor and returns the result
+    /// Transposes a tensor and returns the result.
+    ///
+    /// This fails if `self.rank() != transpose.permutation().len()`.
     pub fn transpose(&self, transpose: &Transpose) -> Result<Tensor<T>, TensorErrors> {
         if transpose.permutation.len() != self.shape().rank() {
             return Err(TensorErrors::TransposeIncompatibleRank {
@@ -266,34 +319,49 @@ impl<T: Clone> Tensor<T> {
     }
 
     /// Pools a `Tensor<T>` into a `Tensor<O>` using a custom pooling function.
-    /// The custom function will take a `Tensor<T>` that corresponds to the slice that the kernel covers.
-    /// If the kernel is hanging over the edge of the tensor, then only the bits of the tensor that fit are included.
-    /// This is reflected in the shape of the input tensor.
-    /// Default functions for `max` and `avg` are given as well.
+    /// The custom function will take a `Tensor<T>` that corresponds to the slice
+    /// that the kernel covers. If the kernel is hanging over the edge of the tensor,
+    /// then only the bit of the tensor that fits is included.
+    ///
+    /// This fails if the kernel shape or stride shape contains 0, or if either of their ranks
+    /// do not match the rank of the input tensor.
     pub fn pool<O: Clone>(
-        &self, 
+        &self,
         pool_fn: impl Fn(Tensor<T>) -> O,
-        kernel_shape: &Shape, 
-        stride_shape: &Shape, 
+        kernel_shape: &Shape,
+        stride_shape: &Shape,
         init: O,
     ) -> Result<Tensor<O>, TensorErrors> {
+        if self.rank() == 0 {
+            return Err(TensorErrors::RankZero { op: "Pooling" });
+        }
+
         if kernel_shape.rank() != self.rank() {
-            return Err(TensorErrors::RanksDoNotMatch(kernel_shape.rank(), self.rank()));
+            return Err(TensorErrors::RanksDoNotMatch(
+                kernel_shape.rank(),
+                self.rank(),
+            ));
         }
 
         if stride_shape.rank() != self.rank() {
-            return Err(TensorErrors::RanksDoNotMatch(stride_shape.rank(), self.rank()));
+            return Err(TensorErrors::RanksDoNotMatch(
+                stride_shape.rank(),
+                self.rank(),
+            ));
         }
 
-        let res_shape = &Shape::new(
-            self.shape()
-                .0
-                .iter()
-                .cloned()
-                .zip(stride_shape.0.iter().cloned())
-                .map(|(x, y)| x.div_ceil(y))
-                .collect::<Vec<usize>>(),
-        )?;
+        if kernel_shape.0.contains(&0) || stride_shape.0.contains(&0) {
+            return Err(TensorErrors::ShapeContainsZero);
+        }
+
+        let res_shape = &self
+            .shape()
+            .0
+            .iter()
+            .cloned()
+            .zip(stride_shape.0.iter().cloned())
+            .map(|(x, y)| x.div_ceil(y))
+            .collect();
 
         let mut result = Tensor::<O>::from_value(res_shape, init);
 
@@ -331,34 +399,49 @@ impl<T: Clone> Tensor<T> {
     }
 
     /// Pools a `Tensor<T>` into a `Tensor<O>` using a custom pooling function with the index.
-    /// The custom function will take a `Tensor<T>` that corresponds to the slice that the kernel covers.
-    /// If the kernel is hanging over the edge of the tensor, then only the bits of the tensor that fit are included.
-    /// This is reflected in the shape of the input tensor.
-    /// Default functions for `max` and `avg` are given as well.
+    /// The custom function will take a `Tensor<T>` that corresponds to the slice
+    /// that the kernel covers. If the kernel is hanging over the edge of the tensor,
+    /// then only the bit of the tensor that fits is included.
+    ///
+    /// This fails if the kernel shape or stride shape contains 0, or if either of their ranks
+    /// do not match the rank of the input tensor.
     pub fn pool_indexed<O: Clone>(
-        &self, 
+        &self,
         pool_fn: impl Fn(Vec<usize>, Tensor<T>) -> O,
-        kernel_shape: &Shape, 
+        kernel_shape: &Shape,
         stride_shape: &Shape,
         init: O,
     ) -> Result<Tensor<O>, TensorErrors> {
+        if self.rank() == 0 {
+            return Err(TensorErrors::RankZero { op: "Pooling" });
+        }
+
         if kernel_shape.rank() != self.rank() {
-            return Err(TensorErrors::RanksDoNotMatch(kernel_shape.rank(), self.rank()));
+            return Err(TensorErrors::RanksDoNotMatch(
+                kernel_shape.rank(),
+                self.rank(),
+            ));
         }
 
         if stride_shape.rank() != self.rank() {
-            return Err(TensorErrors::RanksDoNotMatch(stride_shape.rank(), self.rank()));
+            return Err(TensorErrors::RanksDoNotMatch(
+                stride_shape.rank(),
+                self.rank(),
+            ));
         }
 
-        let res_shape = &Shape::new(
-            self.shape()
-                .0
-                .iter()
-                .cloned()
-                .zip(stride_shape.0.iter().cloned())
-                .map(|(x, y)| x.div_ceil(y))
-                .collect::<Vec<usize>>(),
-        )?;
+        if kernel_shape.0.contains(&0) || stride_shape.0.contains(&0) {
+            return Err(TensorErrors::ShapeContainsZero);
+        }
+
+        let res_shape = &self
+            .shape()
+            .0
+            .iter()
+            .cloned()
+            .zip(stride_shape.0.iter().cloned())
+            .map(|(x, y)| x.div_ceil(y))
+            .collect();
 
         let mut result = Tensor::<O>::from_value(res_shape, init);
 
@@ -397,12 +480,22 @@ impl<T: Clone> Tensor<T> {
 }
 
 impl<T: Clone + Send + Sync> Tensor<T> {
-    /// Concatenates a `Tensor` with another `Tensor` along the specified axis.
-    /// This spawns multiple threads to handle writing to the result at the same time.
+    /// Concatenates a tensor with another tensor along the specified dimension (using multiple threads).
+    ///
+    /// This fails if `self.shape()[i] != other.shape()[i]` for all `i` that is not `axis`,
+    /// or if the ranks do not match.
     pub fn concat_mt(&self, other: &Tensor<T>, axis: usize) -> Result<Tensor<T>, TensorErrors> {
         if self.rank() != other.rank() {
             return Err(TensorErrors::RanksDoNotMatch(self.rank(), other.rank()));
         }
+
+        if axis >= self.rank() {
+            return Err(TensorErrors::AxisOutOfBounds {
+                axis,
+                rank: self.rank(),
+            });
+        }
+
         let mut resultant_shape: Vec<usize> = Vec::with_capacity(self.rank());
 
         // Ensure shapes match on every dim that is not the dim along which to concatenate
@@ -419,7 +512,13 @@ impl<T: Clone + Send + Sync> Tensor<T> {
             resultant_shape.push(self.shape[i]);
         }
 
-        let resultant_shape: Shape = resultant_shape.try_into()?;
+        if self.shape.0.iter().any(|&x| x == 0) {
+            return Ok(other.clone());
+        } else if other.shape.0.iter().any(|&x| x == 0) {
+            return Ok(self.clone());
+        }
+
+        let resultant_shape: Shape = resultant_shape.into();
 
         if axis == 0 {
             // If the dimension is 0 we can just merge the elements one after another
@@ -449,7 +548,8 @@ impl<T: Clone + Send + Sync> Tensor<T> {
 
             let thread_chunks = thread_chunks_self.zip(thread_chunks_other);
 
-            let mut res_elem_chunks = res_elems.chunks_mut(thread_chunk_size_self + thread_chunk_size_other);
+            let mut res_elem_chunks =
+                res_elems.chunks_mut(thread_chunk_size_self + thread_chunk_size_other);
 
             for (self_thread_chunk, other_thread_chunk) in thread_chunks {
                 let res_chunk = res_elem_chunks.next().unwrap();
@@ -457,7 +557,7 @@ impl<T: Clone + Send + Sync> Tensor<T> {
                 s.spawn(|| {
                     let mut self_chunks = self_thread_chunk.chunks(self_chunk_size);
                     let mut other_chunks = other_thread_chunk.chunks(other_chunk_size);
-                    let actual_count = self_chunks.len();  // On the last chunk it may not have as many as chunks_per_thread chunks
+                    let actual_count = self_chunks.len(); // On the last chunk it may not have as many as chunks_per_thread chunks
 
                     for j in 0..actual_count {
                         let current_self_chunk = self_chunks.next().unwrap();
@@ -481,7 +581,9 @@ impl<T: Clone + Send + Sync> Tensor<T> {
         Ok(result)
     }
 
-    /// Flips a tensor along specified axes
+    /// Flips a tensor along specified axes (using multiple threads).
+    ///
+    /// This fails if the axes are out of bounds.
     pub fn flip_axes_mt(&self, axes: &HashSet<usize>) -> Result<Tensor<T>, TensorErrors> {
         let mut res = self.clone();
         let self_arc = Arc::new(self.clone());
@@ -500,7 +602,7 @@ impl<T: Clone + Send + Sync> Tensor<T> {
                 let self_ref = self_arc.clone();
 
                 s.spawn(move || {
-                    let mut new_index = self.shape.tensor_index(i);
+                    let mut new_index = self.shape.tensor_index(i).unwrap();
 
                     for &axis in axes {
                         new_index[axis] = self.shape[axis] - new_index[axis] - 1;
@@ -514,24 +616,24 @@ impl<T: Clone + Send + Sync> Tensor<T> {
         Ok(res)
     }
 
-    /// Flips a tensor
+    /// Flips a tensor along all axes (using multiple threads).
     pub fn flip_mt(&self) -> Tensor<T> {
         self.flip_axes_mt(&(0..self.rank()).collect()).unwrap()
     }
 
-    /// Transposes a `Tensor` using a multithreaded implementation and returns the result
+    /// Transposes a tensor (using multiple threads).
     pub fn transpose_mt(&self, transpose: &Transpose) -> Result<Tensor<T>, TensorErrors> {
         if transpose.permutation.len() != self.shape().rank() {
             return Err(TensorErrors::TransposeIncompatibleRank {
                 rank: self.rank(),
-                trank: transpose.permutation.len()
+                trank: transpose.permutation.len(),
             });
         }
 
         let new_shape = transpose.new_shape(self.shape())?;
         let mut new_tensor = self.clone().reshape(&new_shape)?;
 
-        let elems_per_thread = 20;  // Number of elements a single thread handles
+        let elems_per_thread = 20; // Number of elements a single thread handles
 
         scope(|s| {
             for (i, elem) in new_tensor.chunks_mut(elems_per_thread).enumerate() {
@@ -540,14 +642,14 @@ impl<T: Clone + Send + Sync> Tensor<T> {
                 s.spawn(move || {
                     for j in 0..elems_per_thread {
                         let k = i * elems_per_thread + j;
-                        let new_index = new_shape_clone.tensor_index(k);
-                        let old_index = transpose.old_index(&new_index).unwrap();
+                        match new_shape_clone.tensor_index(k) {
+                            Ok(new_index) => {
+                                let old_index = transpose.old_index(&new_index).unwrap();
 
-                        if old_index.iter().enumerate().any(|(i, x)| x >= &self.shape[i]) {
-                            continue;
+                                elem[j] = self[&old_index].clone();
+                            }
+                            _ => continue,
                         }
-
-                        elem[j] = self[&old_index].clone();
                     }
                 });
             }
@@ -557,35 +659,50 @@ impl<T: Clone + Send + Sync> Tensor<T> {
     }
 
     /// Pools a `Tensor<T>` into a `Tensor<O>` using a custom pooling function with the index.
-    /// The custom function will take a `Tensor<T>` that corresponds to the slice that the kernel covers.
-    /// If the kernel is hanging over the edge of the tensor, then only the bits of the tensor that fit are included.
-    /// This is reflected in the shape of the input tensor.
-    /// Default functions for `max` and `avg` are given as well.
-    /// This is a multithreaded implementation.
+    /// The custom function will take a `Tensor<T>` that corresponds to the slice
+    /// that the kernel covers. If the kernel is hanging over the edge of the tensor,
+    /// then only the bit of the tensor that fits is included.
+    /// As this is multithreaded, a reference to the pooling function is expected.
+    ///
+    /// This fails if the kernel shape or stride shape contains 0, or if either of their ranks
+    /// do not match the rank of the input tensor.
     pub fn pool_indexed_mt<O: Clone + Send + Sync>(
-        &self, 
+        &self,
         pool_fn: &(impl Fn(Vec<usize>, Tensor<T>) -> O + Sync),
         kernel_shape: &Shape,
         stride_shape: &Shape,
         init: O,
     ) -> Result<Tensor<O>, TensorErrors> {
+        if self.rank() == 0 {
+            return Err(TensorErrors::RankZero { op: "Pooling" });
+        }
+
         if kernel_shape.rank() != self.rank() {
-            return Err(TensorErrors::RanksDoNotMatch(kernel_shape.rank(), self.rank()));
+            return Err(TensorErrors::RanksDoNotMatch(
+                kernel_shape.rank(),
+                self.rank(),
+            ));
         }
 
         if stride_shape.rank() != self.rank() {
-            return Err(TensorErrors::RanksDoNotMatch(stride_shape.rank(), self.rank()));
+            return Err(TensorErrors::RanksDoNotMatch(
+                stride_shape.rank(),
+                self.rank(),
+            ));
         }
 
-        let res_shape = &Shape::new(
-            self.shape()
-                .0
-                .iter()
-                .cloned()
-                .zip(stride_shape.0.iter().cloned())
-                .map(|(x, y)| x.div_ceil(y))
-                .collect::<Vec<usize>>(),
-        )?;
+        if kernel_shape.0.contains(&0) || stride_shape.0.contains(&0) {
+            return Err(TensorErrors::ShapeContainsZero);
+        }
+
+        let res_shape = &self
+            .shape()
+            .0
+            .iter()
+            .cloned()
+            .zip(stride_shape.0.iter().cloned())
+            .map(|(x, y)| x.div_ceil(y))
+            .collect();
 
         let mut result = Tensor::<O>::from_value(res_shape, init);
 
@@ -594,9 +711,19 @@ impl<T: Clone + Send + Sync> Tensor<T> {
 
             for (i, chunk) in res_chunks.enumerate() {
                 s.spawn(move || {
-                    let res_pos = res_shape.tensor_index(i);
+                    let res_pos = res_shape.tensor_index(i).unwrap();
                     let self_pos = res_pos.into_tensor() * stride_shape.clone().0.into_tensor();
-                    let self_end_pos = (&self_pos + &kernel_shape.clone().0.into_tensor()).iter().enumerate().map(|(i, x)| if x > &self.shape()[i] { self.shape()[i] } else { *x }).collect::<Vec<usize>>();
+                    let self_end_pos = (&self_pos + &kernel_shape.clone().0.into_tensor())
+                        .iter()
+                        .enumerate()
+                        .map(|(i, x)| {
+                            if x > &self.shape()[i] {
+                                self.shape()[i]
+                            } else {
+                                *x
+                            }
+                        })
+                        .collect::<Vec<usize>>();
 
                     let indices = self_pos
                         .iter()
@@ -613,35 +740,50 @@ impl<T: Clone + Send + Sync> Tensor<T> {
     }
 
     /// Pools a `Tensor<T>` into a `Tensor<O>` using a custom pooling function.
-    /// The custom function will take a `Tensor<T>` that corresponds to the slice that the kernel covers.
-    /// If the kernel is hanging over the edge of the tensor, then only the bits of the tensor that fit are included.
-    /// This is reflected in the shape of the input tensor.
-    /// Default functions for `max` and `avg` are given as well.
-    /// This is a multithreaded implementation.
+    /// The custom function will take a `Tensor<T>` that corresponds to the slice
+    /// that the kernel covers. If the kernel is hanging over the edge of the tensor,
+    /// then only the bit of the tensor that fits is included.
+    /// As this is multithreaded, a reference to the pooling function is expected.
+    ///
+    /// This fails if the kernel shape or stride shape contains 0, or if either of their ranks
+    /// do not match the rank of the input tensor.
     pub fn pool_mt<O: Clone + Send + Sync>(
         &self,
-        pool_fn: &(impl Fn(Tensor<T>) -> O + Sync), 
-        kernel_shape: &Shape, 
+        pool_fn: &(impl Fn(Tensor<T>) -> O + Sync),
+        kernel_shape: &Shape,
         stride_shape: &Shape,
         init: O,
     ) -> Result<Tensor<O>, TensorErrors> {
+        if self.rank() == 0 {
+            return Err(TensorErrors::RankZero { op: "Pooling" });
+        }
+
         if kernel_shape.rank() != self.rank() {
-            return Err(TensorErrors::RanksDoNotMatch(kernel_shape.rank(), self.rank()));
+            return Err(TensorErrors::RanksDoNotMatch(
+                kernel_shape.rank(),
+                self.rank(),
+            ));
         }
 
         if stride_shape.rank() != self.rank() {
-            return Err(TensorErrors::RanksDoNotMatch(stride_shape.rank(), self.rank()));
+            return Err(TensorErrors::RanksDoNotMatch(
+                stride_shape.rank(),
+                self.rank(),
+            ));
         }
 
-        let res_shape = &Shape::new(
-            self.shape()
-                .0
-                .iter()
-                .cloned()
-                .zip(stride_shape.0.iter().cloned())
-                .map(|(x, y)| x.div_ceil(y))
-                .collect::<Vec<usize>>(),
-        )?;
+        if kernel_shape.0.contains(&0) || stride_shape.0.contains(&0) {
+            return Err(TensorErrors::ShapeContainsZero);
+        }
+
+        let res_shape = &self
+            .shape()
+            .0
+            .iter()
+            .cloned()
+            .zip(stride_shape.0.iter().cloned())
+            .map(|(x, y)| x.div_ceil(y))
+            .collect();
 
         let mut result = Tensor::<O>::from_value(res_shape, init);
 
@@ -650,9 +792,19 @@ impl<T: Clone + Send + Sync> Tensor<T> {
 
             for (i, chunk) in res_chunks.enumerate() {
                 s.spawn(move || {
-                    let res_pos = res_shape.tensor_index(i);
+                    let res_pos = res_shape.tensor_index(i).unwrap();
                     let self_pos = res_pos.into_tensor() * stride_shape.clone().0.into_tensor();
-                    let self_end_pos = (&self_pos + &kernel_shape.clone().0.into_tensor()).iter().enumerate().map(|(i, x)| if x > &self.shape()[i] { self.shape()[i] } else { *x }).collect::<Vec<usize>>();
+                    let self_end_pos = (&self_pos + &kernel_shape.clone().0.into_tensor())
+                        .iter()
+                        .enumerate()
+                        .map(|(i, x)| {
+                            if x > &self.shape()[i] {
+                                self.shape()[i]
+                            } else {
+                                *x
+                            }
+                        })
+                        .collect::<Vec<usize>>();
 
                     let indices = self_pos
                         .iter()
@@ -670,6 +822,7 @@ impl<T: Clone + Send + Sync> Tensor<T> {
 }
 
 impl<T: Default + Clone> Tensor<T> {
+    /// Constructs a tensor of the specified shape filled with `T::default()`.
     pub fn from_shape(shape: &Shape) -> Tensor<T> {
         let elements = vec![T::default(); shape.element_count()];
         Tensor {
@@ -680,28 +833,45 @@ impl<T: Default + Clone> Tensor<T> {
     }
 }
 
+impl<T: Default + Clone> Tensor<T>
+where
+    StandardUniform: Distribution<T>,
+    [T]: Fill,
+{
+    /// Generate a tensor of the specified shape filled with random values.
+    pub fn rand(shape: &Shape) -> Tensor<T> {
+        let mut elements = vec![T::default(); shape.element_count()];
+        let mut rng = rand::rng();
+
+        rng.fill(elements.as_mut_slice());
+
+        Tensor::new(shape, elements).unwrap()
+    }
+}
+
 impl<T: Clone> IntoTensor<T> for Vec<T> {
-    /// This converts the vector into a 1-d tensor
+    /// This converts the vector into a 1-d tensor.
     fn into_tensor(self) -> Tensor<T> {
         self.iter().into()
     }
 }
 
 impl<T: Default + Clone> Default for Tensor<T> {
+    /// Returns a tensor with shape (1) and a single element of `T::default()`.
     fn default() -> Self {
         Tensor::from_shape(&shape![1])
     }
 }
 
 impl<T: Zero + Clone> Tensor<T> {
+    /// Returns a matrix of the specified shape filled with `T::zero()`.
     pub fn zeros(shape: &Shape) -> Tensor<T> {
         Tensor::from_value(shape, T::zero())
     }
 }
 
 impl<T: PartialOrd + Clone> Tensor<T> {
-    /// Bounds the values between `min` and `max`
-    /// consuming the original and returning the result
+    /// Bounds the values between `min` and `max`.
     pub fn clip(&self, min: T, max: T) -> Tensor<T> {
         let shape = self.shape();
         Tensor::new(
@@ -719,16 +889,16 @@ impl<T: PartialOrd + Clone> Tensor<T> {
                 })
                 .collect(),
         )
-            .unwrap()
+        .unwrap()
     }
 }
 
-/// Default pooling function to sum the values
+/// Default pooling function to sum the values.
 pub fn pool_sum<T: Add<Output = T> + Clone>(t: Tensor<T>) -> T {
     t.iter().cloned().reduce(T::add).unwrap()
 }
 
-/// Default pooling function to find the maximum value
+/// Default pooling function to find the maximum value.
 pub fn pool_max<T: PartialOrd + Clone>(t: Tensor<T>) -> T {
     let mut max = t.first().unwrap().clone();
 
@@ -741,7 +911,7 @@ pub fn pool_max<T: PartialOrd + Clone>(t: Tensor<T>) -> T {
     max
 }
 
-/// Default pooling function to find the minimum value
+/// Default pooling function to find the minimum value.
 pub fn pool_min<T: PartialOrd + Clone>(t: Tensor<T>) -> T {
     let mut min = t.first().unwrap().clone();
 
@@ -755,9 +925,8 @@ pub fn pool_min<T: PartialOrd + Clone>(t: Tensor<T>) -> T {
 }
 
 /// Default pooling function to find the average.
-/// Bear in mind the total number of elements is the total number of elements in the input,
-/// so if you want the total number of elements to stay the same even for overhanging
-///  input tensors then you will need to write your own version.
+/// The total number of elements is the total number of elements in the input, so this may
+/// vary if the kernel is hanging over the edge of the tensor.
 pub fn pool_avg<T: Add<Output = T> + Div<f64, Output = T> + Clone>(t: Tensor<T>) -> T {
     let elems = t.shape().element_count().to_f64().unwrap();
     let sum = pool_sum(t);

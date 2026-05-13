@@ -8,12 +8,6 @@ use crate::definitions::errors::TensorErrors;
     use crate::shape;
 
     #[test]
-    fn invalid_shape() {
-        let err = Matrix::<i32>::new(0, 1, vec![]).unwrap_err();
-        assert_eq!(err, TensorErrors::ShapeContainsZero);
-    }
-
-    #[test]
     fn invalid_shape_and_elements() {
         let err = Matrix::new(1,1, vec![1, 2]).unwrap_err();
         assert_eq!(err, TensorErrors::ShapeSizeDoesNotMatch);
@@ -67,26 +61,23 @@ use crate::definitions::errors::TensorErrors;
             &shape![2, 3],
             vec![0, 1, 2, 3, 4, 5],
         ).unwrap();
+        let m2 = Matrix::<usize>::new(
+            0,0,
+            vec![],
+        ).unwrap();
+        let t2 = Tensor::<usize>::new(
+            &shape![0, 0],
+            vec![],
+        ).unwrap();
 
         assert_eq!(m1.into_tensor(), t1);
+        assert_eq!(m2.into_tensor(), t2);
     }
 
     #[test]
     fn default_matrix() {
         let m1 = Matrix::<i32>::default();
         assert_eq!(m1, Matrix::new(1, 1, vec![0]).unwrap());
-    }
-
-    #[test]
-    fn from_into_iter() {
-        let v1 = vec![1, 2, 3, 4, 5, 6];
-        let m1 = Matrix::from(v1.into_iter());
-        let ans = Matrix::new(
-            1, 6,
-            vec![1, 2, 3, 4, 5, 6],
-        ).unwrap();
-
-        assert_eq!(m1, ans);
     }
 
     #[test]
@@ -103,6 +94,17 @@ use crate::definitions::errors::TensorErrors;
     }
 
     #[test]
+    fn try_from_tensor() {
+        let t1 = (0..6).collect::<Tensor<_>>().reshape(&shape![2, 3]).unwrap();
+        let m1 = Matrix::try_from(t1).unwrap();
+        let ans = Matrix::new(
+            2, 3,
+            vec![0, 1, 2, 3, 4, 5],
+        ).unwrap();
+        assert_eq!(m1, ans);
+    }
+
+    #[test]
     fn invalid_try_from_tensor() {
         let t1 = vec![1, 2, 3, 4, 5, 6].into_tensor();
         let err = Matrix::try_from(t1).unwrap_err();
@@ -110,5 +112,19 @@ use crate::definitions::errors::TensorErrors;
             TensorErrors::ShapesIncompatible => {},
             _ => panic!("Incorrect error"),
         }
+    }
+
+    #[test]
+    fn can_create_empty_matrix() {
+        let m1 = Matrix::<i32>::new(0, 0, vec![]).unwrap();
+        assert_eq!(0, m1.rows);
+        assert_eq!(0, m1.cols);
+    }
+
+    #[test]
+    #[should_panic]
+    fn invalid_indexing_empty_matrix() {
+        let m1 = Matrix::<i32>::new(0, 0, vec![]).unwrap();
+        m1[&[0, 0]];
     }
 }

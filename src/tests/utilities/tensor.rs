@@ -102,7 +102,7 @@ mod tensor_utils_tests {
 
         assert_eq!(count, shape.element_count());
 
-        let t2: Tensor<i32> = iter2.into();
+        let t2: Tensor<i32> = iter2.collect();
         assert_eq!(t2.shape(), &shape![shape.element_count()]);
         assert_eq!(t2.elements(), t1.elements());
         let t2 = t2.reshape(&shape)
@@ -583,13 +583,13 @@ mod tensor_utils_tests {
 
         let err = t1.slice(&[0..1, 0..1, 1..0, 0..1]).unwrap_err();
         match err {
-            TensorErrors::InvalidNonEmptyInterval { .. } => {},
+            TensorErrors::InvalidInterval { .. } => {},
             _ => panic!("Incorrect error"),
         }
 
         let err = t1.slice_mut(&[0..1, 0..1, 1..0, 0..1]).unwrap_err();
         match err {
-            TensorErrors::InvalidNonEmptyInterval { .. } => {},
+            TensorErrors::InvalidInterval { .. } => {},
             _ => panic!("Incorrect error"),
         }
     }
@@ -620,5 +620,127 @@ mod tensor_utils_tests {
             TensorErrors::SliceIndicesOutOfBounds { .. } => {},
             _ => panic!("Incorrect error"),
         }
+    }
+    
+    #[test]
+    fn slicing_scalar_tensor() {
+        let t1 = Tensor::<i32>::new(&shape![], vec![42]).unwrap();
+        let sliced = t1.slice(&[]).unwrap();
+        assert_eq!(sliced, t1);
+        assert_eq!(sliced.elements(), &[42]);
+    }
+    
+    #[test]
+    fn slicing_empty_tensor() {
+        let t1 = Tensor::<i32>::new(&shape![0, 3], vec![]).unwrap();
+        let sliced = t1.slice(&[0..0, 1..2]).unwrap();
+        let ans = Tensor::<i32>::new(&shape![0, 1], vec![]).unwrap();
+
+        assert_eq!(sliced, ans);
+        assert!(sliced.elements().is_empty());
+    }
+    
+    #[test]
+    fn cannot_flatten_scalar_tensor() {
+        let t1 = Tensor::<i32>::new(&shape![], vec![42]).unwrap();
+        let error = t1.flatten(0).err().unwrap();
+
+        match error {
+            TensorErrors::AxisOutOfBounds { .. } => {}
+            _ => panic!("Incorrect error"),
+        }
+    }
+    
+    #[test]
+    fn flip_scalar_tensor() {
+        let t1 = Tensor::new(&shape![], vec![42]).unwrap();
+
+        assert_eq!(t1.flip(), t1);
+        assert_eq!(t1.flip_mt(), t1);
+
+        let axes = HashSet::new();
+        assert_eq!(t1.flip_axes(&axes).unwrap(), t1);
+        assert_eq!(t1.flip_axes_mt(&axes).unwrap(), t1);
+
+        let mut invalid_axes = HashSet::new();
+        invalid_axes.insert(0);
+        let err = t1.flip_axes(&invalid_axes).unwrap_err();
+        match err {
+            TensorErrors::AxisOutOfBounds { .. } => {}
+            _ => panic!("Incorrect error"),
+        }
+    }
+    
+    #[test]
+    fn collect_empty_tensor() {
+        let empty_vec: Vec<i32> = vec![];
+        let t: Tensor<i32> = empty_vec.into_iter().collect();
+
+        assert_eq!(t.rank(), 1);
+        assert_eq!(t.shape()[0], 0);
+        assert!(t.elements().is_empty());
+    }
+    
+    #[test]
+    fn enumerated_iter() {
+        let mut t1 = Tensor::<i32>::new(&shape![2, 2], vec![1, 2, 3, 4]).unwrap();
+
+        let expected = vec![
+            (vec![0, 0], 1),
+            (vec![0, 1], 2),
+            (vec![1, 0], 3),
+            (vec![1, 1], 4),
+        ];
+
+        let actual: Vec<(Vec<usize>, i32)> = t1.enumerated_iter().collect();
+        assert_eq!(actual, expected);
+
+        for (idx, val) in t1.enumerated_iter_mut() {
+            *val += idx.iter().sum::<usize>() as i32;
+        }
+
+        let expected_mut = vec![
+            (vec![0, 0], 1), // 1 + 0
+            (vec![0, 1], 3), // 2 + 1
+            (vec![1, 0], 4), // 3 + 1
+            (vec![1, 1], 6), // 4 + 2
+        ];
+        let actual_mut: Vec<(Vec<usize>, i32)> =
+            t1.enumerated_iter().map(|(i, v)| (i, v)).collect();
+        assert_eq!(actual_mut, expected_mut);
+    }
+    
+    #[test]
+    fn concat_scalar_tensors() {
+        let t1 = Tensor::new(&shape![], vec![1]).unwrap();
+        let t2 = Tensor::new(&shape![], vec![2]).unwrap();
+
+        let err = t1.concat(&t2, 0).unwrap_err();
+        match err {
+            TensorErrors::AxisOutOfBounds { .. } => {},
+            _ => panic!("Incorrect error")
+        }
+    }
+
+    #[test]
+    fn concat_with_empty_tensor() {
+        let t1 = Tensor::<i32>::from_shape(&shape![2, 3]);
+        let t2 = Tensor::<i32>::new(&shape![0, 3], vec![]).unwrap();
+
+        let res = t1.concat(&t2, 0).unwrap();
+        assert_eq!(res, t1);
+
+        let t3 = Tensor::<i32>::new(&shape![2, 0], vec![]).unwrap();
+        let res2 = t1.concat(&t3, 1).unwrap();
+        assert_eq!(res2, t1);
+    }
+
+    #[test]
+    fn concat_multithreaded_with_empty_tensor() {
+        let t1 = Tensor::<i32>::from_shape(&shape![100, 10]);
+        let t2 = Tensor::<i32>::new(&shape![0, 10], vec![]).unwrap();
+
+        let res = t1.concat_mt(&t2, 0).unwrap();
+        assert_eq!(res, t1);
     }
 }

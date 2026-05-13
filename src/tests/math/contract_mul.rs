@@ -5,6 +5,129 @@ mod contract_mul_tests {
     use crate::definitions::shape::Shape;
     use crate::definitions::tensor::Tensor;
     use crate::shape;
+    
+    #[test]
+    fn contract_mul_with_scalar_tensors() {
+        let scalar = Tensor::new(&shape![], vec![5]).unwrap();
+        let t1 = Tensor::new(&shape![2, 2], vec![1, 2, 3, 4]).unwrap();
+
+        // Scalar * Tensor
+        let res1 = scalar.contract_mul(&t1).unwrap();
+        let ans1 = Tensor::new(&shape![2, 2], vec![5, 10, 15, 20]).unwrap();
+        assert_eq!(res1, ans1);
+
+        // Tensor * Scalar
+        let res2 = t1.contract_mul(&scalar).unwrap();
+        assert_eq!(res2, ans1);
+    }
+    
+    #[test]
+    fn contract_mul_mt_with_scalar_tensors() {
+        let scalar = Tensor::new(&shape![], vec![5]).unwrap();
+        let t1 = Tensor::new(&shape![2, 2], vec![1, 2, 3, 4]).unwrap();
+
+        // Scalar * Tensor
+        let res1 = scalar.contract_mul_mt(&t1).unwrap();
+        let ans1 = Tensor::new(&shape![2, 2], vec![5, 10, 15, 20]).unwrap();
+        assert_eq!(res1, ans1);
+
+        // Tensor * Scalar
+        let res2 = t1.contract_mul_mt(&scalar).unwrap();
+        assert_eq!(res2, ans1);
+    }
+    
+    #[test]
+    fn contract_mul_with_empty_tensor() {
+        let t1 = Tensor::<i32>::new(&shape![2, 0], vec![]).unwrap();
+        let t2 = Tensor::<i32>::new(&shape![0, 3], vec![]).unwrap();
+
+        let res = t1.contract_mul(&t2).unwrap();
+        let ans = Tensor::<i32>::new(&shape![2, 3], vec![0, 0, 0, 0, 0, 0]).unwrap();
+        assert_eq!(res, ans);
+
+        let t3 = Tensor::<i32>::new(&shape![0, 2], vec![]).unwrap();
+        let t4 = Tensor::<i32>::new(&shape![2, 2], vec![1, 2, 3, 4]).unwrap();
+        let res2 = t3.contract_mul(&t4).unwrap();
+        assert_eq!(res2.shape.0, vec![0, 2]);
+        assert_eq!(res2.elements.len(), 0);
+    }
+    
+    #[test]
+    fn contract_mul_mt_with_empty_tensor() {
+        let t1 = Tensor::<i32>::new(&shape![2, 0], vec![]).unwrap();
+        let t2 = Tensor::<i32>::new(&shape![0, 3], vec![]).unwrap();
+
+        let res = t1.contract_mul_mt(&t2).unwrap();
+        let ans = Tensor::<i32>::new(&shape![2, 3], vec![0, 0, 0, 0, 0, 0]).unwrap();
+        assert_eq!(res, ans);
+
+        let t3 = Tensor::<i32>::new(&shape![0, 2], vec![]).unwrap();
+        let t4 = Tensor::<i32>::new(&shape![2, 2], vec![1, 2, 3, 4]).unwrap();
+        let res2 = t3.contract_mul_mt(&t4).unwrap();
+        assert_eq!(res2.shape.0, vec![0, 2]);
+        assert_eq!(res2.elements.len(), 0);
+    }
+    
+    #[test]
+    fn mat_mul_with_empty_matrix() {
+        let m1 = Matrix::<i32>::new(2, 0, vec![]).unwrap();
+        let m2 = Matrix::<i32>::new(0, 3, vec![]).unwrap();
+
+        let res = m1.mat_mul(&m2).unwrap();
+        let ans = Matrix::<i32>::new(2, 3, vec![0, 0, 0, 0, 0, 0]).unwrap();
+        assert_eq!(res, ans);
+
+        let m3 = Matrix::<i32>::new(0, 2, vec![]).unwrap();
+        let m4 = Matrix::<i32>::new(2, 2, vec![1, 2, 3, 4]).unwrap();
+        let res2 = m3.mat_mul(&m4).unwrap();
+        assert_eq!(res2.rows, 0);
+        assert_eq!(res2.cols, 2);
+        assert_eq!(res2.tensor.elements.len(), 0);
+    }
+    
+    #[test]
+    fn mat_mul_mt_with_empty_matrix() {
+        let m1 = Matrix::<i32>::new(2, 0, vec![]).unwrap();
+        let m2 = Matrix::<i32>::new(0, 3, vec![]).unwrap();
+
+        let res = m1.mat_mul_mt(&m2).unwrap();
+        let ans = Matrix::<i32>::new(2, 3, vec![0, 0, 0, 0, 0, 0]).unwrap();
+        assert_eq!(res, ans);
+
+        let m3 = Matrix::<i32>::new(0, 2, vec![]).unwrap();
+        let m4 = Matrix::<i32>::new(2, 2, vec![1, 2, 3, 4]).unwrap();
+        let res2 = m3.mat_mul_mt(&m4).unwrap();
+        assert_eq!(res2.rows, 0);
+        assert_eq!(res2.cols, 2);
+        assert_eq!(res2.tensor.elements.len(), 0);
+    }
+    
+    #[test]
+    fn dot_scalar_tensors() {
+        let t1 = Tensor::new(&shape![], vec![5]).unwrap();
+        let t2 = Tensor::new(&shape![], vec![10]).unwrap();
+
+        assert_eq!(t1.dot(&t2).unwrap(), 50);
+    }
+
+    #[test]
+    fn dot_empty_tensors() {
+        let t1 = Tensor::<i32>::new(&shape![2, 0], vec![]).unwrap();
+        let t2 = Tensor::<i32>::new(&shape![2, 0], vec![]).unwrap();
+
+        assert_eq!(t1.dot(&t2).unwrap(), 0);
+    }
+
+    #[test]
+    fn dot_empty_matrices() {
+        let m1 = Matrix::<i32>::new(2, 0, vec![]).unwrap();
+        let m2 = Matrix::<i32>::new(2, 0, vec![]).unwrap();
+        let m3 = Matrix::<i32>::new(0, 1, vec![]).unwrap();
+        let m4 = Matrix::<i32>::new(0, 1, vec![]).unwrap();
+
+        assert_eq!(m1.dot(&m2).unwrap(), 0);
+        assert_eq!(m3.dot(&m4).unwrap(), 0);
+    }
 
     #[test]
     fn tensor_contraction_multiplication() {

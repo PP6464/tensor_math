@@ -12,7 +12,7 @@ impl Matrix<f64> {
         let (rows, cols) = (self.shape()[0], self.shape()[1]);
 
         let mut r = self.clone();
-        let mut q = identity::<f64>(rows).unwrap();
+        let mut q = identity::<f64>(rows);
 
         for k in 0..min(cols, rows) {
             let vec_bottom = r.slice(k..rows, k..k + 1).unwrap();
@@ -32,7 +32,7 @@ impl Matrix<f64> {
             let u = v.norm_l2();
             let u_clone = u.clone();
             let u_t = u_clone.transpose_mt();
-            let h_sub = identity::<f64>(u.shape.0.first().unwrap().clone()).unwrap() - u
+            let h_sub = identity::<f64>(u.shape.0.first().unwrap().clone()) - u
                 .contract_mul(&u_t)
                 .unwrap()
                 * 2.0;
@@ -64,7 +64,7 @@ impl Matrix<Complex64> {
         let (rows, cols) = (self.shape()[0], self.shape()[1]);
 
         let mut r = self.clone();
-        let mut q = identity::<Complex64>(rows).unwrap();
+        let mut q = identity::<Complex64>(rows);
 
         for k in 0..min(cols, rows) {
             let vec_bottom = r.slice(k..rows, k..k + 1).unwrap();
@@ -85,7 +85,7 @@ impl Matrix<Complex64> {
             let u_clone = u.clone();
             let u_t = u_clone.transpose_mt();
             let u_star = u_t.iter().map(|x| x.conj()).collect::<Matrix<Complex64>>().reshape(u_t.rows, u_t.cols).unwrap();
-            let h_sub = identity::<Complex64>(u.shape.0.first().unwrap().clone()).unwrap() - u
+            let h_sub = identity::<Complex64>(u.shape.0.first().unwrap().clone()) - u
                 .contract_mul(&u_star)
                 .unwrap()
                 * Complex64 { re: 2.0, im: 0.0 };

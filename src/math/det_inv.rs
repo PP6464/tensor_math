@@ -33,11 +33,11 @@ impl Matrix<f64> {
 
         let ord = self.rows;
 
-        let a_i_rref = self.concat_mt(&identity(ord)?, 1)?.reduced_row_echelon();
+        let a_i_rref = self.concat_cols_mt(&identity(ord))?.reduced_row_echelon();
         let left = a_i_rref.slice(0..ord, 0..ord)?;
         let right = a_i_rref.slice(0..ord, ord..2 * ord)?;
 
-        if !approx_eq!(Matrix<f64>, left, identity(ord)?) {
+        if !approx_eq!(Matrix<f64>, left, identity(ord)) {
             return Err(TensorErrors::DeterminantZero);
         }
 
@@ -72,11 +72,11 @@ impl Matrix<Complex64> {
 
         let ord = self.rows;
 
-        let a_i_rref = self.concat_mt(&identity(ord)?, 1)?.reduced_row_echelon();
+        let a_i_rref = self.concat_cols_mt(&identity(ord))?.reduced_row_echelon();
         let left = a_i_rref.slice(0..ord, 0..ord)?;
         let right = a_i_rref.slice(0..ord, ord..2 * ord)?;
 
-        if !approx_eq!(Matrix<Complex64>, left, identity(ord)?) {
+        if !approx_eq!(Matrix<Complex64>, left, identity(ord)) {
             return Err(TensorErrors::DeterminantZero);
         }
 
@@ -130,7 +130,7 @@ pub fn det_slow<T: Add<Output = T> + Mul<Output = T> + Sub<Output = T> + Clone +
 
         let slice = m
             .slice(1..ord, 0..i)?
-            .concat(&m.slice(1..ord, i + 1..ord).unwrap(), 1)?;
+            .concat_cols(&m.slice(1..ord, i + 1..ord).unwrap())?;
 
         if is_minus {
             determinant = determinant - m[&[0, i]].clone() * det_slow(&slice)?
@@ -163,7 +163,7 @@ where
     }
 
     let ord = m.shape[0];
-    let mut res = Matrix::<T>::from_value(m.rows, m.cols, T::zero())?;
+    let mut res = Matrix::<T>::zeros(m.rows, m.cols);
     let d = det_slow(&m)?;
 
     if d == T::zero() {
@@ -185,25 +185,24 @@ where
                 _ if (i, j) == (ord - 1, 0) => m.slice(0..i, 1..ord),
                 _ if i == 0 => Ok(m
                     .slice(1..ord, 0..j)?
-                    .concat(&m.slice(1..ord, j + 1..ord)?, 1)?),
-                _ if i == ord - 1 => m.slice(0..i, 0..j)?.concat(&m.slice(0..i, j + 1..ord)?, 1),
+                    .concat_cols(&m.slice(1..ord, j + 1..ord)?)?),
+                _ if i == ord - 1 => m.slice(0..i, 0..j)?.concat_cols(&m.slice(0..i, j + 1..ord)?),
                 _ if j == 0 => Ok(m
-                    .slice(0..i, 1..ord)
-                    .unwrap()
-                    .concat(&m.slice((i + 1)..ord, 1..ord)?, 0)?),
+                    .slice(0..i, 1..ord)?
+                    .concat_rows(&m.slice((i + 1)..ord, 1..ord)?)?),
                 _ if j == ord - 1 => Ok(m
                     .slice(0..i, 0..j)
                     .unwrap()
-                    .concat(&m.slice((i + 1)..ord, 0..j)?, 0)?),
+                    .concat_rows(&m.slice((i + 1)..ord, 0..j)?)?),
                 _ => Ok({
                     let slice_top = m
                         .slice(0..i, 0..j)?
-                        .concat(&m.slice(0..i, (j + 1)..ord)?, 1)?;
+                        .concat_cols(&m.slice(0..i, (j + 1)..ord)?)?;
                     let slice_bottom = m
                         .slice((i + 1)..ord, 0..j)?
-                        .concat(&m.slice((i + 1)..ord, (j + 1)..ord)?, 1)?;
+                        .concat_cols(&m.slice((i + 1)..ord, (j + 1)..ord)?)?;
 
-                    slice_top.concat(&slice_bottom, 0)?
+                    slice_top.concat_rows(&slice_bottom)?
                 })
             }?;
 

@@ -38,7 +38,7 @@ mod det_inv_tests {
     fn determinant() {
         let m1 = Matrix::<i32>::new(3, 3, vec![5, -2, 1, 8, 9, -5, 1, 0, 2]).unwrap();
         let m2 = vec![1].into_matrix();
-        let m3 = Matrix::<f64>::zeros(10, 10).unwrap();
+        let m3 = Matrix::<f64>::zeros(10, 10);
 
         assert_eq!(det_slow(&m2).unwrap(), 1);
         assert_eq!(det_slow(&m1).unwrap(), 123);
@@ -105,7 +105,7 @@ mod det_inv_tests {
             .contract_mul(&inverse)
             .unwrap()
             .enumerated_iter()
-            .all(|(i, x)| { approx_eq!(f64, x, eye(3).unwrap()[i], epsilon = 1e-15) }));
+            .all(|(i, x)| { approx_eq!(f64, x, eye(3)[i], epsilon = 1e-15) }));
 
         let m2 = Matrix::new(
             2, 2,
@@ -132,7 +132,7 @@ mod det_inv_tests {
             .unwrap()
             .enumerated_iter()
             .all(|(i, x)| {
-                approx_eq!(f64, x.re, eye(3).unwrap()[i], epsilon = 1e-15);
+                approx_eq!(f64, x.re, eye(3)[i], epsilon = 1e-15);
                 approx_eq!(f64, x.im, 0.0, epsilon = 1e-15)
             }));
     }

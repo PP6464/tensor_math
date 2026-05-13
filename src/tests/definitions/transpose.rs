@@ -76,4 +76,20 @@ mod transpose_tests {
             _ => panic!("Incorrect error"),
         }
     }
+    
+    #[test]
+    fn transpose_for_scalar_tensor() {
+        let transpose = Transpose::default(0);
+        assert_eq!(transpose.permutation().len(), 0);
+
+        let shape = shape![];
+        let new_shape = transpose.new_shape(&shape).unwrap();
+        assert_eq!(new_shape, shape![]);
+
+        let index = vec![];
+        let new_index = transpose.new_index(&index).unwrap();
+        assert_eq!(new_index.len(), 0);
+
+        assert_eq!(transpose.inverse(), transpose);
+    }
 }

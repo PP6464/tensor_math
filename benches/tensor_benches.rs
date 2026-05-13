@@ -141,7 +141,7 @@ pub fn bench_inv(c: &mut Criterion) {
     let mut m1 = Matrix::<f64>::rand(100, 100);
 
     if m1.det().unwrap() == 0.0 {
-        m1 = m1 + eye(100).unwrap();
+        m1 = m1 + eye(100);
     }
 
     c.bench_function("inv", |b| {

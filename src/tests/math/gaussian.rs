@@ -24,7 +24,7 @@ mod gaussian_distribution_tests {
     fn rand_gaussian_sample_invalid_min_more_than_max() {
         let err = gaussian_sample(1.0, &shape![3, 3, 3], 10.0, -10.0).unwrap_err();
         match err {
-            TensorErrors::InvalidNonEmptyInterval { min: _, max: _ } => {},
+            TensorErrors::InvalidInterval { min: _, max: _ } => {},
             _ => panic!("Incorrect error"),
         }
     }
@@ -33,7 +33,7 @@ mod gaussian_distribution_tests {
     fn rand_gaussian_sample_invalid_min_eq_max() {
         let err = gaussian_sample(1.0, &shape![3, 3, 3], 10.0, 10.0).unwrap_err();
         match err {
-            TensorErrors::InvalidNonEmptyInterval { min: _, max: _ } => {},
+            TensorErrors::InvalidInterval { min: _, max: _ } => {},
             _ => panic!("Incorrect error"),
         }
     }
@@ -160,7 +160,7 @@ mod gaussian_distribution_tests {
 
     #[test]
     fn invalid_cov_mat_shape_not_right_dim() {
-        let err = gaussian_pdf_cov_mat(eye(2).unwrap(), &shape![1]).unwrap_err();
+        let err = gaussian_pdf_cov_mat(eye(2), &shape![1]).unwrap_err();
         match err {
             TensorErrors::RanksDoNotMatch(_, _) => {},
             _ => panic!("Incorrect error"),

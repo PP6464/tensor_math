@@ -379,8 +379,8 @@ mod fft_ops_tests {
 
     #[test]
     fn invalid_fft_mat_conv_cols_different_cols() {
-        let m1 = Matrix::<Complex64>::zeros(5, 1).unwrap();
-        let m2 = Matrix::<Complex64>::zeros(3, 2).unwrap();
+        let m1 = Matrix::<Complex64>::zeros(5, 1);
+        let m2 = Matrix::<Complex64>::zeros(3, 2);
 
         let err = m1.fft_conv_cols(&m2).unwrap_err();
         match err {
@@ -391,8 +391,8 @@ mod fft_ops_tests {
 
     #[test]
     fn invalid_fft_mat_conv_rows_different_rows() {
-        let m1 = Matrix::<Complex64>::zeros(2, 2).unwrap();
-        let m2 = Matrix::<Complex64>::zeros(1, 1).unwrap();
+        let m1 = Matrix::<Complex64>::zeros(2, 2);
+        let m2 = Matrix::<Complex64>::zeros(1, 1);
 
         let err = m1.fft_conv_rows(&m2).unwrap_err();
         match err {

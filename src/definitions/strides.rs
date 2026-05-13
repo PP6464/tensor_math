@@ -1,5 +1,5 @@
-use std::ops::Index;
 use crate::definitions::shape::Shape;
+use std::ops::Index;
 
 /// Cache the strides required to index the tensor.
 /// addr = dot_vectors(index_vector, strides)
@@ -11,8 +11,7 @@ impl Strides {
 
         for i in 1..shape.rank() {
             let current_index = shape.rank() - 1 - i;
-            strides[current_index] =
-                shape[current_index + 1] * strides[current_index + 1];
+            strides[current_index] = shape[current_index + 1] * strides[current_index + 1];
         }
 
         Strides(strides)

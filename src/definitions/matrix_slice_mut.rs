@@ -1,10 +1,10 @@
-use std::ops::{Index, IndexMut};
 use crate::definitions::errors::TensorErrors;
 use crate::definitions::errors::TensorErrors::SliceIncompatibleShape;
 use crate::definitions::matrix::Matrix;
 use crate::definitions::shape::Shape;
 use crate::definitions::traits::IntoMatrix;
 use crate::shape;
+use std::ops::{Index, IndexMut};
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct MatrixSliceMut<'a, T> {
@@ -14,7 +14,9 @@ pub struct MatrixSliceMut<'a, T> {
 }
 
 impl<'a, T: Clone> MatrixSliceMut<'a, T> {
-    /// Sets all the values in the mutable slice to the values in the given input
+    /// Sets all the values in the mutable slice to the values in the given input.
+    ///
+    /// This fails if the input does not have the same shape as the slice.
     pub fn set_all(&mut self, values: &Matrix<T>) -> Result<(), TensorErrors> {
         if self.end.0 - self.start.0 != values.rows || self.end.1 - self.start.1 != values.cols {
             return Err(SliceIncompatibleShape {
@@ -22,22 +24,22 @@ impl<'a, T: Clone> MatrixSliceMut<'a, T> {
                 tensor_shape: values.shape.clone(),
             });
         }
-        
+
         for (index, value) in values.enumerated_iter() {
             self[index] = value
         }
-        
+
         Ok(())
     }
-    
-    /// Gets the value at the specified index, returns None otherwise
+
+    /// Gets the value at the specified index, returning None if the index is out of bounds.
     pub fn get(&self, indices: (usize, usize)) -> Option<&T> {
         let orig_index = (indices.0 + self.start.0, indices.1 + self.start.1);
-        
+
         if orig_index.0 >= self.end.0 || orig_index.1 >= self.end.1 {
             return None;
         }
-        
+
         self.orig.get(orig_index)
     }
 }
@@ -83,8 +85,7 @@ impl<T> IndexMut<&[usize; 2]> for MatrixSliceMut<'_, T> {
 
 impl<T: Clone> IntoMatrix<T> for MatrixSliceMut<'_, T> {
     fn into_matrix(self) -> Matrix<T> {
-        self
-            .orig
+        self.orig
             .slice(self.start.0..self.end.0, self.start.1..self.end.1)
             .unwrap()
     }

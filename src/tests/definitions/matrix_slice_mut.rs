@@ -4,6 +4,14 @@ mod matrix_slice_mut_tests {
     use crate::definitions::traits::{IntoMatrix, TryIntoMatrix};
 
     #[test]
+    fn empty_slice_mut() {
+        let mut m1 = Matrix::<usize>::new(0, 0, vec![]).unwrap();
+        let slice = m1.slice_mut(0..0, 0..0).unwrap();
+        assert_eq!(slice.end, (0, 0));
+        assert_eq!(slice.start, (0, 0));
+    }
+
+    #[test]
     fn index_mut_slice() {
         let mut m1 = Matrix::new(
             3, 3,

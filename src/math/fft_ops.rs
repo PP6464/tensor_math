@@ -34,7 +34,7 @@ impl Tensor<Complex64> {
         let mut fft_along_shape_vec = res_shape.0.clone();
         fft_along_shape_vec.remove(axis);
 
-        let fft_along_shape = Shape::new(fft_along_shape_vec)?;
+        let fft_along_shape = Shape::new(fft_along_shape_vec);
         let axis_len = res_shape[axis];
 
         scope(|s| {
@@ -104,7 +104,7 @@ impl Tensor<Complex64> {
         let mut fft_along_shape_vec = res_shape.0.clone();
         fft_along_shape_vec.remove(axis);
 
-        let fft_along_shape = Shape::new(fft_along_shape_vec).unwrap();
+        let fft_along_shape = Shape::new(fft_along_shape_vec);
         let axis_len = res_shape[axis];
 
         scope(|s| {
@@ -187,7 +187,7 @@ impl Tensor<Complex64> {
             new_shape[*axis] += other.shape[*axis] - 1;
         }
 
-        let new_shape = Shape::new(new_shape)?;
+        let new_shape = Shape::new(new_shape);
 
         let mut self_padded = Self::zeros(&new_shape);
         let mut other_padded = Self::zeros(&new_shape);
@@ -229,7 +229,7 @@ impl Tensor<Complex64> {
             new_shape[axis] += other.shape[axis] - 1;
         }
 
-        let new_shape = Shape::new(new_shape).unwrap();
+        let new_shape = Shape::new(new_shape);
 
         let mut self_padded = Self::zeros(&new_shape);
         let mut other_padded = Self::zeros(&new_shape);
@@ -402,8 +402,8 @@ impl Matrix<Complex64> {
             return Err(TensorErrors::ShapesIncompatible);
         }
 
-        let self_padded = self.concat_mt(&Self::zeros(other.rows - 1, self.cols)?, 0)?;
-        let other_padded = other.concat_mt(&Self::zeros(self.rows - 1, other.cols)?, 0)?;
+        let self_padded = self.concat_rows_mt(&Self::zeros(other.rows - 1, self.cols))?;
+        let other_padded = other.concat_rows_mt(&Self::zeros(self.rows - 1, other.cols))?;
 
         Ok((self_padded.fft_cols() * other_padded.fft_cols()).ifft_cols())
     }
@@ -419,8 +419,8 @@ impl Matrix<Complex64> {
             return Err(TensorErrors::ShapesIncompatible);
         }
 
-        let self_padded = self.concat_mt(&Self::zeros(self.rows, other.cols - 1)?, 1)?;
-        let other_padded = other.concat_mt(&Self::zeros(other.rows, self.cols - 1)?, 1)?;
+        let self_padded = self.concat_cols_mt(&Self::zeros(self.rows, other.cols - 1))?;
+        let other_padded = other.concat_cols_mt(&Self::zeros(other.rows, self.cols - 1))?;
 
         Ok((self_padded.fft_rows() * other_padded.fft_rows()).ifft_rows())
     }
@@ -432,8 +432,8 @@ impl Matrix<Complex64> {
 
     /// Computes convolution of two matrices
     pub fn fft_conv(&self, other: &Matrix<Complex64>) -> Matrix<Complex64> {
-        let mut self_padded = Self::zeros(self.rows + other.rows - 1, self.cols + other.cols - 1).unwrap();
-        let mut other_padded = Self::zeros(self.rows + other.rows - 1, self.cols + other.cols - 1).unwrap();
+        let mut self_padded = Self::zeros(self.rows + other.rows - 1, self.cols + other.cols - 1);
+        let mut other_padded = Self::zeros(self.rows + other.rows - 1, self.cols + other.cols - 1);
 
         self_padded.slice_mut(0..self.rows, 0..self.cols).unwrap().set_all(&self).unwrap();
         other_padded.slice_mut(0..other.rows, 0..other.cols).unwrap().set_all(&other).unwrap();

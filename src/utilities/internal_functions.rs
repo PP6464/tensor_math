@@ -5,7 +5,7 @@ use num::complex::Complex64;
 use num::{One, Zero};
 
 /// This computes the dot product of two vectors of any type `T` that implements `Add` and `Mul`
-pub(crate) fn dot_vectors<T: Add<Output = T> + Mul<Output = T> + Clone>(
+pub(crate) fn dot_vectors<T: Add<Output = T> + Mul<Output = T> + Zero + Clone>(
     vec1: &Vec<T>,
     vec2: &Vec<T>,
 ) -> T {
@@ -13,8 +13,7 @@ pub(crate) fn dot_vectors<T: Add<Output = T> + Mul<Output = T> + Clone>(
         .cloned()
         .zip(vec2.iter().cloned())
         .map(|(x, y)| x * y)
-        .reduce(T::add)
-        .unwrap()
+        .fold(T::zero(), T::add)
 }
 
 /// This computes the FFT of a vector of Complex64 values

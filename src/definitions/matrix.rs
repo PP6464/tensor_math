@@ -1,11 +1,11 @@
-use std::ops::{Deref, DerefMut, Index, IndexMut};
-use std::slice::Iter;
-use std::vec::IntoIter;
 use crate::definitions::errors::TensorErrors;
 use crate::definitions::shape::Shape;
 use crate::definitions::tensor::Tensor;
-use crate::definitions::traits::{IntoTensor};
+use crate::definitions::traits::IntoTensor;
 use crate::shape;
+use std::ops::{Deref, DerefMut, Index, IndexMut};
+use std::slice::Iter;
+use std::vec::IntoIter;
 
 /// This struct represents a matrix, i.e. a rank 2 tensor.
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -16,36 +16,38 @@ pub struct Matrix<T> {
 }
 
 impl<T> Matrix<T> {
-    /// Returns a new matrix with the given rows and columns and specified elements if possible
+    /// Returns a new matrix with the given rows and columns and specified elements.
+    ///
+    /// This fails if `elements.len() != rows * cols`.
     pub fn new(rows: usize, cols: usize, elements: Vec<T>) -> Result<Matrix<T>, TensorErrors> {
         Ok(Matrix {
-            tensor: Tensor::new(&Shape::new(vec![rows, cols])?, elements)?,
+            tensor: Tensor::new(&shape![rows, cols], elements)?,
             rows,
             cols,
         })
     }
 
-    /// Gives whether the matrix is square or not
+    /// Returns whether the matrix is square or not.
     pub fn is_square(&self) -> bool {
         self.rows == self.cols
     }
 
-    /// Gives the shape of the matrix
+    /// Returns the shape of the matrix.
     pub fn shape(&self) -> Shape {
         shape![self.rows, self.cols]
     }
 
-    /// Gives the number of rows of the matrix
+    /// Returns the number of rows of the matrix.
     pub fn rows(&self) -> usize {
         self.rows
     }
 
-    /// Gives the number of columns of the matrix
+    /// Returns the number of columns of the matrix.
     pub fn cols(&self) -> usize {
         self.cols
     }
-    
-    /// Gets the element at an index if it is in bounds, otherwise returns None
+
+    /// Gets the element at an index if it is in bounds, otherwise returns None.
     pub fn get(&self, indices: (usize, usize)) -> Option<&T> {
         self.tensor.get(&[indices.0, indices.1])
     }
@@ -59,6 +61,10 @@ impl<T> IntoTensor<T> for Matrix<T> {
 
 impl<T> TryFrom<Tensor<T>> for Matrix<T> {
     type Error = TensorErrors;
+
+    /// Converts the tensor into a matrix.
+    ///
+    /// This fails if `tensor.rank() != 2`.
     fn try_from(tensor: Tensor<T>) -> Result<Self, Self::Error> {
         if tensor.rank() != 2 {
             return Err(TensorErrors::ShapesIncompatible);
@@ -115,6 +121,7 @@ impl<T> DerefMut for Matrix<T> {
 }
 
 impl<T: Default + Clone> Default for Matrix<T> {
+    /// Returns a single-element matrix with the single element being `T::default()`.
     fn default() -> Self {
         Matrix {
             tensor: Tensor::<T>::default().reshape(&shape![1, 1]).unwrap(),
@@ -132,22 +139,8 @@ impl<T> IntoIterator for Matrix<T> {
     }
 }
 
-impl<T> From<IntoIter<T>> for Matrix<T> {
-    /// Converts an `IntoIter<T>` into a `Matrix<T>` of shape (1, length_of_iter).
-    /// This will panic if the iterator is empty since the shape will contain a 0.
-    fn from(value: IntoIter<T>) -> Self {
-        let l = value.len();
-
-        Matrix {
-            tensor: Tensor::from(value).reshape(&shape![1, l]).unwrap(),
-            rows: 1,
-            cols: l,
-        }
-    }
-}
-
 impl<T> FromIterator<T> for Matrix<T> {
-    /// Converts an `IntoIter<T>` into a `Matrix<T>` of shape (1, length_of_iter)
+    /// Converts an iterator into a matrix of shape `(1, iter.len())`.
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
         let elems = iter.into_iter().collect::<Vec<_>>();
 
@@ -160,8 +153,7 @@ impl<T> FromIterator<T> for Matrix<T> {
 }
 
 impl<'a, T: Clone> From<Iter<'a, T>> for Matrix<T> {
-    /// Converts an iterator into a matrix of shape (1, length_of_iter)
-    /// This will panic if the iterator is empty as the shape will contain a 0.
+    /// Converts an iterator into a matrix of shape `(1, value.len())`.
     fn from(value: Iter<'a, T>) -> Self {
         let elements: Vec<T> = value.map(|x| x.clone()).collect();
         Matrix {

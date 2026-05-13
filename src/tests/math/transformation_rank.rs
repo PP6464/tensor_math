@@ -6,11 +6,11 @@ mod transformation_rank_tests {
 
     #[test]
     fn transformation_rank() {
-        let m1: Matrix<f64> = identity(3).unwrap();
+        let m1: Matrix<f64> = identity(3);
         assert_eq!(m1.transformation_rank(), 3);
 
-        let mut m2 = identity(4).unwrap();
-        m2.slice_mut(1..3, 0..4).unwrap().set_all(&Matrix::<f64>::zeros(2, 4).unwrap()).unwrap();
+        let mut m2 = identity(4);
+        m2.slice_mut(1..3, 0..4).unwrap().set_all(&Matrix::<f64>::zeros(2, 4)).unwrap();
         assert_eq!(m2.transformation_rank(), 2);
 
         let m3 = Matrix::<Complex64>::new(
@@ -34,10 +34,10 @@ mod transformation_rank_tests {
 
         assert_eq!(m4.transformation_rank(), 2);
 
-        let m5 = Matrix::<f64>::zeros(3, 3).unwrap();
+        let m5 = Matrix::<f64>::zeros(3, 3);
         assert_eq!(m5.transformation_rank(), 0);
 
-        let m6 = Matrix::<Complex64>::zeros(3, 3).unwrap();
+        let m6 = Matrix::<Complex64>::zeros(3, 3);
         assert_eq!(m6.transformation_rank(), 0);
     }
 }

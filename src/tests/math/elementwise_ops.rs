@@ -54,8 +54,8 @@ mod elementwise_ops_tests {
     
     #[test]
     fn mat_operators() {
-        let m1 = -identity::<Complex64>(2).unwrap() / Complex64::from(2.0);
-        let m2 = identity::<Complex64>(2).unwrap() * (Complex64::ONE + Complex64::I);
+        let m1 = -identity::<Complex64>(2) / Complex64::from(2.0);
+        let m2 = identity::<Complex64>(2) * (Complex64::ONE + Complex64::I);
         let ans = Matrix::new(
             2,
             2,
@@ -140,7 +140,7 @@ mod elementwise_ops_tests {
     #[test]
     fn mat_and_mat_ref() {
         let m1 = vec![1, 2, 3, 4].into_matrix().reshape(2, 2).unwrap();
-        let m2 = Matrix::from_value(2, 2, 1).unwrap();
+        let m2 = Matrix::from_value(2, 2, 1);
         let ans = vec![0, 1, 2, 3].into_matrix().reshape(2, 2).unwrap();
 
         assert_eq!(m1 - &m2, ans);

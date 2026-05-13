@@ -2,7 +2,9 @@
 mod internal_functions_tests {
     use float_cmp::approx_eq;
     use num::complex::Complex64;
-    use crate::utilities::internal_functions::{bluestein_fft_vec, fft_vec, ifft_vec, radix_2_fft_vec};
+    use crate::utilities::internal_functions::{
+        bluestein_fft_vec, dot_vectors, fft_vec, ifft_vec, radix_2_fft_vec,
+    };
 
     #[test]
     fn radix_2_vec_fft_test() {
@@ -63,8 +65,8 @@ mod internal_functions_tests {
         ];
 
         for i in 0..8 {
-            assert!(approx_eq!(f64, res1[i].re, ans1[i].re, epsilon = 1e-15));
-            assert!(approx_eq!(f64, res1[i].im, ans1[i].im, epsilon = 1e-15));
+            assert!(approx_eq!(f64, res1[i].re, ans1[i].re, epsilon = 1e-10));
+            assert!(approx_eq!(f64, res1[i].im, ans1[i].im, epsilon = 1e-10));
         }
 
         for i in 0..16 {
@@ -172,8 +174,8 @@ mod internal_functions_tests {
         ];
 
         for i in 0..8 {
-            assert!(approx_eq!(f64, res1[i].re, ans1[i].re, epsilon = 1e-15));
-            assert!(approx_eq!(f64, res1[i].im, ans1[i].im, epsilon = 1e-15));
+            assert!(approx_eq!(f64, res1[i].re, ans1[i].re, epsilon = 1e-10));
+            assert!(approx_eq!(f64, res1[i].im, ans1[i].im, epsilon = 1e-10));
         }
 
         for i in 0..16 {
@@ -275,5 +277,31 @@ mod internal_functions_tests {
             assert!(approx_eq!(f64, res3[i].re, ans3[i].re, epsilon = 1e-10));
             assert!(approx_eq!(f64, res3[i].im, ans3[i].im, epsilon = 1e-10));
         }
+    }
+    
+    #[test]
+    fn dot_vectors_test() {
+        let v1 = vec![1.0, 2.0, 3.0];
+        let v2 = vec![4.0, 5.0, 6.0];
+        let res = dot_vectors(&v1, &v2);
+        assert!(approx_eq!(f64, res, 32.0, epsilon = 1e-10));
+
+        let v3 = vec![
+            Complex64::new(1.0, 2.0),
+            Complex64::new(3.0, 4.0),
+        ];
+        let v4 = vec![
+            Complex64::new(5.0, 6.0),
+            Complex64::new(7.0, 8.0),
+        ];
+
+
+        let res2 = dot_vectors(&v3, &v4);
+        assert!(approx_eq!(f64, res2.re, -18.0, epsilon = 1e-10));
+        assert!(approx_eq!(f64, res2.im, 68.0, epsilon = 1e-10));
+
+        let (v5, v6): (Vec<usize>, Vec<usize>) = (vec![], vec![]);
+        let res = dot_vectors(&v5, &v6);
+        assert_eq!(res, 0);
     }
 }

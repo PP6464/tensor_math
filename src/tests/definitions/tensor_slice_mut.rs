@@ -54,4 +54,31 @@ mod tensor_slice_mut_tests {
         
         assert_eq!(slice.try_into_tensor().unwrap(), ans);
     }
+    
+    #[test]
+    fn slicing_on_scalar_tensor() {
+        let mut tensor = Tensor::<i32>::new(&shape![], vec![42]).unwrap();
+        let mut slice = tensor.slice_mut(&[]).unwrap();
+
+        assert_eq!(slice.get(&[]), Some(&42));
+        slice[&[]] = 10;
+        assert_eq!(slice.into_tensor(), Tensor::new(&shape![], vec![10]).unwrap());
+    }
+    
+    #[test]
+    fn slicing_on_empty_tensor() {
+        let mut tensor = Tensor::<i32>::new(&shape![0, 3], vec![]).unwrap();
+        let slice = tensor.slice_mut(&[0..0, 1..2]).unwrap();
+
+        assert_eq!(slice.start, vec![0, 1]);
+        assert_eq!(slice.end, vec![0, 2]);
+        assert_eq!(slice.into_tensor().shape().0, vec![0, 1]);
+
+        let mut tensor2 = Tensor::<i32>::new(&shape![3, 0], vec![]).unwrap();
+        let slice2 = tensor2.slice_mut(&[1..2, 0..0]).unwrap();
+
+        assert_eq!(slice2.start, vec![1, 0]);
+        assert_eq!(slice2.end, vec![2, 0]);
+        assert_eq!(slice2.into_tensor().shape().0, vec![1, 0]);
+    }
 }

@@ -16,10 +16,10 @@ impl Matrix<f64> {
 
         // All 1x1 and 2x2 matrices are trivially upper Hessenberg
         if ord < 3 {
-            return Ok((self.clone(), identity(ord)?));
+            return Ok((self.clone(), identity(ord)));
         }
 
-        let (mut h, mut q) = (self.clone(), identity(ord)?);
+        let (mut h, mut q) = (self.clone(), identity(ord));
 
         for i in 0..ord - 2 {
             let vec_bottom = h.slice(i+1..ord, i..i + 1)?;
@@ -39,7 +39,7 @@ impl Matrix<f64> {
             let u = v.norm_l2();
             let u_clone = u.clone();
             let u_t = u_clone.transpose_mt();
-            let reflector = identity::<f64>(u.shape.0.first().unwrap().clone())? - u
+            let reflector = identity::<f64>(u.shape.0.first().unwrap().clone()) - u
                 .contract_mul(&u_t)?
                 * 2.0;
             let reflector_transpose = reflector.transpose_mt();
@@ -88,10 +88,10 @@ impl Matrix<Complex64> {
 
         // All 1x1 and 2x2 matrices are trivially upper Hessenberg
         if ord < 3 {
-            return Ok((self.clone(), identity(ord)?));
+            return Ok((self.clone(), identity(ord)));
         }
 
-        let (mut h, mut q) = (self.clone(), identity(ord)?);
+        let (mut h, mut q) = (self.clone(), identity(ord));
 
         for i in 0..ord - 2 {
             let vec_bottom = h.slice(i+1..ord, i..i + 1)?;
@@ -112,7 +112,7 @@ impl Matrix<Complex64> {
             let u_clone = u.clone();
             let u_t = u_clone.transpose_mt();
             let u_star = u_t.iter().map(|x| x.conj()).collect::<Matrix<Complex64>>().reshape(u_t.rows, u_t.cols)?;
-            let reflector = identity::<Complex64>(u.shape.0[0].clone())? - u.mat_mul_mt(&u_star)?
+            let reflector = identity::<Complex64>(u.shape.0[0].clone()) - u.mat_mul_mt(&u_star)?
                 * Complex64 { re: 2.0, im: 0.0 };
             let reflector_star = reflector.conj_transpose_mt();
             let reflector_ord = reflector.rows;

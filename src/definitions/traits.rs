@@ -1,15 +1,13 @@
 use crate::definitions::matrix::Matrix;
 use crate::definitions::tensor::Tensor;
 
-/// This trait allows you to specify that something can be infallibly converted into a type of `Tensor<T>`.
-/// It has the `into_tensor` method that converts the value into a `Tensor<T>`, consuming it. Bear in mind
-/// that this does then automatically derive an implementation for `TryIntoTensor`.
+/// This trait allows you to specify that something can be infallibly converted into a tensor.
+/// This automatically derives an implementation for `TryIntoTensor`.
 pub trait IntoTensor<T> {
     fn into_tensor(self) -> Tensor<T>;
 }
-/// This trait allows you to specify that something can be fallibly converted into a type of `Tensor<T>`.
-/// It has the `try_into_tensor` method that attempts to convert the value into a `Tensor<T>`, consuming it
-/// and returning an error value if not possible.
+
+/// This trait allows you to specify that something can be fallibly converted into a tensor.
 pub trait TryIntoTensor<T> {
     type Error;
 
@@ -24,14 +22,13 @@ impl<T, O: IntoTensor<T>> TryIntoTensor<T> for O {
     }
 }
 
-/// This trait allows you to specify that something can be infallibly converted into a `Matrix<T>`.
-/// Bear in mind that this does automatically derive an implementation for `TryIntoMatrix<T>`.
+/// This trait allows you to specify that something can be infallibly converted into a matrix.
+/// This automatically derives an implementation for `TryIntoMatrix`.
 pub trait IntoMatrix<T> {
     fn into_matrix(self) -> Matrix<T>;
 }
 
-/// This trait allows you to specify that something can be fallibly converted into a `Matrix<T>`,
-/// returning an error value if it is not possible.
+/// This trait allows you to specify that something can be fallibly converted into a matrix.
 pub trait TryIntoMatrix<T> {
     type Error;
 

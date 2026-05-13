@@ -76,10 +76,10 @@ use float_cmp::{ApproxEq, F64Margin, FloatMargin};
 
     #[test]
     fn householder_of_zeros() {
-        let m1 = Matrix::<f64>::zeros(3, 3).unwrap();
-        let m2 = Matrix::<Complex64>::zeros(3, 3).unwrap();
+        let m1 = Matrix::<f64>::zeros(3, 3);
+        let m2 = Matrix::<Complex64>::zeros(3, 3);
 
-        assert_eq!(m1.householder(), (eye(3).unwrap(), m1));
-        assert_eq!(m2.householder(), (eye(3).unwrap(), m2));
+        assert_eq!(m1.householder(), (eye(3), m1));
+        assert_eq!(m2.householder(), (eye(3), m2));
     }
 }

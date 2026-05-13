@@ -45,10 +45,10 @@ impl Matrix<Complex64> {
                 ws = roots[1]
             }
             
-            let shifted = h.clone() - identity(ord)? * ws;
+            let shifted = h.clone() - identity(ord) * ws;
             let (qs, rs) = shifted.householder();
 
-            h = rs.contract_mul_mt(&qs)? + identity(ord)? * ws;
+            h = rs.contract_mul_mt(&qs)? + identity(ord) * ws;
             q = q.contract_mul_mt(&qs)?;
 
             diff = h[(ord - 1, ord - 1)] - prev_ref;

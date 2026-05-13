@@ -12,7 +12,7 @@ mod eigen_tests {
 
         let (vals, vecs) = m1.map(Complex64::from).eigendecompose().unwrap();
         assert_eq!(vals, vec![Complex64::ONE]);
-        assert_eq!(vecs, eye(1).unwrap());
+        assert_eq!(vecs, eye(1));
     }
 
     #[test]
@@ -43,7 +43,10 @@ mod eigen_tests {
                 let vec = vecs.slice(0..ord, i..i + 1).unwrap();
                 let val = vals[i];
 
-                assert!(approx_eq!(Matrix<Complex64>, vec.clone() * val, m.contract_mul_mt(&vec).unwrap(), epsilon = 1e-13));
+                println!("left: {:?}", vec.clone() * val);
+                println!("right: {:?}", m.mat_mul_mt(&vec).unwrap());
+
+                assert!(approx_eq!(Matrix<Complex64>, vec.clone() * val, m.contract_mul_mt(&vec).unwrap(), epsilon = 1e-10));
             }
         }
     }

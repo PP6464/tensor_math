@@ -2,45 +2,38 @@ use crate::definitions::errors::TensorErrors;
 use crate::definitions::strides::Strides;
 use crate::utilities::internal_functions::dot_vectors;
 use std::fmt::Display;
-use std::ops::Index;
+use std::ops::{Index, IndexMut};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Shape(pub(crate) Vec<usize>);
 
 impl Shape {
-    pub fn new(shape: Vec<usize>) -> Result<Self, TensorErrors> {
-        if shape.is_empty() {
-            return Err(TensorErrors::ShapeNoDimensions);
-        }
-
-        if shape.contains(&0) {
-            return Err(TensorErrors::ShapeContainsZero);
-        }
-
-        Ok(Shape(shape))
+    /// Constructs a new shape.
+    pub fn new(shape: Vec<usize>) -> Self {
+        Shape(shape)
     }
 
-    /// This returns the number of dimensions of the shape
+    /// This returns the number of dimensions of the shape.
     pub fn rank(&self) -> usize {
         self.0.len()
     }
 
-    /// The size of the elements a tensor of this shape would have
+    /// The number of elements a tensor of this shape should have.
     pub fn element_count(&self) -> usize {
         self.0.iter().product()
     }
 
-    /// This gives a list of all indices that are valid for a tensor with this shape
+    /// This gives a list of all indices that are valid for a tensor with this shape.
     pub fn indices(&self) -> Vec<Vec<usize>> {
-        (0..self.element_count()).map(|i| self.tensor_index(i)).collect()
+        (0..self.element_count())
+            .map(|i| self.tensor_index(i).unwrap())
+            .collect()
     }
 
-    /// This sets the value at a given axis
+    /// Sets the value at a given axis.
+    ///
+    /// This fails if the axis is out of bounds.
     pub fn set(&mut self, axis: usize, value: usize) -> Result<(), TensorErrors> {
-        if value == 0 {
-            return Err(TensorErrors::ShapeContainsZero);
-        }
-
         if axis >= self.rank() {
             return Err(TensorErrors::AxisOutOfBounds {
                 axis,
@@ -53,15 +46,20 @@ impl Shape {
         Ok(())
     }
 
-    /// Gets the length at a specified axis, if it exists, otherwise returns None
+    /// Gets the length at a specified axis, if it exists, otherwise returns None.
     pub fn get(&self, axis: usize) -> Option<usize> {
         self.0.get(axis).copied()
     }
 
-    /// This gives the address for a corresponding shape index
-    pub fn address_of(&self, index: Vec<usize>) -> Result<usize, TensorErrors> {
+    /// This gives the address for a corresponding shape index.
+    ///
+    /// This fails if the index is out of bounds.
+    pub fn address(&self, index: Vec<usize>) -> Result<usize, TensorErrors> {
         if index.len() != self.rank() {
-            return Err(TensorErrors::IndicesInvalidForRank(index.len(), self.rank()));
+            return Err(TensorErrors::IndicesInvalidForRank(
+                index.len(),
+                self.rank(),
+            ));
         }
 
         for (i, &v) in index.iter().enumerate() {
@@ -77,10 +75,14 @@ impl Shape {
         Ok(dot_vectors(&Strides::from_shape(self).0, &index))
     }
 
-    /// Computes the tensor index for a given address (also takes the shape of the tensor)
-    /// E.g. for a tensor of shape (2, 3, 2), address 4 in the data would correspond to the index (0, 2, 0)
-    /// and the address 11 would correspond to (1, 2, 1) etc.
-    pub fn tensor_index(&self, address: usize) -> Vec<usize> {
+    /// Computes the tensor index for a given address.
+    ///
+    /// This fails if the address is out of bounds.
+    pub fn tensor_index(&self, address: usize) -> Result<Vec<usize>, TensorErrors> {
+        if address >= self.element_count() {
+            return Err(TensorErrors::AddressOutOfBounds(address));
+        }
+
         let mut index_vec = Vec::with_capacity(self.rank());
         let mut remainder = address;
         let strides = Strides::from_shape(self);
@@ -91,7 +93,7 @@ impl Shape {
             remainder = remainder % j;
         }
 
-        index_vec
+        Ok(index_vec)
     }
 }
 
@@ -103,10 +105,20 @@ impl Index<usize> for Shape {
     }
 }
 
-impl TryFrom<Vec<usize>> for Shape {
-    type Error = TensorErrors;
+impl IndexMut<usize> for Shape {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.0[index]
+    }
+}
 
-    fn try_from(shape: Vec<usize>) -> Result<Self, Self::Error> {
+impl FromIterator<usize> for Shape {
+    fn from_iter<I: IntoIterator<Item = usize>>(iter: I) -> Self {
+        Shape(Vec::from_iter(iter))
+    }
+}
+
+impl From<Vec<usize>> for Shape {
+    fn from(shape: Vec<usize>) -> Self {
         Shape::new(shape)
     }
 }
@@ -118,12 +130,9 @@ impl Display for Shape {
 }
 
 #[macro_export]
-/// Creates a shape from varargs of type usize
-/// Assumes the arguments form a valid shape so
-/// will panic! if the arguments are invalid instead
-/// of returning a `Result` type
+/// Creates a shape from varargs of type usize.
 macro_rules! shape {
     ($($shape_dimensions:expr),*$(,)?) => {
-        Shape::new(vec![$($shape_dimensions),*]).unwrap()
+        Shape::new(vec![$($shape_dimensions),*])
     };
 }

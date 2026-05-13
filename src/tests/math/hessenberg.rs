@@ -130,11 +130,11 @@ mod hessenberg_tests {
 
     #[test]
     fn hessenberg_of_zero() {
-        let m1 = Matrix::<f64>::zeros(5, 5).unwrap();
+        let m1 = Matrix::<f64>::zeros(5, 5);
 
         let (h, q) = m1.upper_hessenberg().unwrap();
 
-        assert_eq!(h, Matrix::zeros(5, 5).unwrap());
-        assert_eq!(q, eye(5).unwrap());
+        assert_eq!(h, Matrix::zeros(5, 5));
+        assert_eq!(q, eye(5));
     }
 }

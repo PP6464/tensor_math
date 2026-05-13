@@ -87,7 +87,7 @@ pub fn gaussian_pdf_multi_sigma(sigma: Vec<f64>, shape: &Shape) -> Result<Tensor
 /// The possible outputs will be 1001 different outputs spaced evenly across the interval [min, max\].
 pub fn gaussian_sample(sigma: f64, shape: &Shape, min: f64, max: f64) -> Result<Tensor<f64>, TensorErrors> {
     if max <= min {
-        return Err(TensorErrors::InvalidNonEmptyInterval {
+        return Err(TensorErrors::InvalidInterval {
             min,
             max,
         });

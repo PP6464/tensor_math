@@ -33,7 +33,7 @@ impl<T: Clone + Mul<Output = T>> Tensor<T> {
             }
         }
 
-        let new_shape = Shape::new(new_shape_vec).unwrap();
+        let new_shape = Shape::new(new_shape_vec);
         let mut new_elements = Vec::with_capacity(new_shape.element_count());
 
         for i in self.elements.iter().cloned() {
@@ -79,7 +79,7 @@ impl<T: Clone + Mul<Output = T> + Send + Sync> Tensor<T> {
             }
         }
 
-        let new_shape = Shape::new(new_shape_vec).unwrap();
+        let new_shape = Shape::new(new_shape_vec);
         let mut new_elements = (0..new_shape.element_count()).map(|_| self.first().unwrap().clone()).collect::<Vec<T>>();
 
         scope(|s| {

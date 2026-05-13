@@ -60,7 +60,7 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Tensor<T> {
             })
             .collect::<Vec<_>>();
 
-        let padded_shape = Shape::new(padded_shape_vec)?;
+        let padded_shape = Shape::new(padded_shape_vec);
 
         let res_shape_vec = self_perm
             .shape
@@ -79,7 +79,7 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Tensor<T> {
             .map(|(i, &o)| if i >= rank - axes.len() { o } else { 1 })
             .collect::<Vec<_>>();
 
-        let kernel_shape = Shape::new(kernel_shape_vec)?;
+        let kernel_shape = Shape::new(kernel_shape_vec);
 
         let mut self_padded = Self::zeros(&padded_shape);
         self_padded
@@ -129,7 +129,7 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Tensor<T> {
                     }
                 },
                 &kernel_shape,
-                &Shape::new(vec![1; rank])?,
+                &Shape::new(vec![1; rank]),
                 T::zero(),
             )
             .unwrap()
@@ -150,7 +150,7 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Tensor<T> {
                 .zip(other.shape.0.iter())
                 .map(|(&s, &o)| s + o - 1)
                 .collect::<Vec<_>>(),
-        )?;
+        );
 
         let padded_shape = Shape::new(
             self.shape
@@ -159,7 +159,7 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Tensor<T> {
                 .zip(other.shape.0.iter())
                 .map(|(&s, &o)| s + 2 * (o - 1))
                 .collect::<Vec<_>>(),
-        )?;
+        );
 
         let mut self_padded = Self::zeros(&padded_shape);
 
@@ -181,7 +181,7 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Tensor<T> {
                     }
                 },
                 &other.shape,
-                &Shape::new(vec![1; self.rank()]).unwrap(),
+                &Shape::new(vec![1; self.rank()]),
                 T::zero(),
             )?
             .slice(&res_shape.0.iter().map(|&x| 0..x).collect::<Vec<_>>())?)
@@ -200,7 +200,7 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Matrix<T> {
             return Err(TensorErrors::ShapesIncompatible);
         }
 
-        let mut self_padded = Self::zeros(self.rows + 2 * (other.rows - 1), self.cols)?;
+        let mut self_padded = Self::zeros(self.rows + 2 * (other.rows - 1), self.cols);
         self_padded
             .slice_mut(other.rows - 1..other.rows - 1 + self.rows, 0..self.cols)?
             .set_all(&self)?;
@@ -227,7 +227,7 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Matrix<T> {
             return Err(TensorErrors::ShapesIncompatible);
         }
 
-        let mut self_padded = Self::zeros(self.rows, self.cols + 2 * (other.cols - 1))?;
+        let mut self_padded = Self::zeros(self.rows, self.cols + 2 * (other.cols - 1));
         self_padded
             .slice_mut(0..self.rows, other.cols - 1..other.cols - 1 + self.cols)?
             .set_all(&self)?;
@@ -256,7 +256,7 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Matrix<T> {
         );
         let (res_rows, res_cols) = (self.rows + other.rows - 1, self.cols + other.cols - 1);
 
-        let mut self_padded = Self::zeros(padded_rows, padded_cols).unwrap();
+        let mut self_padded = Self::zeros(padded_rows, padded_cols);
 
         self_padded
             .slice_mut(
@@ -293,7 +293,11 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Matrix<T> {
 
 impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Send + Sync> Tensor<T> {
     /// Computes the correlation of two tensors across specified axes on multiple threads
-    pub fn corr_axes_mt(&self, other: &Tensor<T>, axes: &HashSet<usize>) -> Result<Tensor<T>, TensorErrors> {
+    pub fn corr_axes_mt(
+        &self,
+        other: &Tensor<T>,
+        axes: &HashSet<usize>,
+    ) -> Result<Tensor<T>, TensorErrors> {
         if self.rank() != other.rank() {
             return Err(TensorErrors::RanksDoNotMatch(self.rank(), other.rank()));
         }
@@ -302,10 +306,7 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Send + Sync> Tensor<T
 
         for &axis in axes {
             if axis >= rank {
-                return Err(TensorErrors::AxisOutOfBounds {
-                    axis,
-                    rank,
-                });
+                return Err(TensorErrors::AxisOutOfBounds { axis, rank });
             }
         }
 
@@ -342,7 +343,7 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Send + Sync> Tensor<T
             })
             .collect::<Vec<_>>();
 
-        let padded_shape = Shape::new(padded_shape_vec)?;
+        let padded_shape = Shape::new(padded_shape_vec);
 
         let res_shape_vec = self_perm
             .shape
@@ -361,7 +362,7 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Send + Sync> Tensor<T
             .map(|(i, &o)| if i >= rank - axes.len() { o } else { 1 })
             .collect::<Vec<_>>();
 
-        let kernel_shape = Shape::new(kernel_shape_vec)?;
+        let kernel_shape = Shape::new(kernel_shape_vec);
 
         let mut self_padded = Self::zeros(&padded_shape);
         self_padded
@@ -411,7 +412,7 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Send + Sync> Tensor<T
                     }
                 },
                 &kernel_shape,
-                &Shape::new(vec![1; rank]).unwrap(),
+                &Shape::new(vec![1; rank]),
                 T::zero(),
             )?
             .slice(&res_shape_vec.iter().map(|&x| 0..x).collect::<Vec<_>>())?
@@ -431,7 +432,7 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Send + Sync> Tensor<T
                 .zip(other.shape.0.iter())
                 .map(|(&s, &o)| s + o - 1)
                 .collect::<Vec<_>>(),
-        )?;
+        );
 
         let padded_shape = Shape::new(
             self.shape
@@ -440,7 +441,7 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Send + Sync> Tensor<T
                 .zip(other.shape.0.iter())
                 .map(|(&s, &o)| s + 2 * (o - 1))
                 .collect::<Vec<_>>(),
-        )?;
+        );
 
         let mut self_padded = Self::zeros(&padded_shape);
 
@@ -462,7 +463,7 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Send + Sync> Tensor<T
                     }
                 },
                 &other.shape,
-                &Shape::new(vec![1; self.rank()])?,
+                &Shape::new(vec![1; self.rank()]),
                 T::zero(),
             )?
             .slice(&res_shape.0.iter().map(|&x| 0..x).collect::<Vec<_>>())?)
@@ -483,7 +484,7 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Send + Sync> Matrix<T
         );
         let (res_rows, res_cols) = (self.rows + other.rows - 1, self.cols + other.cols - 1);
 
-        let mut self_padded = Self::zeros(padded_rows, padded_cols).unwrap();
+        let mut self_padded = Self::zeros(padded_rows, padded_cols);
 
         self_padded
             .slice_mut(
@@ -523,7 +524,7 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Send + Sync> Matrix<T
             return Err(TensorErrors::ShapesIncompatible);
         }
 
-        let mut self_padded = Self::zeros(self.rows + 2 * (other.rows - 1), self.cols)?;
+        let mut self_padded = Self::zeros(self.rows + 2 * (other.rows - 1), self.cols);
         self_padded
             .slice_mut(other.rows - 1..other.rows - 1 + self.rows, 0..self.cols)?
             .set_all(&self)?;
@@ -550,7 +551,7 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Send + Sync> Matrix<T
             return Err(TensorErrors::ShapesIncompatible);
         }
 
-        let mut self_padded = Self::zeros(self.rows, self.cols + 2 * (other.cols - 1))?;
+        let mut self_padded = Self::zeros(self.rows, self.cols + 2 * (other.cols - 1));
         self_padded
             .slice_mut(0..self.rows, other.cols - 1..other.cols - 1 + self.cols)?
             .set_all(&self)?;

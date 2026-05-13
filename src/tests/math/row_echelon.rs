@@ -242,14 +242,14 @@ mod row_echelon_tests {
         ).unwrap();
 
         let m1_rref = m1.reduced_row_echelon();
-        let m1_rref_ans = eye(3).unwrap().concat_mt(&Matrix::<f64>::new(
+        let m1_rref_ans = eye(3).concat_cols_mt(&Matrix::<f64>::new(
             3, 2,
             vec![
                 37.0, -2.5,
                 3.6, -1.1,
                 -3.25, -61.0/24.0,
             ],
-        ).unwrap(), 1).unwrap();
+        ).unwrap()).unwrap();
 
         assert!(approx_eq!(Matrix<f64>, m1_rref, m1_rref_ans, epsilon = 1e-15));
 
@@ -285,7 +285,7 @@ mod row_echelon_tests {
         ).unwrap();
 
         let m3_rref = m3.reduced_row_echelon();
-        let m3_rref_ans = identity(2).unwrap();
+        let m3_rref_ans = identity(2);
 
         assert!(approx_eq!(Matrix<f64>, m3_rref, m3_rref_ans, epsilon = 1e-15));
 

@@ -2,6 +2,7 @@ use std::cmp::min;
 use std::ops::{Add, Mul};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread::scope;
+use num::Zero;
 use crate::definitions::errors::TensorErrors;
 use crate::definitions::matrix::Matrix;
 use crate::definitions::shape::Shape;
@@ -10,12 +11,21 @@ use crate::definitions::traits::{IntoTensor};
 use crate::shape;
 use crate::utilities::internal_functions::dot_vectors;
 
-impl<T: Clone + Add<Output = T> + Mul<Output = T>> Tensor<T> {
-    /// Perform tensor-contraction multiplication, which is a more general form of matrix multiplication
-    /// A `Tensor` of shape (a,b,c) multiplied in this way by a `Tensor` of shape (c, d, e, f)
-    /// will produce a resultant `Tensor` of shape (a, b, d, e, f) by the following formula:
-    /// result(a, b, d, e, f) = sum(x=0, x=c) { first(a, b, x) * second(x, d, e, f) }
+impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Tensor<T> {
+    /// Perform tensor-contraction multiplication,
+    /// which is a more general form of matrix multiplication.
+    /// E.g: A tensor of shape (a,b,c) multiplied in this way by a tensor of shape (c, d, e, f)
+    /// will produce a tensor of shape (a, b, d, e, f) by the following formula:
+    /// result[&[i, j, k, l, m\]\] = sum(x=0, x=c) { first[&[i, j, x\]\] * second[&[x, k, l, m\]\] }.
     pub fn contract_mul(&self, other: &Tensor<T>) -> Result<Tensor<T>, TensorErrors> {
+        if self.rank() == 0 {
+            return Ok(other.map_refs(|x| self.elements[0].clone() * x.clone()))
+        }
+
+        if other.rank() == 0 {
+            return Ok(self * other.elements[0].clone())
+        }
+
         if self.shape.0.last().unwrap() != other.shape.0.first().unwrap() {
             return Err(TensorErrors::ShapesIncompatible);
         }
@@ -38,11 +48,11 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T>> Tensor<T> {
                 .rev()
                 .cloned(),
         );
-        let resultant_shape = Shape::new(resultant_shape_vec)?;
+        let resultant_shape: Shape = resultant_shape_vec.into();
         let mut resultant_elements: Vec<T> = Vec::with_capacity(resultant_shape.element_count());
 
         for i in 0..resultant_shape.element_count() {
-            let index = resultant_shape.tensor_index(i);
+            let index = resultant_shape.tensor_index(i)?;
             let (self_chunk, other_chunk) = index.split_at(self.rank() - 1);
             let mut self_elements: Vec<T> = Vec::with_capacity(*self.shape.0.last().unwrap());
             let mut other_elements: Vec<T> = Vec::with_capacity(*other.shape.0.first().unwrap());
@@ -74,18 +84,18 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T>> Tensor<T> {
     }
 }
 
-impl<T: Clone + Add<Output = T> + Mul<Output = T>> Matrix<T> {
-    /// Does matrix multiplication with another `Matrix`
+impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Matrix<T> {
+    /// Does matrix multiplication with another matrix.
     pub fn contract_mul(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
         self.tensor.contract_mul(&other.tensor)?.try_into()
     }
 
-    /// Does matrix multiplication with another matrix. This is just an alternate name for the method
+    /// Does matrix multiplication with another matrix.
     pub fn mat_mul(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
         self.contract_mul(other)
     }
     
-    /// Computes the dot product of the two matrices, i.e. the elementwise product, then the sum of the result
+    /// Computes the dot product of the two matrices, i.e. the elementwise product, then the sum of the result.
     pub fn dot(&self, other: &Matrix<T>) -> Result<T, TensorErrors> {
         if self.shape != other.shape {
             return Err(TensorErrors::ShapesIncompatible);
@@ -95,9 +105,21 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T>> Matrix<T> {
     }
 }
 
-impl<T: Clone + Add<Output = T> + Mul<Output = T> + Send + Sync> Tensor<T> {
-    /// Does tensor contraction multiplication on multiple threads
+impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Send + Sync> Tensor<T> {
+    /// Perform tensor-contraction multiplication (using multiple threads),
+    /// which is a more general form of matrix multiplication.
+    /// E.g: A tensor of shape (a,b,c) multiplied in this way by a tensor of shape (c, d, e, f)
+    /// will produce a tensor of shape (a, b, d, e, f) by the following formula:
+    /// result[&[i, j, k, l, m\]\] = sum(x=0, x=c) { first[&[i, j, x\]\] * second[&[x, k, l, m\]\] }.
     pub fn contract_mul_mt(&self, other: &Tensor<T>) -> Result<Tensor<T>, TensorErrors> {
+        if self.rank() == 0 {
+            return Ok(other.map_refs(|x| self.elements[0].clone() * x.clone()));
+        }
+
+        if other.rank() == 0 {
+            return Ok(self * other.elements[0].clone());
+        }
+
         if self.shape.0.last().unwrap() != other.shape.0.first().unwrap() {
             return Err(TensorErrors::ShapesIncompatible);
         }
@@ -120,14 +142,14 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Send + Sync> Tensor<T> {
                 .rev()
                 .cloned(),
         );
-        let res_shape = Shape::new(resultant_shape_vec)?;
+        let res_shape = resultant_shape_vec.into();
 
         let res_mutexes = Arc::new(
             RwLock::new(
                 Tensor::new(
                     &res_shape,
                     (0..res_shape.element_count())
-                        .map(|_| Mutex::new(self.first().unwrap().clone()))
+                        .map(|_| Mutex::new(T::zero()))
                         .collect(),
                 )?,
             ),
@@ -151,7 +173,7 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Send + Sync> Tensor<T> {
                     let res_read = res_arc_clone.read().unwrap();
 
                     for j in start..end {
-                        let t_index = res_shape_arc_clone.tensor_index(j);
+                        let t_index = res_shape_arc_clone.tensor_index(j).unwrap();
 
                         let (self_part, other_part) = t_index.split_at(self_arc_clone.rank() - 1);
 
@@ -179,7 +201,7 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Send + Sync> Tensor<T> {
     }
 }
 
-impl<T: Clone + Add<Output = T> + Mul<Output = T> + Send + Sync> Matrix<T> {
+impl<T: Clone + Add<Output = T> + Mul<Output = T> + Send + Sync + Zero> Matrix<T> {
     /// Does matrix multiplication on multiple threads
     pub fn contract_mul_mt(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
         self.tensor.contract_mul_mt(&other.tensor)?.try_into()
