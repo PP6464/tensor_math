@@ -11,7 +11,11 @@ use crate::utilities::internal_functions::{fft_vec, ifft_vec};
 
 impl Tensor<Complex64> {
     /// Computes an FFT along a single axis.
+    /// Fails if the tensor is rank zero or the axis is out of bounds.
     pub fn fft_single_axis(&self, axis: usize) -> Result<Tensor<Complex64>, TensorErrors> {
+        if self.rank() == 0 {
+            return Err(TensorErrors::RankZero { op: "fft_single_axis" });
+        }
         if axis >= self.rank() {
             return Err(TensorErrors::AxisOutOfBounds {
                 axis,
@@ -65,7 +69,11 @@ impl Tensor<Complex64> {
     }
 
     /// Computes an FFT along a list of axes
+    /// Fails if the tensor is rank zero or if any of the axes are out of bounds.
     pub fn fft_axes(&self, axes: &HashSet<usize>) -> Result<Tensor<Complex64>, TensorErrors> {
+        if self.rank() == 0 {
+            return Err(TensorErrors::RankZero { op: "fft_axes" });
+        }
         let mut res = self.clone();
 
         for &axis in axes {
@@ -75,13 +83,21 @@ impl Tensor<Complex64> {
         Ok(res)
     }
 
-    /// Computes an FFT along all the axes
-    pub fn fft(&self) -> Tensor<Complex64> {
-        self.fft_axes(&(0..self.rank()).collect()).unwrap()
+    /// Computes an FFT along all the axes.
+    /// Fails if the tensor is rank zero.
+    pub fn fft(&self) -> Result<Tensor<Complex64>, TensorErrors> {
+        if self.rank() == 0 {
+            return Err(TensorErrors::RankZero { op: "fft" });
+        }
+        self.fft_axes(&(0..self.rank()).collect())
     }
 
     /// Computes an inverse FFT along a single axis.
+    /// Fails if the tensor is rank zero or the axis is out of bounds.
     pub fn ifft_single_axis(&self, axis: usize) -> Result<Tensor<Complex64>, TensorErrors> {
+        if self.rank() == 0 {
+            return Err(TensorErrors::RankZero { op: "ifft_single_axis" });
+        }
         if axis >= self.rank() {
             return Err(TensorErrors::AxisOutOfBounds {
                 axis,
@@ -135,7 +151,11 @@ impl Tensor<Complex64> {
     }
 
     /// Computes an inverse FFT along a list of axes
+    /// Fails if the tensor is rank zero or if any of the axes are out of bounds.
     pub fn ifft_axes(&self, axes: &HashSet<usize>) -> Result<Tensor<Complex64>, TensorErrors> {
+        if self.rank() == 0 {
+            return Err(TensorErrors::RankZero { op: "ifft_axes" });
+        }
         let mut res = self.clone();
 
         for &axis in axes {
@@ -145,18 +165,30 @@ impl Tensor<Complex64> {
         Ok(res)
     }
 
-    /// Computes an inverse FFT along all the axes
-    pub fn ifft(&self) -> Tensor<Complex64> {
-        self.ifft_axes(&(0..self.rank()).collect()).unwrap()
+    /// Computes an inverse FFT along all the axes.
+    /// Fails if the tensor is rank zero.
+    pub fn ifft(&self) -> Result<Tensor<Complex64>, TensorErrors> {
+        if self.rank() == 0 {
+            return Err(TensorErrors::RankZero { op: "ifft" });
+        }
+        self.ifft_axes(&(0..self.rank()).collect())
     }
 
     /// Computes the correlation of this and another tensor along a specified list of axes.
+    /// Fails if the tensors have different ranks, if non-correlation shapes do not match, or if the tensor is rank zero.
     pub fn fft_corr_axes(&self, other: &Tensor<Complex64>, axes: &HashSet<usize>) -> Result<Tensor<Complex64>, TensorErrors> {
+        if self.rank() == 0 {
+            return Err(TensorErrors::RankZero { op: "fft_corr_axes" });
+        }
         self.fft_conv_axes(&other.flip_axes_mt(axes)?, axes)
     }
 
     /// Computes the convolution of this and another tensor along a specified list of axes.
+    /// Fails if the tensors have different ranks, if non-convolution shapes do not match, or if the tensor is rank zero.
     pub fn fft_conv_axes(&self, other: &Tensor<Complex64>, axes: &HashSet<usize>) -> Result<Tensor<Complex64>, TensorErrors> {
+        if self.rank() == 0 {
+            return Err(TensorErrors::RankZero { op: "fft_conv_axes" });
+        }
         // Check that the shapes match on all non-convolution axes
         if self.rank() != other.rank() {
             return Err(TensorErrors::RanksDoNotMatch(self.rank(), other.rank()));
@@ -212,13 +244,21 @@ impl Tensor<Complex64> {
         res.ifft_axes(&(1..=k).map(|i| rank - i).collect())?.transpose_mt(&inv_perm)
     }
 
-    /// Computes the correlation of this and another tensor
+    /// Computes the correlation of this and another tensor.
+    /// Fails if the tensor is rank zero or if ranks do not match.
     pub fn fft_corr(&self, other: &Tensor<Complex64>) -> Result<Tensor<Complex64>, TensorErrors> {
+        if self.rank() == 0 {
+            return Err(TensorErrors::RankZero { op: "fft_corr" });
+        }
         self.fft_conv(&other.flip_mt())
     }
 
-    /// Computes the convolution of this and another tensor
+    /// Computes the convolution of this and another tensor.
+    /// Fails if the tensor is rank zero or if ranks do not match.
     pub fn fft_conv(&self, other: &Tensor<Complex64>) -> Result<Tensor<Complex64>, TensorErrors> {
+        if self.rank() == 0 {
+            return Err(TensorErrors::RankZero { op: "fft_conv" });
+        }
         if self.rank() != other.rank() {
             return Err(TensorErrors::RanksDoNotMatch(self.rank(), other.rank()));
         }
@@ -241,11 +281,11 @@ impl Tensor<Complex64> {
             .slice_mut(other.shape.0.iter().map(|x| 0..*x).collect::<Vec<_>>().as_slice())?
             .set_all(&other)?;
 
-        let self_fft = self_padded.fft();
+        let self_fft = self_padded.fft()?;
 
-        let other_fft = other_padded.fft();
+        let other_fft = other_padded.fft()?;
 
-        Ok((self_fft * other_fft).ifft())
+        Ok((self_fft * other_fft).ifft()?)
     }
 }
 
