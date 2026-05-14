@@ -25,7 +25,7 @@ impl<T: Add<Output = T> + Clone + Zero> Matrix<T> {
 
         let mut sum = T::zero();
 
-        for i in 1..self.shape.0.iter().min().unwrap().clone() {
+        for i in 0..self.shape.0.iter().min().unwrap().clone() {
             sum = sum.add(self[&[i, i]].clone());
         }
 

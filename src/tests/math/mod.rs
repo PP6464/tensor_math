@@ -12,3 +12,4 @@ mod transformation_rank;
 mod fft_ops;
 mod corr_conv;
 mod elementwise_ops;
+mod sum;
