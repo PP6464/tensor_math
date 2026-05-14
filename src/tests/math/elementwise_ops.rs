@@ -145,4 +145,34 @@ mod elementwise_ops_tests {
 
         assert_eq!(m1 - &m2, ans);
     }
+
+    #[test]
+    fn empty_tensor_ops() {
+        let t1 = Tensor::<i32>::new(&shape![0, 3], vec![]).unwrap();
+        let t2 = Tensor::<i32>::new(&shape![0, 3], vec![]).unwrap();
+        let ans = Tensor::<i32>::new(&shape![0, 3], vec![]).unwrap();
+
+        assert_eq!(&t1 + t2, ans);
+        assert_eq!(&t1 * 5, ans);
+    }
+
+    #[test]
+    fn empty_matrix_ops() {
+        let m1 = Matrix::<f64>::new(0, 2, vec![]).unwrap();
+        let m2 = Matrix::<f64>::new(0, 2, vec![]).unwrap();
+        let ans = Matrix::<f64>::new(0, 2, vec![]).unwrap();
+
+        assert_eq!(m1 + m2, ans);
+    }
+
+    #[test]
+    fn rank_0_tensor_ops() {
+        let t1 = Tensor::<i32>::new(&shape![], vec![10]).unwrap();
+        let t2 = Tensor::<i32>::new(&shape![], vec![5]).unwrap();
+        let ans_add = Tensor::<i32>::new(&shape![], vec![15]).unwrap();
+        let ans_mul = Tensor::<i32>::new(&shape![], vec![50]).unwrap();
+
+        assert_eq!(&t1 + &t2, ans_add);
+        assert_eq!(t1 * t2, ans_mul);
+    }
 }
