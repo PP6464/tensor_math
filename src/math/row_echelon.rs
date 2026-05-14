@@ -112,6 +112,10 @@ impl Matrix<f64> {
         let mut det_scale = 1;
         let mut pivot = (0usize, 0usize);
 
+        if res.rows == 0 {
+            return (res, det_scale);
+        }
+
         while pivot.0 < res.rows - 1 && pivot.1 < res.cols {
             // Identify if we can use this position as a pivot value
             let pivot_val = res[pivot];
@@ -359,6 +363,10 @@ impl Matrix<Complex64> {
         let mut det_scale = 1;
 
         let mut pivot = (0usize, 0usize);
+
+        if res.rows == 0 {
+            return (res, det_scale);
+        }
 
         while pivot.0 < res.rows - 1 && pivot.1 < res.cols {
             // Identify if we can use this position as a pivot value

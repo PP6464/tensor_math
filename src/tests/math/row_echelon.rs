@@ -383,4 +383,26 @@ mod row_echelon_tests {
         assert_eq!(m7_rref, m7_rref_ans);
         assert_eq!(m7.into_complex().reduced_row_echelon(), m7_rref_ans.into_complex());
     }
+
+    #[test]
+    fn empty_matrix_tests() {
+        let matrices = vec![
+            Matrix::<f64>::new(0, 0, vec![]).unwrap(),
+            Matrix::<f64>::new(0, 5, vec![]).unwrap(),
+            Matrix::<f64>::new(5, 0, vec![]).unwrap(),
+        ];
+
+        for m in matrices {
+            assert!(m.is_row_echelon());
+            assert!(m.is_reduced_row_echelon());
+            assert_eq!(m.row_echelon(), m);
+            assert_eq!(m.reduced_row_echelon(), m);
+
+            let mc = m.into_complex();
+            assert!(mc.is_row_echelon());
+            assert!(mc.is_reduced_row_echelon());
+            assert_eq!(mc.row_echelon(), mc);
+            assert_eq!(mc.reduced_row_echelon(), mc);
+        }
+    }
 }
