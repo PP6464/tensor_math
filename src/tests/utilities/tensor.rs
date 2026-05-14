@@ -8,7 +8,6 @@ mod tensor_utils_tests {
     use crate::{shape, transpose};
     use std::collections::HashSet;
     use std::f64::consts::PI;
-    use crate::utilities::matrix::pool_sum_mat;
 
     #[test]
     fn concat() {
@@ -744,6 +743,31 @@ mod tensor_utils_tests {
         let actual_mut: Vec<(Vec<usize>, i32)> =
             t1.enumerated_iter().map(|(i, v)| (i, v)).collect();
         assert_eq!(actual_mut, expected_mut);
+    }
+    
+    #[test]
+    fn enumerated_iter_rank_0() {
+        let mut t1 = Tensor::<i32>::new(&shape![], vec![42]).unwrap();
+
+        let expected = vec![(vec![], 42)];
+        let actual: Vec<(Vec<usize>, i32)> = t1.enumerated_iter().collect();
+        assert_eq!(actual, expected);
+
+        for (idx, val) in t1.enumerated_iter_mut() {
+            assert!(idx.is_empty());
+            *val += 1;
+        }
+        assert_eq!(t1.elements()[0], 43);
+    }
+
+    #[test]
+    fn enumerated_iter_empty() {
+        let mut t1 = Tensor::<i32>::new(&shape![0, 2], vec![]).unwrap();
+
+        assert_eq!(t1.enumerated_iter().count(), 0);
+        for (_, _) in t1.enumerated_iter_mut() {
+            panic!("Should not iterate over empty tensor");
+        }
     }
 
     #[test]

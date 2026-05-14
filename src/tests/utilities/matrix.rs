@@ -423,4 +423,28 @@ mod matrix_utils_tests {
         let res2 = m2.enumerated_iter_mut().collect::<Vec<_>>();
         assert!(res2.is_empty());
     }
+    
+    #[test]
+    fn enumerated_iter_empty_variants() {
+        let m_row_empty = Matrix::<i32>::new(0, 3, vec![]).unwrap();
+        assert_eq!(m_row_empty.enumerated_iter().count(), 0);
+
+        let m_col_empty = Matrix::<i32>::new(3, 0, vec![]).unwrap();
+        assert_eq!(m_col_empty.enumerated_iter().count(), 0);
+
+        let m_both_empty = Matrix::<i32>::new(0, 0, vec![]).unwrap();
+        assert_eq!(m_both_empty.enumerated_iter().count(), 0);
+    }
+
+    #[test]
+    fn enumerated_iter_mut_empty_variants() {
+        let mut m_row_empty = Matrix::<i32>::new(0, 3, vec![]).unwrap();
+        assert_eq!(m_row_empty.enumerated_iter_mut().count(), 0);
+
+        let mut m_col_empty = Matrix::<i32>::new(3, 0, vec![]).unwrap();
+        assert_eq!(m_col_empty.enumerated_iter_mut().count(), 0);
+
+        let mut m_both_empty = Matrix::<i32>::new(0, 0, vec![]).unwrap();
+        assert_eq!(m_both_empty.enumerated_iter_mut().count(), 0);
+    }
 }
