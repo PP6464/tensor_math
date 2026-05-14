@@ -8,12 +8,13 @@ impl Matrix<Complex64> {
     /// Returns the eigendecomposition for a matrix in the form `(values, vectors)`
     /// where `values` is a vector of eigenvalues and `vectors` is a matrix where
     /// the columns are the eigenvectors the matrix.
+    /// This fails if the matrix is not square.
     pub fn eigendecompose(&self) -> Result<(Vec<Complex64>, Matrix<Complex64>), TensorErrors> {
         if !self.is_square() {
             return Err(TensorErrors::NonSquareMatrix);
         }
 
-        if self.rows == 1 {
+        if self.rows <= 1 {
             return Ok((self.elements.clone(), self.clone()));
         }
 

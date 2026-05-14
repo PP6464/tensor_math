@@ -5,6 +5,15 @@ mod eigen_tests {
     use num::complex::{Complex64, ComplexFloat};
     use crate::definitions::errors::TensorErrors;
     use crate::utilities::matrix::eye;
+    
+    #[test]
+    fn zero_by_zero_case() {
+        let m = Matrix::<Complex64>::new(0, 0, vec![]).unwrap();
+        let (vals, vecs) = m.eigendecompose().unwrap();
+        assert!(vals.is_empty());
+        assert_eq!(vecs.rows, 0);
+        assert_eq!(vecs.cols, 0);
+    }
 
     #[test]
     fn one_by_one_case() {
@@ -42,9 +51,6 @@ mod eigen_tests {
             for i in 0..ord {
                 let vec = vecs.slice(0..ord, i..i + 1).unwrap();
                 let val = vals[i];
-
-                println!("left: {:?}", vec.clone() * val);
-                println!("right: {:?}", m.mat_mul_mt(&vec).unwrap());
 
                 assert!(approx_eq!(Matrix<Complex64>, vec.clone() * val, m.contract_mul_mt(&vec).unwrap(), epsilon = 1e-10));
             }
