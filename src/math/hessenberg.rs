@@ -7,6 +7,7 @@ use crate::utilities::matrix::identity;
 impl Matrix<f64> {
     /// Computes the upper Hessenberg form for square matrices.
     /// Returns (H, Q) where H is the Hessenberg form and Q is the accrued reflectors.
+    /// This fails if the matrix is not square.
     pub fn upper_hessenberg(&self) -> Result<(Matrix<f64>, Matrix<f64>), TensorErrors> {
         if !self.is_square() {
             return Err(TensorErrors::NonSquareMatrix);
@@ -69,6 +70,7 @@ impl Matrix<f64> {
 
     /// Computes the lower Hessenberg form for square matrices
     /// Returns (H, Q) where H is the Hessenberg form and Q is the accrued reflectors.
+    /// This fails if the matrix is not square.
     pub fn lower_hessenberg(&self) -> Result<(Matrix<f64>, Matrix<f64>), TensorErrors> {
         // Note that Q_l = Q_u and H_l = (H_u) ^ T
         let (h_u, q_u) = self.transpose_mt().upper_hessenberg()?;
@@ -79,6 +81,7 @@ impl Matrix<f64> {
 impl Matrix<Complex64> {
     /// Computes the upper Hessenberg form for square matrices.
     /// Returns (H, Q) where H is the Hessenberg form and Q is the accrued reflectors.
+    /// This fails if the matrix is not square
     pub fn upper_hessenberg(&self) -> Result<(Matrix<Complex64>, Matrix<Complex64>), TensorErrors> {
         if !self.is_square() {
             return Err(TensorErrors::NonSquareMatrix);
@@ -141,8 +144,9 @@ impl Matrix<Complex64> {
 
     /// Computes the lower Hessenberg form for square matrices.
     /// Returns (H, Q) where H is the Hessenberg form and Q is the accrued reflectors.
+    /// This fails if the matrix is not square.
     pub fn lower_hessenberg(&self) -> Result<(Matrix<Complex64>, Matrix<Complex64>), TensorErrors> {
-        // Note that Q_l = Q_u and H_l = (H_u) ^ T
+        // Note that Q_l = Q_u and H_l = (H_u) ^ *
         let (h_u, q_u) = self.conj_transpose_mt().upper_hessenberg()?;
         Ok((h_u.conj_transpose_mt(), q_u))
     }

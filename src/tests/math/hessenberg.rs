@@ -137,4 +137,15 @@ mod hessenberg_tests {
         assert_eq!(h, Matrix::zeros(5, 5));
         assert_eq!(q, eye(5));
     }
+
+    #[test]
+    fn hessenberg_of_zero_by_zero() {
+        let m1 = Matrix::<f64>::zeros(0, 0);
+        let (h, q) = m1.upper_hessenberg().unwrap();
+        assert_eq!(h, Matrix::zeros(0, 0));
+        assert_eq!(q, eye(0));
+        let (h, q) = m1.lower_hessenberg().unwrap();
+        assert_eq!(h, Matrix::zeros(0, 0));
+        assert_eq!(q, eye(0));
+    }
 }
