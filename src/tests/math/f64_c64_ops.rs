@@ -694,4 +694,132 @@ mod f64_c64_ops_tests {
         assert!(approx_eq!(Matrix<f64>, ans3, m1.born_probabilities()));
         assert!(approx_eq!(Matrix<f64>, ans4, m2.born_probabilities()));
     }
+    
+    #[test]
+    fn rank_0_tensor_ops() {
+        let val = Complex64::new(3.0, 4.0);
+        let t = Tensor::new(&shape![], vec![val]).unwrap();
+
+        // Real/Imag
+        assert_eq!(t.clone().re().elements[0], 3.0);
+        assert_eq!(t.clone().im().elements[0], 4.0);
+
+        // Basic Math
+        assert_approx_eq!(f64, t.clone().exp().elements[0].re, val.exp().re, epsilon = 1e-15);
+        assert_approx_eq!(f64, t.clone().ln().elements[0].re, val.ln().re, epsilon = 1e-15);
+        assert_approx_eq!(f64, t.clone().sin().elements[0].re, val.sin().re, epsilon = 1e-15);
+        assert_approx_eq!(f64, t.clone().sqrt().elements[0].re, val.sqrt().re, epsilon = 1e-15);
+
+        // Magnitude and Abs
+        assert_approx_eq!(f64, t.clone().mag(), 5.0, epsilon = 1e-15);
+        assert_approx_eq!(f64, t.clone().mag_2(), 25.0, epsilon = 1e-15);
+        assert_approx_eq!(f64, t.clone().abs().elements[0], 5.0, epsilon = 1e-15);
+
+        // Born probabilities (rank 0 sum is just the value itself / mag_2)
+        let prob = t.clone().born_probabilities();
+        assert_approx_eq!(f64, prob.elements[0], 1.0, epsilon = 1e-15);
+    }
+    
+    #[test]
+    fn empty_tensor_matrix_ops() {
+        let t_empty = Tensor::<f64>::new(&shape![0], vec![]).unwrap();
+        let m_empty = Matrix::<f64>::new(0, 0, vec![]).unwrap();
+
+        // Mapping operations for f64
+        assert_eq!(t_empty.clone().exp().elements.len(), 0);
+        assert_eq!(t_empty.clone().ln().elements.len(), 0);
+        assert_eq!(t_empty.clone().log(10.0).elements.len(), 0);
+        assert_eq!(t_empty.clone().log2().elements.len(), 0);
+        assert_eq!(t_empty.clone().log10().elements.len(), 0);
+        assert_eq!(t_empty.clone().exp_base_n(2.0).elements.len(), 0);
+        assert_eq!(t_empty.clone().pow(2.0).elements.len(), 0);
+        assert_eq!(t_empty.clone().sin().elements.len(), 0);
+        assert_eq!(t_empty.clone().cos().elements.len(), 0);
+        assert_eq!(t_empty.clone().tan().elements.len(), 0);
+        assert_eq!(t_empty.clone().asin().elements.len(), 0);
+        assert_eq!(t_empty.clone().acos().elements.len(), 0);
+        assert_eq!(t_empty.clone().atan().elements.len(), 0);
+        assert_eq!(t_empty.clone().recip().elements.len(), 0);
+        assert_eq!(t_empty.clone().sinh().elements.len(), 0);
+        assert_eq!(t_empty.clone().cosh().elements.len(), 0);
+        assert_eq!(t_empty.clone().tanh().elements.len(), 0);
+        assert_eq!(t_empty.clone().asinh().elements.len(), 0);
+        assert_eq!(t_empty.clone().acosh().elements.len(), 0);
+        assert_eq!(t_empty.clone().atanh().elements.len(), 0);
+        assert_eq!(t_empty.clone().sigmoid().elements.len(), 0);
+        assert_eq!(t_empty.clone().relu().elements.len(), 0);
+        assert_eq!(t_empty.clone().leaky_relu(0.1).elements.len(), 0);
+        assert_eq!(t_empty.clone().sqrt().elements.len(), 0);
+        assert_eq!(t_empty.clone().cbrt().elements.len(), 0);
+        assert_eq!(t_empty.clone().abs().elements.len(), 0);
+        assert_eq!(t_empty.clone().into_complex().elements.len(), 0);
+
+        // Matrix f64 mapping
+        assert_eq!(m_empty.clone().exp().elements.len(), 0);
+        assert_eq!(m_empty.clone().sigmoid().elements.len(), 0);
+
+        // Softmax on empty (nan sum usually, but check length)
+        assert_eq!(t_empty.clone().softmax().elements.len(), 0);
+        assert_eq!(m_empty.clone().softmax().elements.len(), 0);
+
+        // Normalization on empty
+        assert_eq!(t_empty.clone().norm_l1().elements.len(), 0);
+        assert_eq!(t_empty.clone().norm_l2().elements.len(), 0);
+        assert_eq!(t_empty.clone().born_probabilities().elements.len(), 0);
+
+        // Reduction operations
+        assert_eq!(t_empty.clone().mag(), 0.0);
+        assert_eq!(t_empty.clone().mag_2(), 0.0);
+        assert_eq!(m_empty.clone().mag(), 0.0);
+        assert_eq!(m_empty.clone().mag_2(), 0.0);
+
+        // Complex empty
+        let t_c_empty = Tensor::<Complex64>::new(&shape![0, 5], vec![]).unwrap();
+        let m_c_empty = Matrix::<Complex64>::new(0, 0, vec![]).unwrap();
+
+        assert_eq!(t_c_empty.clone().re().elements.len(), 0);
+        assert_eq!(t_c_empty.clone().im().elements.len(), 0);
+        assert_eq!(t_c_empty.clone().exp().elements.len(), 0);
+        assert_eq!(t_c_empty.clone().conj().elements.len(), 0);
+        assert_eq!(t_c_empty.conj_transpose(&transpose![1, 0]).unwrap().elements.len(), 0);
+        assert_eq!(m_c_empty.conj_transpose().elements.len(), 0);
+        assert_eq!(t_c_empty.clone().mag(), 0.0);
+        assert_eq!(t_c_empty.clone().mag_2(), 0.0);
+        assert_eq!(t_c_empty.clone().abs().elements.len(), 0);
+        assert_eq!(t_c_empty.clone().born_probabilities().elements.len(), 0);
+    }
+
+    #[test]
+    fn test_nan_returns() {
+        // 1. ln on negative f64
+        let t_neg = Tensor::new(&shape![2], vec![-1.0, -2.0]).unwrap();
+        assert!(t_neg.ln().elements.iter().all(|x| x.is_nan()));
+
+        // 2. sqrt on negative f64
+        let m_neg = Matrix::new(1, 2, vec![-4.0, -9.0]).unwrap();
+        assert!(m_neg.sqrt().elements.iter().all(|x| x.is_nan()));
+
+        // 3. inverse trig/hyperbolic out of range f64
+        let t_range = Tensor::new(&shape![1], vec![2.0]).unwrap();
+        assert!(t_range.clone().asin().elements[0].is_nan());
+        assert!(t_range.acos().elements[0].is_nan());
+
+        let t_acosh = Tensor::new(&shape![1], vec![0.5]).unwrap();
+        assert!(t_acosh.acosh().elements[0].is_nan());
+
+        // 4. Born probabilities on zero tensors (f64 and Complex64)
+        let t_zero_f = Tensor::new(&shape![3], vec![0.0, 0.0, 0.0]).unwrap();
+        assert!(t_zero_f.born_probabilities().elements.iter().all(|x| x.is_nan()));
+
+        let t_zero_c = Tensor::new(&shape![2], vec![Complex64::ZERO, Complex64::ZERO]).unwrap();
+        assert!(t_zero_c.born_probabilities().elements.iter().all(|x| x.is_nan()));
+
+        // 5. Normalization on zeros
+        let m_zero_f = Matrix::new(2, 2, vec![0.0; 4]).unwrap();
+        assert!(m_zero_f.clone().norm_l1().elements.iter().all(|x| x.is_nan()));
+        assert!(m_zero_f.norm_l2().elements.iter().all(|x| x.is_nan()));
+
+        let m_zero_c = Matrix::new(2, 2, vec![Complex64::ZERO; 4]).unwrap();
+        assert!(m_zero_c.norm_l1().elements.iter().all(|x| x.re.is_nan() && x.im.is_nan()));
+    }
 }

@@ -13,28 +13,32 @@ impl Tensor<f64> {
         self.map(f64::exp)
     }
     
-    /// Computes the natural logarithm of each element in the tensor
+    /// Computes the natural logarithm of each element in the tensor.
+    /// This can return `NaN` for negative inputs.
     pub fn ln(self) -> Tensor<f64> { self.map(f64::ln) }
     
-    /// Computes the log base n of each element in the tensor
+    /// Computes the log base n of each element in the tensor.
+    /// This can return `NaN` for negative inputs or invalid bases.
     pub fn log(self, n: f64) -> Tensor<f64> { self.map(|x| x.log(n)) }
     
-    /// Computes the log base 2 of each element in the tensor
+    /// Computes the log base 2 of each element in the tensor.
+    /// This can return `NaN` for negative inputs.
     pub fn log2(self) -> Tensor<f64> { self.map(f64::log2) }
     
-    /// Computes the log base 10 of each element in the tensor
+    /// Computes the log base 10 of each element in the tensor.
+    /// This can return `NaN` for negative inputs.
     pub fn log10(self) -> Tensor<f64> { self.map(f64::log10) }
 
     /// Raises n to the power of each element.
-    /// This method uses `f64::powf` so beware of `f64::NaN` values
-    /// if you have a negative value raised to the power of 0.5 for example
+    /// This method uses `f64::powf` so beware of `NaN` values
+    /// if you have a negative value raised to a non-integer power.
     pub fn exp_base_n(self, n: f64) -> Tensor<f64> {
         self.map(|x| f64::powf(n, x))
     }
 
-    /// Raises each element to the power of n
+    /// Raises each element to the power of n.
     /// Like `exp_base_n` this can give `NaN` values if you aren't careful
-    /// with what you are raising to which power
+    /// with what you are raising to which power (e.g. negative values to fractional powers).
     pub fn pow(self, n: f64) -> Tensor<f64> {
         self.map(|x| f64::powf(x, n))
     }
@@ -54,12 +58,14 @@ impl Tensor<f64> {
         self.map(f64::tan)
     }
 
-    /// Computes the arcsin of each element
+    /// Computes the arcsin of each element.
+    /// Returns `NaN` if the input is outside the range [-1, 1].
     pub fn asin(self) -> Tensor<f64> {
         self.map(f64::asin)
     }
 
-    /// Computes the arccos of each element
+    /// Computes the arccos of each element.
+    /// Returns `NaN` if the input is outside the range [-1, 1].
     pub fn acos(self) -> Tensor<f64> {
         self.map(f64::acos)
     }
@@ -95,12 +101,14 @@ impl Tensor<f64> {
         self.map(f64::asinh)
     }
 
-    /// Computes the arcosh of each element
+    /// Computes the arcosh of each element.
+    /// Returns `NaN` if the input is less than 1.0.
     pub fn acosh(self) -> Tensor<f64> {
         self.map(f64::acosh)
     }
 
-    /// Computes the artanh of each element
+    /// Computes the artanh of each element.
+    /// Returns `NaN` if the input is outside the range (-1, 1).
     pub fn atanh(self) -> Tensor<f64> {
         self.map(f64::atanh)
     }
@@ -121,26 +129,30 @@ impl Tensor<f64> {
         self.map(|x| if x > 0.0 { x } else { alpha * x })
     }
 
-    /// Applies softmax to the tensor
+    /// Applies softmax to the tensor.
+    /// May return `NaN` if the sum of exponents is zero or infinite.
     pub fn softmax(self) -> Tensor<f64> {
         let new = self.exp();
         let sum = new.sum();
         new / sum
     }
 
-    /// Computes the square root of every element
+    /// Computes the square root of every element.
+    /// Returns `NaN` for negative inputs.
     pub fn sqrt(self) -> Tensor<f64> { self.map(f64::sqrt) }
 
     /// Computes the cube root of every element
     pub fn cbrt(self) -> Tensor<f64> { self.map(f64::cbrt) }
 
-    /// Normalises the tensor so the sum of magnitudes is 1
+    /// Normalises the tensor so the sum of magnitudes is 1.
+    /// May return `NaN` if the sum of magnitudes is zero.
     pub fn norm_l1(self) -> Tensor<f64> {
         let mag = self.clone().map(|x| x.abs()).sum();
         self / mag
     }
 
-    /// Normalises the tensor so the sum of the squares of the magnitudes is 1
+    /// Normalises the tensor so the sum of the squares of the magnitudes is 1.
+    /// May return `NaN` if the sum of the squares of the magnitudes is zero.
     pub fn norm_l2(self) -> Tensor<f64> {
         let mag = self.clone().map(|x| x * x).sum().sqrt();
         self / mag
@@ -155,7 +167,8 @@ impl Tensor<f64> {
     /// Computes the absolute value of every element
     pub fn abs(self) -> Tensor<f64> { self.map(|x| x.abs()) }
 
-    /// Computes the squared norms of each element, then divides by the square of the magnitude
+    /// Computes the squared norms of each element, then divides by the sum of the squares of the magnitudes.
+    /// May return `NaN` if the sum of the squares of the magnitudes is zero.
     pub fn born_probabilities(self) -> Tensor<f64> {
         let div_by = self.clone().mag_2();
         self.pow(2.0) / div_by
@@ -171,28 +184,32 @@ impl Matrix<f64> {
         self.map(f64::exp)
     }
 
-    /// Computes the natural logarithm of each element in the tensor
+    /// Computes the natural logarithm of each element in the tensor.
+    /// This can return `NaN` for negative inputs.
     pub fn ln(self) -> Matrix<f64> { self.map(f64::ln) }
 
-    /// Computes the log base n of each element in the tensor
+    /// Computes the log base n of each element in the tensor.
+    /// This can return `NaN` for negative inputs or invalid bases.
     pub fn log(self, n: f64) -> Matrix<f64> { self.map(|x| x.log(n)) }
 
-    /// Computes the log base 2 of each element in the tensor
+    /// Computes the log base 2 of each element in the tensor.
+    /// This can return `NaN` for negative inputs.
     pub fn log2(self) -> Matrix<f64> { self.map(f64::log2) }
 
-    /// Computes the log base 10 of each element in the tensor
+    /// Computes the log base 10 of each element in the tensor.
+    /// This can return `NaN` for negative inputs.
     pub fn log10(self) -> Matrix<f64> { self.map(f64::log10) }
 
     /// Raises n to the power of each element.
-    /// This method uses `f64::powf` so beware of `f64::NaN` values
-    /// if you have a negative value raised to the power of 0.5 for example
+    /// This method uses `f64::powf` so beware of `NaN` values
+    /// if you have a negative value raised to a non-integer power.
     pub fn exp_base_n(self, n: f64) -> Matrix<f64> {
         self.map(|x| f64::powf(n, x))
     }
 
-    /// Raises each element to the power of n
+    /// Raises each element to the power of n.
     /// Like `exp_base_n` this can give `NaN` values if you aren't careful
-    /// with what you are raising to which power
+    /// with what you are raising to which power (e.g. negative values to fractional powers).
     pub fn pow(self, n: f64) -> Matrix<f64> {
         self.map(|x| f64::powf(x, n))
     }
@@ -212,12 +229,14 @@ impl Matrix<f64> {
         self.map(f64::tan)
     }
 
-    /// Computes the arcsin of each element
+    /// Computes the arcsin of each element.
+    /// Returns `NaN` if the input is outside the range [-1, 1].
     pub fn asin(self) -> Matrix<f64> {
         self.map(f64::asin)
     }
 
-    /// Computes the arccos of each element
+    /// Computes the arccos of each element.
+    /// Returns `NaN` if the input is outside the range [-1, 1].
     pub fn acos(self) -> Matrix<f64> {
         self.map(f64::acos)
     }
@@ -253,12 +272,14 @@ impl Matrix<f64> {
         self.map(f64::asinh)
     }
 
-    /// Computes the arcosh of each element
+    /// Computes the arcosh of each element.
+    /// Returns `NaN` if the input is less than 1.0.
     pub fn acosh(self) -> Matrix<f64> {
         self.map(f64::acosh)
     }
 
-    /// Computes the artanh of each element
+    /// Computes the artanh of each element.
+    /// Returns `NaN` if the input is outside the range (-1, 1).
     pub fn atanh(self) -> Matrix<f64> {
         self.map(f64::atanh)
     }
@@ -279,26 +300,30 @@ impl Matrix<f64> {
         self.map(|x| if x > 0.0 { x } else { alpha * x })
     }
 
-    /// Applies softmax to the tensor
+    /// Applies softmax to the tensor.
+    /// May return `NaN` if the sum of exponents is zero or infinite.
     pub fn softmax(self) -> Matrix<f64> {
         let new = self.exp();
         let sum = new.sum();
         new / sum
     }
 
-    /// Computes the square root of every element
+    /// Computes the square root of every element.
+    /// Returns `NaN` for negative inputs.
     pub fn sqrt(self) -> Matrix<f64> { self.map(f64::sqrt) }
 
     /// Computes the cube root of every element
     pub fn cbrt(self) -> Matrix<f64> { self.map(f64::cbrt) }
 
-    /// Normalises the tensor so the sum of magnitudes is 1
+    /// Normalises the tensor so the sum of magnitudes is 1.
+    /// May return `NaN` if the sum of the magnitudes is zero.
     pub fn norm_l1(self) -> Matrix<f64> {
         let mag = self.clone().map(|x| x.abs()).sum();
         self / mag
     }
 
-    /// Normalises the tensor so the sum of the squares of the magnitudes is 1
+    /// Normalises the tensor so the sum of the squares of the magnitudes is 1.
+    /// May return `NaN` if the sum of the squares of the magnitudes is zero.
     pub fn norm_l2(self) -> Matrix<f64> {
         let mag = self.clone().map(|x| x * x).sum().sqrt();
         self / mag
@@ -313,7 +338,8 @@ impl Matrix<f64> {
     /// Computes the absolute value of every element
     pub fn abs(self) -> Matrix<f64> { self.map(|x| x.abs()) }
 
-    /// Computes the squared norms of each element, then divides by the square of the magnitude
+    /// Computes the squared norms of each element, then divides by the square of the magnitude.
+    /// May return `NaN` if the sum of the squares of the magnitudes is zero.
     pub fn born_probabilities(self) -> Matrix<f64> {
         let div_by = self.clone().mag_2();
         self.pow(2.0) / div_by
@@ -332,7 +358,8 @@ impl Tensor<Complex64> {
         self.map(Complex64::exp)
     }
 
-    /// Computes the natural logarithm of each element in the tensor
+    /// Computes the natural logarithm of each element in the tensor.
+    /// For complex numbers, this uses the principal branch.
     pub fn ln(self) -> Tensor<Complex64> { self.map(Complex64::ln) }
 
     /// Computes the log base n of each element in the tensor
@@ -426,13 +453,15 @@ impl Tensor<Complex64> {
     /// Computes the cube root of every element
     pub fn cbrt(self) -> Tensor<Complex64> { self.map(Complex64::cbrt) }
 
-    /// Normalises the tensor so the sum of magnitudes is 1
+    /// Normalises the tensor so the sum of magnitudes is 1.
+    /// May return `Complex64` NaN if the sum of magnitudes is zero.
     pub fn norm_l1(self) -> Tensor<Complex64> {
         let mag: Complex64 = self.clone().map(|x| x.abs()).sum().into();
         self / mag
     }
 
-    /// Normalises the tensor so the sum of the squares of the magnitudes is 1
+    /// Normalises the tensor so the sum of the squares of the magnitudes is 1.
+    /// May return `Complex64` NaN if the sum of the squares magnitude is zero.
     pub fn norm_l2(self) -> Tensor<Complex64> {
         let mag: Complex64 = self
             .clone()
@@ -467,7 +496,8 @@ impl Tensor<Complex64> {
     /// Computes the absolute value of every element
     pub fn abs(self) -> Tensor<f64> { self.map(|x| x.abs()) }
 
-    /// Computes the squared norms of each element, then divides by the square of the magnitude
+    /// Computes the squared norms of each element, then divides by the square of the magnitude.
+    /// May return `Complex64` NaN if the sum of the squares of the magnitudes is zero.
     pub fn born_probabilities(self) -> Tensor<f64> {
         let div_by = self.clone().mag_2();
         self.abs().pow(2.0) / div_by
@@ -486,7 +516,8 @@ impl Matrix<Complex64> {
         self.map(Complex64::exp)
     }
 
-    /// Computes the natural logarithm of each element in the tensor
+    /// Computes the natural logarithm of each element in the tensor.
+    /// For complex numbers, this uses the principal branch.
     pub fn ln(self) -> Matrix<Complex64> { self.map(Complex64::ln) }
 
     /// Computes the log base n of each element in the tensor
@@ -580,13 +611,15 @@ impl Matrix<Complex64> {
     /// Computes the cube root of every element
     pub fn cbrt(self) -> Matrix<Complex64> { self.map(Complex64::cbrt) }
 
-    /// Normalises the tensor so the sum of magnitudes is 1
+    /// Normalises the tensor so the sum of magnitudes is 1.
+    /// May return `Complex64` NaN if the sum of magnitudes is zero.
     pub fn norm_l1(self) -> Matrix<Complex64> {
         let mag: Complex64 = self.clone().map(|x| x.abs()).sum().into();
         self / mag
     }
 
-    /// Normalises the tensor so the sum of the squares of the magnitudes is 1
+    /// Normalises the tensor so the sum of the squares of the magnitudes is 1.
+    /// May return `Complex64` NaN if the sum of the squares of the magnitude is zero.
     pub fn norm_l2(self) -> Matrix<Complex64> {
         let mag: Complex64 = self
             .clone()
