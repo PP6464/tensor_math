@@ -40,4 +40,16 @@ mod transformation_rank_tests {
         let m6 = Matrix::<Complex64>::zeros(3, 3);
         assert_eq!(m6.transformation_rank(), 0);
     }
+    
+    #[test]
+    fn test_empty_matrices() {
+        let m1 = Matrix::<f64>::zeros(0, 0);
+        assert_eq!(m1.transformation_rank(), 0);
+
+        let m2 = Matrix::<f64>::zeros(0, 3);
+        assert_eq!(m2.transformation_rank(), 0);
+
+        let m3 = Matrix::<f64>::zeros(3, 0);
+        assert_eq!(m3.transformation_rank(), 0);
+    }
 }
