@@ -80,6 +80,11 @@ impl<T: Clone + Mul<Output = T> + Send + Sync> Tensor<T> {
         }
 
         let new_shape = Shape::new(new_shape_vec);
+
+        if new_shape.element_count() == 0 {
+            return Tensor::new(&new_shape, vec![]).unwrap();
+        }
+
         let mut new_elements = (0..new_shape.element_count()).map(|_| self.first().unwrap().clone()).collect::<Vec<T>>();
 
         scope(|s| {
@@ -108,6 +113,10 @@ impl<T: Clone + Mul<Output = T> + Send + Sync> Matrix<T> {
         let mut new_elements = (0..self.rows * self.cols * other.rows * other.cols)
             .map(|_| self[(0, 0)].clone())
             .collect::<Vec<T>>();
+
+        if new_elements.len() == 0 {
+            return Matrix::new(self.rows * other.rows, self.cols * other.cols, vec![]).unwrap();
+        }
 
         scope(|s| {
             let mut new_elements_chunks = new_elements.chunks_mut(other.shape.element_count());
