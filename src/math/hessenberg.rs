@@ -15,7 +15,7 @@ impl Matrix<f64> {
 
         let ord = self.rows;
 
-        // All 1x1 and 2x2 matrices are trivially upper Hessenberg
+        // All 0x0, 1x1 and 2x2 matrices are trivially upper Hessenberg
         if ord < 3 {
             return Ok((self.clone(), identity(ord)));
         }
@@ -89,7 +89,7 @@ impl Matrix<Complex64> {
 
         let ord = self.rows;
 
-        // All 1x1 and 2x2 matrices are trivially upper Hessenberg
+        // All 0x0, 1x1 and 2x2 matrices are trivially upper Hessenberg
         if ord < 3 {
             return Ok((self.clone(), identity(ord)));
         }
