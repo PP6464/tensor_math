@@ -14,12 +14,18 @@ use crate::definitions::tensor::Tensor;
 /// The shape of the result is also specified by the user. The mean is the centre value,
 /// but when tensors have an even number of elements in a certain axis, then the centre
 /// is treated as being in between the two.
+/// This fails if the standard deviation is not positive.
 pub fn gaussian_pdf_single_sigma(sigma: f64, shape: &Shape) -> Result<Tensor<f64>, TensorErrors> {
     if sigma <= 0.0 {
         return Err(TensorErrors::NonPositiveSigma(sigma));
     }
 
     let mut res = Tensor::<f64>::from_shape(shape);
+
+    if shape.element_count() == 0 {
+        return Ok(res);
+    }
+
     let centre = shape
         .0
         .iter()
@@ -31,8 +37,7 @@ pub fn gaussian_pdf_single_sigma(sigma: f64, shape: &Shape) -> Result<Tensor<f64
             .iter()
             .zip(pos.iter())
             .map(|(x, y)| (x - y.to_f64().unwrap()).powi(2))
-            .reduce(f64::add)
-            .unwrap()
+            .fold(0.0, f64::add)
             * -1.0
             / (2.0 * sigma.powi(2));
 
@@ -47,6 +52,7 @@ pub fn gaussian_pdf_single_sigma(sigma: f64, shape: &Shape) -> Result<Tensor<f64
 /// The shape of the result is also specified by the user. The mean is the centre value,
 /// but when tensors have an even number of elements in a certain axis, then the centre
 /// is treated as being in between the two.
+/// This fails if any of the standard deviations are not positive.
 pub fn gaussian_pdf_multi_sigma(sigma: Vec<f64>, shape: &Shape) -> Result<Tensor<f64>, TensorErrors> {
     if sigma.len() != shape.rank() {
         return Err(TensorErrors::SigmaListLengthIncompatible(sigma.len(), shape.rank()));
@@ -57,6 +63,11 @@ pub fn gaussian_pdf_multi_sigma(sigma: Vec<f64>, shape: &Shape) -> Result<Tensor
     }
 
     let mut res = Tensor::<f64>::from_shape(shape);
+
+    if shape.element_count() == 0 {
+        return Ok(res);
+    }
+
     let centre = shape
         .0
         .iter()
@@ -85,6 +96,7 @@ pub fn gaussian_pdf_multi_sigma(sigma: Vec<f64>, shape: &Shape) -> Result<Tensor
 /// Creates a tensor of values with the specified shape where the values are sampled from a
 /// Gaussian distribution. The min and max values allow you to specify the range of the outputs.
 /// The possible outputs will be 1001 different outputs spaced evenly across the interval [min, max\].
+/// This fails if the standard deviation is not positive or if `max <= min`.
 pub fn gaussian_sample(sigma: f64, shape: &Shape, min: f64, max: f64) -> Result<Tensor<f64>, TensorErrors> {
     if max <= min {
         return Err(TensorErrors::InvalidInterval {
@@ -100,6 +112,11 @@ pub fn gaussian_sample(sigma: f64, shape: &Shape, min: f64, max: f64) -> Result<
     let step_size = (max - min) / 1e3;
 
     let mut res = Tensor::<f64>::from_shape(shape);
+
+    if shape.element_count() == 0 {
+        return Ok(res);
+    }
+
     let dist = WeightedIndex::new(
         (0..=1000)
             .map(|x| f64::exp(-(x.to_f64().unwrap() - 500.0).powi(2)) / (2.0 * sigma.powi(2)))
@@ -120,6 +137,7 @@ pub fn gaussian_sample(sigma: f64, shape: &Shape, min: f64, max: f64) -> Result<
 /// The shape of the result is also specified by the user. The mean is the centre value,
 /// but when tensors have an even number of elements in a certain axis, then the centre
 /// is treated as being in between the two.
+/// This fails if the standard deviation matrix is not positive definite.
 pub fn gaussian_pdf_cov_mat(sigma: Matrix<f64>, shape: &Shape) -> Result<Tensor<f64>, TensorErrors> {
     if !sigma.is_square() {
         return Err(TensorErrors::NonSquareMatrix);
@@ -138,6 +156,11 @@ pub fn gaussian_pdf_cov_mat(sigma: Matrix<f64>, shape: &Shape) -> Result<Tensor<
     }
 
     let mut res = Tensor::<f64>::from_shape(shape);
+
+    if shape.element_count() == 0 {
+        return Ok(res);
+    }
+
     let sigma_inv = sigma.inv()?;
 
     let centre = shape.0.iter().map(|x| { (x - 1).to_f64().unwrap() / 2.0 }).collect::<Vec<f64>>();

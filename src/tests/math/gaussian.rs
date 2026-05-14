@@ -175,4 +175,59 @@ mod gaussian_distribution_tests {
             _ => panic!("Incorrect error"),
         }
     }
+    
+    #[test]
+    fn gaussian_pdf_single_sigma_rank_zero() {
+        let t = gaussian_pdf_single_sigma(1.0, &shape![]).unwrap();
+        assert_eq!(t.shape().rank(), 0);
+        assert_approx_eq!(f64, t[&[]], 1.0, epsilon = 1e-15);
+    }
+
+    #[test]
+    fn gaussian_pdf_multi_sigma_rank_zero() {
+        let t = gaussian_pdf_multi_sigma(vec![], &shape![]).unwrap();
+        assert_eq!(t.shape().rank(), 0);
+        // Exponent 0, Denominator 1
+        assert_approx_eq!(f64, t[&[]], 1.0, epsilon = 1e-15);
+    }
+
+    #[test]
+    fn gaussian_sample_rank_zero() {
+        let t = gaussian_sample(1.0, &shape![], -10.0, 10.0).unwrap();
+        assert_eq!(t.shape().rank(), 0);
+        assert!(t[&[]] >= -10.0 && t[&[]] <= 10.0);
+    }
+
+    #[test]
+    fn gaussian_pdf_cov_mat_rank_zero() {
+        let cov = Matrix::<f64>::new(0, 0, vec![]).unwrap();
+        let t = gaussian_pdf_cov_mat(cov, &shape![]).unwrap();
+        assert_eq!(t.shape().rank(), 0);
+        assert_approx_eq!(f64, t[&[]], 1.0, epsilon = 1e-15);
+    }
+    
+    #[test]
+    fn gaussian_pdf_single_sigma_empty_tensor() {
+        let t = gaussian_pdf_single_sigma(1.0, &shape![0, 5]).unwrap();
+        assert_eq!(t.len(), 0);
+    }
+
+    #[test]
+    fn gaussian_pdf_multi_sigma_empty_tensor() {
+        let t = gaussian_pdf_multi_sigma(vec![1.0, 1.0], &shape![2, 0]).unwrap();
+        assert_eq!(t.len(), 0);
+    }
+
+    #[test]
+    fn gaussian_sample_empty_tensor() {
+        let t = gaussian_sample(1.0, &shape![0], -1.0, 1.0).unwrap();
+        assert_eq!(t.len(), 0);
+    }
+
+    #[test]
+    fn gaussian_pdf_cov_mat_empty_tensor() {
+        let cov = eye(2);
+        let t = gaussian_pdf_cov_mat(cov, &shape![2, 0]).unwrap();
+        assert_eq!(t.len(), 0);
+    }
 }
