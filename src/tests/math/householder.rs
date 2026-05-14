@@ -82,4 +82,22 @@ use float_cmp::{ApproxEq, F64Margin, FloatMargin};
         assert_eq!(m1.householder(), (eye(3), m1));
         assert_eq!(m2.householder(), (eye(3), m2));
     }
+    
+    #[test]
+    fn householder_empty_matrices() {
+        let m1 = Matrix::<f64>::zeros(0, 0);
+        let (q1, r1) = m1.householder();
+        assert_eq!(q1, eye(0));
+        assert_eq!(r1, m1);
+
+        let m2 = Matrix::<f64>::zeros(3, 0);
+        let (q2, r2) = m2.householder();
+        assert_eq!(q2, eye(3));
+        assert_eq!(r2, m2);
+
+        let m3 = Matrix::<f64>::zeros(0, 3);
+        let (q3, r3) = m3.householder();
+        assert_eq!(q3, eye(0));
+        assert_eq!(r3, m3);
+    }
 }
