@@ -3,17 +3,21 @@ use crate::definitions::matrix::Matrix;
 use crate::utilities::matrix::identity;
 use float_cmp::approx_eq;
 use num::complex::Complex64;
-use num::Zero;
+use num::{One, Zero};
 use std::ops::{Add, Div, Mul, Neg, Sub};
 
 impl Matrix<f64> {
-    /// Computes the determinant of the matrix
+    /// Computes the determinant of the matrix.
+    /// This fails if the matrix is not square.
     pub fn det(&self) -> Result<f64, TensorErrors> {
         if !self.is_square() {
             return Err(TensorErrors::NonSquareMatrix);
         }
 
         let ord = self.rows;
+        if ord == 0 {
+            return Ok(1.0);
+        }
         let (ref_form, det_scale) = self.tracked_row_echelon();
         let mut res = 1f64;
 
@@ -25,13 +29,16 @@ impl Matrix<f64> {
     }
 
     /// Computes the inverse of a matrix.
-    /// This returns a result in case the determinant is zero.
+    /// This fails if the matrix is not square or if the determinant is 0.
     pub fn inv(&self) -> Result<Matrix<f64>, TensorErrors> {
         if !self.is_square() {
             return Err(TensorErrors::NonSquareMatrix);
         }
 
         let ord = self.rows;
+        if ord == 0 {
+            return Ok(self.clone());
+        }
 
         let a_i_rref = self.concat_cols_mt(&identity(ord))?.reduced_row_echelon();
         let left = a_i_rref.slice(0..ord, 0..ord)?;
@@ -47,13 +54,18 @@ impl Matrix<f64> {
 
 impl Matrix<Complex64> {
     /// Computes the determinant of a matrix.
+    /// This fails if the matrix is not square.
     pub fn det(&self) -> Result<Complex64, TensorErrors> {
         if !self.is_square() {
             return Err(TensorErrors::NonSquareMatrix);
         }
 
-        let (ref_form, det_scale) = self.tracked_row_echelon();
         let ord = self.rows;
+        if ord == 0 {
+            return Ok(Complex64::ONE);
+        }
+
+        let (ref_form, det_scale) = self.tracked_row_echelon();
         let mut res = Complex64::ONE;
 
         for i in 0..ord {
@@ -64,13 +76,16 @@ impl Matrix<Complex64> {
     }
 
     /// Computes the inverse of a matrix.
-    /// This returns a result for in case the determinant was zero.
+    /// This fails if the matrix is not square or if the determinant is 0.
     pub fn inv(&self) -> Result<Matrix<Complex64>, TensorErrors> {
         if !self.is_square() {
             return Err(TensorErrors::NonSquareMatrix);
         }
 
         let ord = self.rows;
+        if ord == 0 {
+            return Ok(self.clone());
+        }
 
         let a_i_rref = self.concat_cols_mt(&identity(ord))?.reduced_row_echelon();
         let left = a_i_rref.slice(0..ord, 0..ord)?;
@@ -87,7 +102,8 @@ impl Matrix<Complex64> {
 /// Calculates the determinant for a matrix of values of type `T`.
 /// This uses a slower method which is O(n!) for an n x n matrix but may be
 /// useful for matrices of types that aren't f64 or Complex64.
-pub fn det_slow<T: Add<Output = T> + Mul<Output = T> + Sub<Output = T> + Clone + Zero>(
+/// This fails if the matrix is not square.
+pub fn det_slow<T: Add<Output = T> + Mul<Output = T> + Sub<Output = T> + Clone + Zero + One>(
     m: &Matrix<T>,
 ) -> Result<T, TensorErrors> {
     if !m.is_square() {
@@ -95,6 +111,10 @@ pub fn det_slow<T: Add<Output = T> + Mul<Output = T> + Sub<Output = T> + Clone +
     }
 
     let ord = m.shape[0];
+
+    if ord == 0 {
+        return Ok(T::one());
+    }
 
     if ord == 2 {
         return Ok(m[&[0, 0]].clone() * m[&[1, 1]].clone() - m[&[0, 1]].clone() * m[&[1, 0]].clone());
@@ -143,10 +163,10 @@ pub fn det_slow<T: Add<Output = T> + Mul<Output = T> + Sub<Output = T> + Clone +
 }
 
 /// Calculates the inverse for a matrix of values of type `T`.
-/// If the determinant is 0 you will receive `TensorErrors::DeterminantZero`.
 /// This uses a slower implementation for det and is slower itself than using
 /// REF/RREF, but note that this can be used on matrices that don't have REF/RREF
 /// implemented for them.
+/// This fails if the matrix is not square or has determinant 0.
 pub fn inv_slow<T>(m: &Matrix<T>) -> Result<Matrix<T>, TensorErrors>
 where
     T: Add<Output = T>
@@ -156,6 +176,7 @@ where
         + Neg<Output = T>
         + Clone
         + Zero
+        + One
         + PartialEq,
 {
     if !m.is_square() {
@@ -163,6 +184,11 @@ where
     }
 
     let ord = m.shape[0];
+
+    if ord == 0 {
+        return Ok(m.clone());
+    }
+
     let mut res = Matrix::<T>::zeros(m.rows, m.cols);
     let d = det_slow(&m)?;
 

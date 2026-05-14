@@ -166,4 +166,21 @@ mod det_inv_tests {
             _ => panic!("Incorrect error"),
         }
     }
+    
+    #[test]
+    fn empty_matrix_det_inv() {
+        let m_f64 = Matrix::<f64>::new(0, 0, vec![]).unwrap();
+        let m_complex = Matrix::<Complex64>::new(0, 0, vec![]).unwrap();
+
+        // f64 tests
+        assert_eq!(m_f64.det().unwrap(), 1.0);
+        assert_eq!(det_slow(&m_f64).unwrap(), 1.0);
+        assert_eq!(m_f64.inv().unwrap().rows, 0);
+        assert_eq!(inv_slow(&m_f64).unwrap().rows, 0);
+
+        // Complex64 tests
+        assert_eq!(m_complex.det().unwrap(), Complex64::new(1.0, 0.0));
+        assert_eq!(m_complex.inv().unwrap().rows, 0);
+        assert_eq!(inv_slow(&m_complex).unwrap().rows, 0);
+    }
 }
