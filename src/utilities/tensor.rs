@@ -7,12 +7,12 @@ use crate::definitions::traits::IntoTensor;
 use crate::definitions::transpose::Transpose;
 use crate::shape;
 use crate::utilities::internal_functions::dot_vectors;
+use rayon::prelude::*;
 use num::{ToPrimitive, Zero};
 use rand::distr::{Distribution, StandardUniform};
 use rand::{Fill, Rng};
 use std::collections::HashSet;
 use std::ops::{Add, Div, Range};
-use std::sync::Arc;
 use std::thread::scope;
 
 impl<T> Tensor<T> {
@@ -57,6 +57,22 @@ impl<T> Tensor<T> {
     pub fn map_refs<O>(&self, closure: impl FnMut(&T) -> O) -> Tensor<O> {
         let shape = self.shape().clone();
         let new_elements = self.elements.iter().map(closure).collect();
+        Tensor::new(&shape, new_elements).unwrap()
+    }
+}
+
+impl<T: Send + Sync> Tensor<T> {
+    /// Applies the given function over the entire tensor elementwise by consuming the elements
+    pub fn par_map<O: Send>(self, closure: impl Fn(T) -> O + Sync + Send) -> Tensor<O> {
+        let shape = self.shape().clone();
+        let new_elements = self.elements.into_par_iter().map(closure).collect();
+        Tensor::new(&shape, new_elements).unwrap()
+    }
+
+    /// Applies the given function over the entire tensor elementwise by reference.
+    pub fn par_map_refs<O: Send>(self, closure: impl Fn(&T) -> O + Sync + Send) -> Tensor<O> {
+        let shape = self.shape().clone();
+        let new_elements = self.elements.par_iter().map(closure).collect();
         Tensor::new(&shape, new_elements).unwrap()
     }
 }
@@ -579,11 +595,27 @@ impl<T: Clone + Send + Sync> Tensor<T> {
         Ok(result)
     }
 
+    /// Returns a parallel iterator that is enumerated with tensor indices.
+    pub fn enumerated_par_iter(&self) -> impl ParallelIterator<Item = (Vec<usize>, T)> + '_ {
+        self.elements
+            .par_iter()
+            .cloned()
+            .enumerate()
+            .map(|(index, element)| (self.shape.tensor_index(index).unwrap(), element))
+    }
+    
+    /// Returns a parallel mutable iterator that is enumerated with tensor indices.
+    pub fn enumerated_par_iter_mut(&mut self) -> impl ParallelIterator<Item = (Vec<usize>, &mut T)> + '_ {
+        self.elements
+            .par_iter_mut()
+            .enumerate()
+            .map(|(index, element)| (self.shape.tensor_index(index).unwrap(), element))
+    }
+
     /// Flips a tensor along specified axes (using multiple threads).
     /// This fails if the axes are out of bounds.
     pub fn flip_axes_mt(&self, axes: &HashSet<usize>) -> Result<Tensor<T>, TensorErrors> {
         let mut res = self.clone();
-        let self_arc = Arc::new(self.clone());
 
         for &axis in axes.iter() {
             if axis >= self.rank() {
@@ -594,20 +626,14 @@ impl<T: Clone + Send + Sync> Tensor<T> {
             }
         }
 
-        scope(|s| {
-            for (i, chunk) in res.chunks_mut(1).enumerate() {
-                let self_ref = self_arc.clone();
+        res.enumerated_par_iter_mut().for_each(|(index, elem)| {
+            let mut new_index = index.clone();
 
-                s.spawn(move || {
-                    let mut new_index = self.shape.tensor_index(i).unwrap();
-
-                    for &axis in axes {
-                        new_index[axis] = self.shape[axis] - new_index[axis] - 1;
-                    }
-
-                    chunk[0] = self_ref[&new_index].clone();
-                });
+            for &axis in axes {
+                new_index[axis] = self.shape[axis] - index[axis] - 1;
             }
+
+            *elem = self[&new_index].clone();
         });
 
         Ok(res)
@@ -631,26 +657,8 @@ impl<T: Clone + Send + Sync> Tensor<T> {
         let new_shape = transpose.new_shape(self.shape())?;
         let mut new_tensor = self.clone().reshape(&new_shape)?;
 
-        let elems_per_thread = 20; // Number of elements a single thread handles
-
-        scope(|s| {
-            for (i, elem) in new_tensor.chunks_mut(elems_per_thread).enumerate() {
-                let new_shape_clone = new_shape.clone();
-
-                s.spawn(move || {
-                    for j in 0..elems_per_thread {
-                        let k = i * elems_per_thread + j;
-                        match new_shape_clone.tensor_index(k) {
-                            Ok(new_index) => {
-                                let old_index = transpose.old_index(&new_index).unwrap();
-
-                                elem[j] = self[&old_index].clone();
-                            }
-                            _ => continue,
-                        }
-                    }
-                });
-            }
+        new_tensor.enumerated_par_iter_mut().for_each(|(index, elem)| {
+            *elem = self[&transpose.old_index(&index).unwrap()].clone();
         });
 
         Ok(new_tensor)
@@ -707,34 +715,27 @@ impl<T: Clone + Send + Sync> Tensor<T> {
 
         let mut result = Tensor::<O>::from_value(res_shape, init);
 
-        scope(|s| {
-            let res_chunks = result.chunks_mut(1);
+        result.enumerated_par_iter_mut().for_each(|(index, elem)| {
+            let self_pos = index.clone().into_tensor() * stride_shape.clone().0.into_tensor();
+            let self_end_pos = (&self_pos + &kernel_shape.clone().0.into_tensor())
+                .iter()
+                .enumerate()
+                .map(|(i, x)| {
+                    if x > &self.shape()[i] {
+                        self.shape()[i]
+                    } else {
+                        *x
+                    }
+                })
+                .collect::<Vec<usize>>();
 
-            for (i, chunk) in res_chunks.enumerate() {
-                s.spawn(move || {
-                    let res_pos = res_shape.tensor_index(i).unwrap();
-                    let self_pos = res_pos.into_tensor() * stride_shape.clone().0.into_tensor();
-                    let self_end_pos = (&self_pos + &kernel_shape.clone().0.into_tensor())
-                        .iter()
-                        .enumerate()
-                        .map(|(i, x)| {
-                            if x > &self.shape()[i] {
-                                self.shape()[i]
-                            } else {
-                                *x
-                            }
-                        })
-                        .collect::<Vec<usize>>();
+            let indices = self_pos
+                .iter()
+                .zip(self_end_pos.iter())
+                .map(|(x, y)| *x..*y)
+                .collect::<Vec<_>>();
 
-                    let indices = self_pos
-                        .iter()
-                        .zip(self_end_pos.iter())
-                        .map(|(x, y)| *x..*y)
-                        .collect::<Vec<_>>();
-
-                    chunk[0] = pool_fn(self_pos.elements, self.slice(&indices).unwrap());
-                });
-            }
+            *elem = pool_fn(index, self.slice(&indices).unwrap());
         });
 
         Ok(result)
@@ -791,34 +792,27 @@ impl<T: Clone + Send + Sync> Tensor<T> {
 
         let mut result = Tensor::<O>::from_value(res_shape, init);
 
-        scope(|s| {
-            let res_chunks = result.chunks_mut(1);
+        result.enumerated_par_iter_mut().for_each(|(index, elem)| {
+            let self_pos = index.clone().into_tensor() * stride_shape.clone().0.into_tensor();
+            let self_end_pos = (&self_pos + &kernel_shape.clone().0.into_tensor())
+                .iter()
+                .enumerate()
+                .map(|(i, x)| {
+                    if x > &self.shape()[i] {
+                        self.shape()[i]
+                    } else {
+                        *x
+                    }
+                })
+                .collect::<Vec<_>>();
 
-            for (i, chunk) in res_chunks.enumerate() {
-                s.spawn(move || {
-                    let res_pos = res_shape.tensor_index(i).unwrap();
-                    let self_pos = res_pos.into_tensor() * stride_shape.clone().0.into_tensor();
-                    let self_end_pos = (&self_pos + &kernel_shape.clone().0.into_tensor())
-                        .iter()
-                        .enumerate()
-                        .map(|(i, x)| {
-                            if x > &self.shape()[i] {
-                                self.shape()[i]
-                            } else {
-                                *x
-                            }
-                        })
-                        .collect::<Vec<usize>>();
+            let indices = self_pos
+                .iter()
+                .zip(self_end_pos.iter())
+                .map(|(x, y)| *x..*y)
+                .collect::<Vec<_>>();
 
-                    let indices = self_pos
-                        .iter()
-                        .zip(self_end_pos.iter())
-                        .map(|(x, y)| *x..*y)
-                        .collect::<Vec<_>>();
-
-                    chunk[0] = pool_fn(self.slice(&indices).unwrap());
-                });
-            }
+            *elem = pool_fn(self.slice(&indices).unwrap());
         });
 
         Ok(result)

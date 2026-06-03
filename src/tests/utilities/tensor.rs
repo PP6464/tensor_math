@@ -8,6 +8,7 @@ mod tensor_utils_tests {
     use crate::{shape, transpose};
     use std::collections::HashSet;
     use std::f64::consts::PI;
+    use rayon::prelude::*;
 
     #[test]
     fn concat() {
@@ -768,6 +769,59 @@ mod tensor_utils_tests {
         for (_, _) in t1.enumerated_iter_mut() {
             panic!("Should not iterate over empty tensor");
         }
+    }
+
+    #[test]
+    fn enumerated_par_iter_and_mut() {
+        let mut t1 = Tensor::<i32>::new(&shape![2, 2], vec![1, 2, 3, 4]).unwrap();
+
+        let expected = vec![
+            (vec![0, 0], 1),
+            (vec![0, 1], 2),
+            (vec![1, 0], 3),
+            (vec![1, 1], 4),
+        ];
+
+        let actual: Vec<(Vec<usize>, i32)> = t1.enumerated_par_iter().collect();
+        assert_eq!(actual, expected);
+
+        t1.enumerated_par_iter_mut().for_each(|(idx, val)| {
+            *val += idx.iter().sum::<usize>() as i32;
+        });
+
+        let expected_mut = vec![
+            (vec![0, 0], 1),
+            (vec![0, 1], 3),
+            (vec![1, 0], 4),
+            (vec![1, 1], 6),
+        ];
+        let actual_mut: Vec<(Vec<usize>, i32)> = t1.enumerated_par_iter().collect();
+        assert_eq!(actual_mut, expected_mut);
+    }
+
+    #[test]
+    fn enumerated_par_iter_rank_0_and_mut() {
+        let mut t1 = Tensor::<i32>::new(&shape![], vec![42]).unwrap();
+
+        let expected = vec![(vec![], 42)];
+        let actual: Vec<(Vec<usize>, i32)> = t1.enumerated_par_iter().collect();
+        assert_eq!(actual, expected);
+
+        t1.enumerated_par_iter_mut().for_each(|(idx, val)| {
+            assert!(idx.is_empty());
+            *val += 1;
+        });
+        assert_eq!(t1.elements()[0], 43);
+    }
+
+    #[test]
+    fn enumerated_par_iter_empty_and_mut() {
+        let mut t1 = Tensor::<i32>::new(&shape![0, 2], vec![]).unwrap();
+
+        assert_eq!(t1.enumerated_par_iter().count(), 0);
+        t1.enumerated_par_iter_mut().for_each(|(_, _)| {
+            panic!("Should not iterate over empty tensor");
+        });
     }
 
     #[test]
