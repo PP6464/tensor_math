@@ -842,11 +842,18 @@ mod tensor_utils_tests {
         let t2 = Tensor::<i32>::new(&shape![0, 3], vec![]).unwrap();
 
         let res = t1.concat(&t2, 0).unwrap();
-        assert_eq!(res, t1);
+        assert_eq!(res.shape(), &shape![2, 3]);
+        assert_eq!(res.elements(), t1.elements());
 
         let t3 = Tensor::<i32>::new(&shape![2, 0], vec![]).unwrap();
         let res2 = t1.concat(&t3, 1).unwrap();
-        assert_eq!(res2, t1);
+        assert_eq!(res2.shape(), &shape![2, 3]);
+        assert_eq!(res2.elements(), t1.elements());
+
+        // Test concatenating into an empty tensor
+        let res3 = t2.concat(&t1, 0).unwrap();
+        assert_eq!(res3.shape(), &shape![2, 3]);
+        assert_eq!(res3.elements(), t1.elements());
     }
 
     #[test]
@@ -855,6 +862,11 @@ mod tensor_utils_tests {
         let t2 = Tensor::<i32>::new(&shape![0, 10], vec![]).unwrap();
 
         let res = t1.concat_mt(&t2, 0).unwrap();
-        assert_eq!(res, t1);
+        assert_eq!(res.shape(), &shape![100, 10]);
+        assert_eq!(res.elements(), t1.elements());
+
+        let res2 = t2.concat_mt(&t1, 0).unwrap();
+        assert_eq!(res2.shape(), &shape![100, 10]);
+        assert_eq!(res2.elements(), t1.elements());
     }
 }
