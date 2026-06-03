@@ -9,10 +9,9 @@ use crate::{shape, transpose};
 use num::{One, ToPrimitive, Zero};
 use rand::distr::{Distribution, StandardUniform};
 use rand::Fill;
+use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
 use std::cmp::min;
 use std::ops::{Add, Div, Range};
-use std::sync::Arc;
-use std::thread::scope;
 
 impl<T> Matrix<T> {
     /// Reshapes the matrix.
@@ -44,6 +43,32 @@ impl<T> Matrix<T> {
 
         Matrix {
             tensor: self.tensor.map_refs(f),
+            rows,
+            cols,
+        }
+    }
+}
+
+impl<T: Send + Sync> Matrix<T> {
+    /// Applies the given function over the entire tensor elementwise by consuming the elements.
+    pub fn par_map<F: Send>(self, f: impl Fn(T) -> F + Send + Sync) -> Matrix<F> {
+        let rows = self.rows;
+        let cols = self.cols;
+
+        Matrix {
+            tensor: self.tensor.par_map(f),
+            rows,
+            cols,
+        }
+    }
+
+    /// Applies the given function over the entire tensor elementwise by reference.
+    pub fn par_map_refs<F: Send>(&self, f: impl Fn(&T) -> F + Send + Sync) -> Matrix<F> {
+        let rows = self.rows;
+        let cols = self.cols;
+
+        Matrix {
+            tensor: self.tensor.par_map_refs(f),
             rows,
             cols,
         }
@@ -294,6 +319,24 @@ impl<T: Clone> Matrix<T> {
 }
 
 impl<T: Clone + Send + Sync> Matrix<T> {
+    /// Returns a parallel enumerated iterator with matrix indices.
+    pub fn enumerated_par_iter(
+        &self,
+    ) -> impl ParallelIterator<Item = ((usize, usize), T)> + use<'_, T> {
+        self.tensor
+            .enumerated_par_iter()
+            .map(|(i, x)| ((i[0], i[1]), x))
+    }
+
+    /// Returns a parallel mutable enumerated iterator with matrix indices.
+    pub fn enumerated_par_iter_mut(
+        &mut self,
+    ) -> impl ParallelIterator<Item = ((usize, usize), &mut T)> + use<'_, T> {
+        self.tensor
+            .enumerated_par_iter_mut()
+            .map(|(i, x)| ((i[0], i[1]), x))
+    }
+
     /// Concatenates two matrices along the columns.
     /// This fails if the number of columns do not match.
     pub fn concat_cols_mt(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
@@ -312,87 +355,49 @@ impl<T: Clone + Send + Sync> Matrix<T> {
 
     /// Flips the columns of a matrix (using multiple threads).
     pub fn flip_cols_mt(&self) -> Matrix<T> {
-        let self_arc = Arc::new(self);
         let mut res = self.clone();
 
-        scope(|s| {
-            for (i, chunk) in res.chunks_mut(1).enumerate() {
-                let self_ref = self_arc.clone();
-                let mat_index = self_arc.shape.tensor_index(i).unwrap();
-
-                s.spawn(move || {
-                    chunk[0] = self_ref[(self.rows - 1 - mat_index[0], mat_index[1])].clone();
-                });
-            }
-        });
+        res.enumerated_par_iter_mut()
+            .for_each(|((row, col), elem)| {
+                *elem = self[(self.rows - row - 1, col)].clone();
+            });
 
         res
     }
 
     /// Flips the rows of a matrix (using multiple threads).
     pub fn flip_rows_mt(&self) -> Matrix<T> {
-        let self_arc = Arc::new(self);
         let mut res = self.clone();
 
-        scope(|s| {
-            for (i, chunk) in res.chunks_mut(1).enumerate() {
-                let self_ref = self_arc.clone();
-                let mat_index = self_arc.shape.tensor_index(i).unwrap();
-
-                s.spawn(move || {
-                    chunk[0] = self_ref[(mat_index[0], self.cols - 1 - mat_index[1])].clone();
-                });
-            }
-        });
+        res.enumerated_par_iter_mut()
+            .for_each(|((row, col), elem)| {
+                *elem = self[(row, self.cols - col - 1)].clone();
+            });
 
         res
     }
 
     /// Flips the matrix along both the rows and columns (using multiple threads).
     pub fn flip_mt(&self) -> Matrix<T> {
-        let self_arc = Arc::new(self);
         let mut res = self.clone();
 
-        scope(|s| {
-            for (i, chunk) in res.chunks_mut(1).enumerate() {
-                let self_ref = self_arc.clone();
-                let mat_index = self_arc.shape.tensor_index(i).unwrap();
-
-                s.spawn(move || {
-                    chunk[0] = self_ref
-                        [(self.rows - 1 - mat_index[0], self.cols - 1 - mat_index[1])]
-                        .clone();
-                });
-            }
-        });
+        res.enumerated_par_iter_mut()
+            .for_each(|((row, col), elem)| {
+                *elem = self[(self.rows - row - 1, self.cols - col - 1)].clone();
+            });
 
         res
     }
 
     /// Transposes a matrix (using multiple threads).
     pub fn transpose_mt(&self) -> Matrix<T> {
-        let new_shape = (self.cols, self.rows);
-        let mut new_matrix = self.clone().reshape(new_shape.0, new_shape.1).unwrap();
+        let mut new_matrix = self.clone().reshape(self.cols, self.rows).unwrap();
 
-        let elems_per_thread = 20; // Number of elements a single thread handles
-
-        scope(|s| {
-            for (i, elem) in new_matrix.chunks_mut(elems_per_thread).enumerate() {
-                s.spawn(move || {
-                    for j in 0..elems_per_thread {
-                        let k = i * elems_per_thread + j;
-                        match shape![new_shape.0, new_shape.1].tensor_index(k) {
-                            Ok(new_index) => {
-                                let old_index = (new_index[1], new_index[0]);
-
-                                elem[j] = self[old_index].clone();
-                            }
-                            _ => {}
-                        }
-                    }
-                });
-            }
-        });
+        new_matrix
+            .enumerated_par_iter_mut()
+            .for_each(|((row, col), elem)| {
+                *elem = self[(col, row)].clone();
+            });
 
         new_matrix
     }
@@ -425,23 +430,17 @@ impl<T: Clone + Send + Sync> Matrix<T> {
 
         let mut result = Matrix::<O>::from_value(res_shape.0, res_shape.1, init);
 
-        scope(|s| {
-            let res_chunks = result.chunks_mut(1);
+        result.enumerated_par_iter_mut().for_each(|(index, elem)| {
+            let self_pos = (index.0 * stride_shape.0, index.1 * stride_shape.1);
+            let self_end_pos = (
+                min(self_pos.0 + kernel_shape.0, self.rows),
+                min(self_pos.1 + kernel_shape.1, self.cols),
+            );
 
-            for (i, chunk) in res_chunks.enumerate() {
-                s.spawn(move || {
-                    let res_pos = &shape![res_shape.0, res_shape.1].tensor_index(i).unwrap();
-                    let self_pos = (res_pos[0] * stride_shape.0, res_pos[1] * stride_shape.1);
-                    let self_end_pos = (
-                        min(self_pos.0 + kernel_shape.0, self.rows),
-                        min(self_pos.1 + kernel_shape.1, self.cols),
-                    );
-
-                    let indices = (self_pos.0..self_end_pos.0, self_pos.1..self_end_pos.1);
-
-                    chunk[0] = pool_fn(self.slice(indices.0, indices.1).unwrap());
-                });
-            }
+            *elem = pool_fn(
+                self.slice(self_pos.0..self_end_pos.0, self_pos.1..self_end_pos.1)
+                    .unwrap(),
+            );
         });
 
         Ok(result)
@@ -475,23 +474,18 @@ impl<T: Clone + Send + Sync> Matrix<T> {
 
         let mut result = Matrix::<O>::from_value(res_shape.0, res_shape.1, init);
 
-        scope(|s| {
-            let res_chunks = result.chunks_mut(1);
+        result.enumerated_par_iter_mut().for_each(|(index, elem)| {
+            let self_pos = (index.0 * stride_shape.0, index.1 * stride_shape.1);
+            let self_end_pos = (
+                min(self_pos.0 + kernel_shape.0, self.rows),
+                min(self_pos.1 + kernel_shape.1, self.cols),
+            );
 
-            for (i, chunk) in res_chunks.enumerate() {
-                s.spawn(move || {
-                    let res_pos = shape![res_shape.0, res_shape.1].tensor_index(i).unwrap();
-                    let self_pos = (res_pos[0] * stride_shape.0, res_pos[1] * stride_shape.1);
-                    let self_end_pos = (
-                        min(self_pos.0 + kernel_shape.0, self.rows),
-                        min(self_pos.1 + kernel_shape.1, self.cols),
-                    );
-
-                    let indices = (self_pos.0..self_end_pos.0, self_pos.1..self_end_pos.1);
-
-                    chunk[0] = pool_fn(self_pos, self.slice(indices.0, indices.1).unwrap());
-                });
-            }
+            *elem = pool_fn(
+                index,
+                self.slice(self_pos.0..self_end_pos.0, self_pos.1..self_end_pos.1)
+                    .unwrap(),
+            );
         });
 
         Ok(result)
@@ -550,6 +544,23 @@ impl<T: PartialOrd + Clone> Matrix<T> {
                 *val = max.clone();
             }
         }
+
+        res
+    }
+}
+
+impl<T: PartialOrd + Clone + Send + Sync> Matrix<T> {
+    /// Clips the values in the matrix between `[min, max]`
+    pub fn par_clip(&self, min: T, max: T) -> Matrix<T> {
+        let mut res = self.clone();
+
+        res.par_iter_mut().for_each(|val| {
+            if *val <= min {
+                *val = min.clone();
+            } else if *val >= max {
+                *val = max.clone();
+            }
+        });
 
         res
     }
