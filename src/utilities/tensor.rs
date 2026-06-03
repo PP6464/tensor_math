@@ -840,9 +840,8 @@ impl<T: Zero + Clone> Tensor<T> {
 impl<T: PartialOrd + Clone> Tensor<T> {
     /// Bounds the values between `min` and `max`.
     pub fn clip(&self, min: T, max: T) -> Tensor<T> {
-        let shape = self.shape();
         Tensor::new(
-            shape,
+            self.shape(),
             self.iter()
                 .cloned()
                 .map(|x| {
@@ -857,6 +856,28 @@ impl<T: PartialOrd + Clone> Tensor<T> {
                 .collect(),
         )
         .unwrap()
+    }
+}
+
+impl<T: PartialOrd + Clone + Send + Sync> Tensor<T> {
+    /// Bounds the values between `min` and `max`
+    pub fn par_clip(&self, min: T, max: T) -> Tensor<T> {
+        Tensor::new(
+            self.shape(),
+            self.par_iter()
+                .cloned()
+                .map(|x| {
+                    if x < min {
+                        min.clone()
+                    } else if x > max {
+                        max.clone()
+                    } else {
+                        x
+                    }
+                })
+                .collect(),
+        )
+            .unwrap()
     }
 }
 
