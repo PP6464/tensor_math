@@ -6,111 +6,111 @@ use crate::definitions::transpose::Transpose;
 
 impl Tensor<f64> {
     /// Converts this into a tensor of `Complex64` values
-    pub fn into_complex(self) -> Tensor<Complex64> { self.map(Complex64::from) }
+    pub fn into_complex(self) -> Tensor<Complex64> { self.par_map(Complex64::from) }
     
     /// Exponentiates each element in the tensor
     pub fn exp(self) -> Tensor<f64> {
-        self.map(f64::exp)
+        self.par_map(f64::exp)
     }
     
     /// Computes the natural logarithm of each element in the tensor.
     /// This can return `NaN` for negative inputs.
-    pub fn ln(self) -> Tensor<f64> { self.map(f64::ln) }
+    pub fn ln(self) -> Tensor<f64> { self.par_map(f64::ln) }
     
     /// Computes the log base n of each element in the tensor.
     /// This can return `NaN` for negative inputs or invalid bases.
-    pub fn log(self, n: f64) -> Tensor<f64> { self.map(|x| x.log(n)) }
+    pub fn log(self, n: f64) -> Tensor<f64> { self.par_map(|x| x.log(n)) }
     
     /// Computes the log base 2 of each element in the tensor.
     /// This can return `NaN` for negative inputs.
-    pub fn log2(self) -> Tensor<f64> { self.map(f64::log2) }
+    pub fn log2(self) -> Tensor<f64> { self.par_map(f64::log2) }
     
     /// Computes the log base 10 of each element in the tensor.
     /// This can return `NaN` for negative inputs.
-    pub fn log10(self) -> Tensor<f64> { self.map(f64::log10) }
+    pub fn log10(self) -> Tensor<f64> { self.par_map(f64::log10) }
 
     /// Raises n to the power of each element.
     /// This method uses `f64::powf` so beware of `NaN` values
     /// if you have a negative value raised to a non-integer power.
     pub fn exp_base_n(self, n: f64) -> Tensor<f64> {
-        self.map(|x| f64::powf(n, x))
+        self.par_map(|x| f64::powf(n, x))
     }
 
     /// Raises each element to the power of n.
     /// Like `exp_base_n` this can give `NaN` values if you aren't careful
     /// with what you are raising to which power (e.g. negative values to fractional powers).
     pub fn pow(self, n: f64) -> Tensor<f64> {
-        self.map(|x| f64::powf(x, n))
+        self.par_map(|x| f64::powf(x, n))
     }
 
     /// Computes the sin of each element
     pub fn sin(self) -> Tensor<f64> {
-        self.map(f64::sin)
+        self.par_map(f64::sin)
     }
 
     /// Computes the cos of each element
     pub fn cos(self) -> Tensor<f64> {
-        self.map(f64::cos)
+        self.par_map(f64::cos)
     }
 
     /// Computes the tan of each element
     pub fn tan(self) -> Tensor<f64> {
-        self.map(f64::tan)
+        self.par_map(f64::tan)
     }
 
     /// Computes the arcsin of each element.
     /// Returns `NaN` if the input is outside the range [-1, 1].
     pub fn asin(self) -> Tensor<f64> {
-        self.map(f64::asin)
+        self.par_map(f64::asin)
     }
 
     /// Computes the arccos of each element.
     /// Returns `NaN` if the input is outside the range [-1, 1].
     pub fn acos(self) -> Tensor<f64> {
-        self.map(f64::acos)
+        self.par_map(f64::acos)
     }
 
     /// Computes the atan of each element
     pub fn atan(self) -> Tensor<f64> {
-        self.map(f64::atan)
+        self.par_map(f64::atan)
     }
 
     /// Computes the reciprocal of each element.
     /// Use in conjunction with trigonometric functions to get sec(x), coth(x) etc.
     pub fn recip(self) -> Tensor<f64> {
-        self.map(f64::recip)
+        self.par_map(f64::recip)
     }
 
     /// Computes the sinh of each element
     pub fn sinh(self) -> Tensor<f64> {
-        self.map(f64::sinh)
+        self.par_map(f64::sinh)
     }
 
     /// Computes the cosh of each element
     pub fn cosh(self) -> Tensor<f64> {
-        self.map(f64::cosh)
+        self.par_map(f64::cosh)
     }
 
     /// Computes the tanh of each element
     pub fn tanh(self) -> Tensor<f64> {
-        self.map(f64::tanh)
+        self.par_map(f64::tanh)
     }
 
     /// Computes the arsinh of each element
     pub fn asinh(self) -> Tensor<f64> {
-        self.map(f64::asinh)
+        self.par_map(f64::asinh)
     }
 
     /// Computes the arcosh of each element.
     /// Returns `NaN` if the input is less than 1.0.
     pub fn acosh(self) -> Tensor<f64> {
-        self.map(f64::acosh)
+        self.par_map(f64::acosh)
     }
 
     /// Computes the artanh of each element.
     /// Returns `NaN` if the input is outside the range (-1, 1).
     pub fn atanh(self) -> Tensor<f64> {
-        self.map(f64::atanh)
+        self.par_map(f64::atanh)
     }
 
     /// Computes the sigmoid function for each element.
@@ -121,12 +121,12 @@ impl Tensor<f64> {
 
     /// Computes the ReLU function for each element
     pub fn relu(self) -> Tensor<f64> {
-        self.map(|x| if x > 0.0 { x } else { 0.0 })
+        self.par_map(|x| if x > 0.0 { x } else { 0.0 })
     }
 
     /// Computes the leaky ReLU function for each element
     pub fn leaky_relu(self, alpha: f64) -> Tensor<f64> {
-        self.map(|x| if x > 0.0 { x } else { alpha * x })
+        self.par_map(|x| if x > 0.0 { x } else { alpha * x })
     }
 
     /// Applies softmax to the tensor.
@@ -139,33 +139,33 @@ impl Tensor<f64> {
 
     /// Computes the square root of every element.
     /// Returns `NaN` for negative inputs.
-    pub fn sqrt(self) -> Tensor<f64> { self.map(f64::sqrt) }
+    pub fn sqrt(self) -> Tensor<f64> { self.par_map(f64::sqrt) }
 
     /// Computes the cube root of every element
-    pub fn cbrt(self) -> Tensor<f64> { self.map(f64::cbrt) }
+    pub fn cbrt(self) -> Tensor<f64> { self.par_map(f64::cbrt) }
 
     /// Normalises the tensor so the sum of magnitudes is 1.
     /// May return `NaN` if the sum of magnitudes is zero.
     pub fn norm_l1(self) -> Tensor<f64> {
-        let mag = self.clone().map(|x| x.abs()).sum();
+        let mag = self.clone().par_map(|x| x.abs()).sum();
         self / mag
     }
 
     /// Normalises the tensor so the sum of the squares of the magnitudes is 1.
     /// May return `NaN` if the sum of the squares of the magnitudes is zero.
     pub fn norm_l2(self) -> Tensor<f64> {
-        let mag = self.clone().map(|x| x * x).sum().sqrt();
+        let mag = self.clone().par_map(|x| x * x).sum().sqrt();
         self / mag
     }
 
     /// Computes the sum of the squares of the values, then square roots the result
-    pub fn mag(self) -> f64 { self.map(|x| x * x).sum().sqrt() }
+    pub fn mag(self) -> f64 { self.par_map(|x| x * x).sum().sqrt() }
 
     /// Computes the sum of squares of the values
-    pub fn mag_2(self) -> f64 { self.map(|x| x * x).sum() }
+    pub fn mag_2(self) -> f64 { self.par_map(|x| x * x).sum() }
 
     /// Computes the absolute value of every element
-    pub fn abs(self) -> Tensor<f64> { self.map(|x| x.abs()) }
+    pub fn abs(self) -> Tensor<f64> { self.par_map(|x| x.abs()) }
 
     /// Computes the squared norms of each element, then divides by the sum of the squares of the magnitudes.
     /// May return `NaN` if the sum of the squares of the magnitudes is zero.
@@ -177,111 +177,111 @@ impl Tensor<f64> {
 
 impl Matrix<f64> {
     /// Converts this into a matrix of `Complex64` values
-    pub fn into_complex(self) -> Matrix<Complex64> { self.map(Complex64::from) }
+    pub fn into_complex(self) -> Matrix<Complex64> { self.par_map(Complex64::from) }
     
     /// Exponentiates each element in the tensor
     pub fn exp(self) -> Matrix<f64> {
-        self.map(f64::exp)
+        self.par_map(f64::exp)
     }
 
     /// Computes the natural logarithm of each element in the tensor.
     /// This can return `NaN` for negative inputs.
-    pub fn ln(self) -> Matrix<f64> { self.map(f64::ln) }
+    pub fn ln(self) -> Matrix<f64> { self.par_map(f64::ln) }
 
     /// Computes the log base n of each element in the tensor.
     /// This can return `NaN` for negative inputs or invalid bases.
-    pub fn log(self, n: f64) -> Matrix<f64> { self.map(|x| x.log(n)) }
+    pub fn log(self, n: f64) -> Matrix<f64> { self.par_map(|x| x.log(n)) }
 
     /// Computes the log base 2 of each element in the tensor.
     /// This can return `NaN` for negative inputs.
-    pub fn log2(self) -> Matrix<f64> { self.map(f64::log2) }
+    pub fn log2(self) -> Matrix<f64> { self.par_map(f64::log2) }
 
     /// Computes the log base 10 of each element in the tensor.
     /// This can return `NaN` for negative inputs.
-    pub fn log10(self) -> Matrix<f64> { self.map(f64::log10) }
+    pub fn log10(self) -> Matrix<f64> { self.par_map(f64::log10) }
 
     /// Raises n to the power of each element.
     /// This method uses `f64::powf` so beware of `NaN` values
     /// if you have a negative value raised to a non-integer power.
     pub fn exp_base_n(self, n: f64) -> Matrix<f64> {
-        self.map(|x| f64::powf(n, x))
+        self.par_map(|x| f64::powf(n, x))
     }
 
     /// Raises each element to the power of n.
     /// Like `exp_base_n` this can give `NaN` values if you aren't careful
     /// with what you are raising to which power (e.g. negative values to fractional powers).
     pub fn pow(self, n: f64) -> Matrix<f64> {
-        self.map(|x| f64::powf(x, n))
+        self.par_map(|x| f64::powf(x, n))
     }
 
     /// Computes the sin of each element
     pub fn sin(self) -> Matrix<f64> {
-        self.map(f64::sin)
+        self.par_map(f64::sin)
     }
 
     /// Computes the cos of each element
     pub fn cos(self) -> Matrix<f64> {
-        self.map(f64::cos)
+        self.par_map(f64::cos)
     }
 
     /// Computes the tan of each element
     pub fn tan(self) -> Matrix<f64> {
-        self.map(f64::tan)
+        self.par_map(f64::tan)
     }
 
     /// Computes the arcsin of each element.
     /// Returns `NaN` if the input is outside the range [-1, 1].
     pub fn asin(self) -> Matrix<f64> {
-        self.map(f64::asin)
+        self.par_map(f64::asin)
     }
 
     /// Computes the arccos of each element.
     /// Returns `NaN` if the input is outside the range [-1, 1].
     pub fn acos(self) -> Matrix<f64> {
-        self.map(f64::acos)
+        self.par_map(f64::acos)
     }
 
     /// Computes the atan of each element
     pub fn atan(self) -> Matrix<f64> {
-        self.map(f64::atan)
+        self.par_map(f64::atan)
     }
 
     /// Computes the reciprocal of each element.
     /// Use in conjunction with trigonometric functions to get sec(x), coth(x) etc.
     pub fn recip(self) -> Matrix<f64> {
-        self.map(f64::recip)
+        self.par_map(f64::recip)
     }
 
     /// Computes the sinh of each element
     pub fn sinh(self) -> Matrix<f64> {
-        self.map(f64::sinh)
+        self.par_map(f64::sinh)
     }
 
     /// Computes the cosh of each element
     pub fn cosh(self) -> Matrix<f64> {
-        self.map(f64::cosh)
+        self.par_map(f64::cosh)
     }
 
     /// Computes the tanh of each element
     pub fn tanh(self) -> Matrix<f64> {
-        self.map(f64::tanh)
+        self.par_map(f64::tanh)
     }
 
     /// Computes the arsinh of each element
     pub fn asinh(self) -> Matrix<f64> {
-        self.map(f64::asinh)
+        self.par_map(f64::asinh)
     }
 
     /// Computes the arcosh of each element.
     /// Returns `NaN` if the input is less than 1.0.
     pub fn acosh(self) -> Matrix<f64> {
-        self.map(f64::acosh)
+        self.par_map(f64::acosh)
     }
 
     /// Computes the artanh of each element.
     /// Returns `NaN` if the input is outside the range (-1, 1).
     pub fn atanh(self) -> Matrix<f64> {
-        self.map(f64::atanh)
+        self.par_map(f64::atanh)
     }
 
     /// Computes the sigmoid function for each element.
@@ -292,12 +292,12 @@ impl Matrix<f64> {
 
     /// Computes the ReLU function for each element
     pub fn relu(self) -> Matrix<f64> {
-        self.map(|x| if x > 0.0 { x } else { 0.0 })
+        self.par_map(|x| if x > 0.0 { x } else { 0.0 })
     }
 
     /// Computes the leaky ReLU function for each element
     pub fn leaky_relu(self, alpha: f64) -> Matrix<f64> {
-        self.map(|x| if x > 0.0 { x } else { alpha * x })
+        self.par_map(|x| if x > 0.0 { x } else { alpha * x })
     }
 
     /// Applies softmax to the tensor.
@@ -310,33 +310,33 @@ impl Matrix<f64> {
 
     /// Computes the square root of every element.
     /// Returns `NaN` for negative inputs.
-    pub fn sqrt(self) -> Matrix<f64> { self.map(f64::sqrt) }
+    pub fn sqrt(self) -> Matrix<f64> { self.par_map(f64::sqrt) }
 
     /// Computes the cube root of every element
-    pub fn cbrt(self) -> Matrix<f64> { self.map(f64::cbrt) }
+    pub fn cbrt(self) -> Matrix<f64> { self.par_map(f64::cbrt) }
 
     /// Normalises the tensor so the sum of magnitudes is 1.
     /// May return `NaN` if the sum of the magnitudes is zero.
     pub fn norm_l1(self) -> Matrix<f64> {
-        let mag = self.clone().map(|x| x.abs()).sum();
+        let mag = self.clone().par_map(|x| x.abs()).sum();
         self / mag
     }
 
     /// Normalises the tensor so the sum of the squares of the magnitudes is 1.
     /// May return `NaN` if the sum of the squares of the magnitudes is zero.
     pub fn norm_l2(self) -> Matrix<f64> {
-        let mag = self.clone().map(|x| x * x).sum().sqrt();
+        let mag = self.clone().par_map(|x| x * x).sum().sqrt();
         self / mag
     }
 
     /// Computes the sum of squares of values, then square roots the result
-    pub fn mag(self) -> f64 { self.map(|x| x * x).sum().sqrt() }
+    pub fn mag(self) -> f64 { self.par_map(|x| x * x).sum().sqrt() }
 
     /// Computes the sum of squares of values
-    pub fn mag_2(self) -> f64 { self.map(|x| x * x).sum() }
+    pub fn mag_2(self) -> f64 { self.par_map(|x| x * x).sum() }
 
     /// Computes the absolute value of every element
-    pub fn abs(self) -> Matrix<f64> { self.map(|x| x.abs()) }
+    pub fn abs(self) -> Matrix<f64> { self.par_map(|x| x.abs()) }
 
     /// Computes the squared norms of each element, then divides by the square of the magnitude.
     /// May return `NaN` if the sum of the squares of the magnitudes is zero.
@@ -348,115 +348,115 @@ impl Matrix<f64> {
 
 impl Tensor<Complex64> {
     /// Gives the real parts of all the elements
-    pub fn re(self) -> Tensor<f64> { self.map(Complex64::re) }
+    pub fn re(self) -> Tensor<f64> { self.par_map(Complex64::re) }
     
     /// Gives the imaginary parts of all the elements
-    pub fn im(self) -> Tensor<f64> { self.map(Complex64::im) }
+    pub fn im(self) -> Tensor<f64> { self.par_map(Complex64::im) }
     
     /// Computes the exponential of each element
     pub fn exp(self) -> Tensor<Complex64> {
-        self.map(Complex64::exp)
+        self.par_map(Complex64::exp)
     }
 
     /// Computes the natural logarithm of each element in the tensor.
     /// For complex numbers, this uses the principal branch.
-    pub fn ln(self) -> Tensor<Complex64> { self.map(Complex64::ln) }
+    pub fn ln(self) -> Tensor<Complex64> { self.par_map(Complex64::ln) }
 
     /// Computes the log base n of each element in the tensor
-    pub fn log(self, n: f64) -> Tensor<Complex64> { self.map(|x| x.log(n)) }
+    pub fn log(self, n: f64) -> Tensor<Complex64> { self.par_map(|x| x.log(n)) }
 
     /// Computes the log base 2 of each element in the tensor
-    pub fn log2(self) -> Tensor<Complex64> { self.map(Complex64::log2) }
+    pub fn log2(self) -> Tensor<Complex64> { self.par_map(Complex64::log2) }
 
     /// Computes the log base 10 of each element in the tensor
-    pub fn log10(self) -> Tensor<Complex64> { self.map(Complex64::log10) }
+    pub fn log10(self) -> Tensor<Complex64> { self.par_map(Complex64::log10) }
 
     /// Raises n to the power of each element
     pub fn exp_base_n(self, n: Complex64) -> Tensor<Complex64> {
-        self.map(|x| n.powc(x))
+        self.par_map(|x| n.powc(x))
     }
 
     /// Raises each element to the power of n
     pub fn pow(self, n: Complex64) -> Tensor<Complex64> {
-        self.map(|x| x.powc(n))
+        self.par_map(|x| x.powc(n))
     }
 
     /// Computes the sin of each element
     pub fn sin(self) -> Tensor<Complex64> {
-        self.map(Complex64::sin)
+        self.par_map(Complex64::sin)
     }
 
     /// Computes the cos of each element
     pub fn cos(self) -> Tensor<Complex64> {
-        self.map(Complex64::cos)
+        self.par_map(Complex64::cos)
     }
 
     /// Computes the tan of each element
     pub fn tan(self) -> Tensor<Complex64> {
-        self.map(Complex64::tan)
+        self.par_map(Complex64::tan)
     }
 
     /// Computes the arcsin of each element
     pub fn asin(self) -> Tensor<Complex64> {
-        self.map(Complex64::asin)
+        self.par_map(Complex64::asin)
     }
 
     /// Computes the arccos of each element
     pub fn acos(self) -> Tensor<Complex64> {
-        self.map(Complex64::acos)
+        self.par_map(Complex64::acos)
     }
 
     /// Computes the arctan of each element
     pub fn atan(self) -> Tensor<Complex64> {
-        self.map(Complex64::atan)
+        self.par_map(Complex64::atan)
     }
 
     /// Computes the sinh of each element
     pub fn sinh(self) -> Tensor<Complex64> {
-        self.map(Complex64::sinh)
+        self.par_map(Complex64::sinh)
     }
 
     /// Computes the cosh of each element
     pub fn cosh(self) -> Tensor<Complex64> {
-        self.map(Complex64::cosh)
+        self.par_map(Complex64::cosh)
     }
 
     /// Computes the tanh of each element
     pub fn tanh(self) -> Tensor<Complex64> {
-        self.map(Complex64::tanh)
+        self.par_map(Complex64::tanh)
     }
 
     /// Computes the arsinh of each element
     pub fn asinh(self) -> Tensor<Complex64> {
-        self.map(Complex64::asinh)
+        self.par_map(Complex64::asinh)
     }
 
     /// Computes the arcosh of each element
     pub fn acosh(self) -> Tensor<Complex64> {
-        self.map(Complex64::acosh)
+        self.par_map(Complex64::acosh)
     }
 
     /// Computes the artanh of each element
     pub fn atanh(self) -> Tensor<Complex64> {
-        self.map(Complex64::atanh)
+        self.par_map(Complex64::atanh)
     }
 
     /// Computes the reciprocal of each element.
     /// Use in conjunction with trigonometric functions to get sec(x), coth(x) etc.
     pub fn recip(self) -> Tensor<Complex64> {
-        self.map(Complex64::recip)
+        self.par_map(Complex64::recip)
     }
 
     /// Computes the square root of every element
-    pub fn sqrt(self) -> Tensor<Complex64> { self.map(Complex64::sqrt) }
+    pub fn sqrt(self) -> Tensor<Complex64> { self.par_map(Complex64::sqrt) }
 
     /// Computes the cube root of every element
-    pub fn cbrt(self) -> Tensor<Complex64> { self.map(Complex64::cbrt) }
+    pub fn cbrt(self) -> Tensor<Complex64> { self.par_map(Complex64::cbrt) }
 
     /// Normalises the tensor so the sum of magnitudes is 1.
     /// May return `Complex64` NaN if the sum of magnitudes is zero.
     pub fn norm_l1(self) -> Tensor<Complex64> {
-        let mag: Complex64 = self.clone().map(|x| x.abs()).sum().into();
+        let mag: Complex64 = self.clone().par_map(|x| x.abs()).sum().into();
         self / mag
     }
 
@@ -465,7 +465,7 @@ impl Tensor<Complex64> {
     pub fn norm_l2(self) -> Tensor<Complex64> {
         let mag: Complex64 = self
             .clone()
-            .map(|x| (x * x).abs())
+            .par_map(|x| (x * x).abs())
             .sum()
             .sqrt()
             .into();
@@ -473,28 +473,28 @@ impl Tensor<Complex64> {
     }
 
     /// Conjugates every element in the list
-    pub fn conj(self) -> Tensor<Complex64> { self.map_refs(Complex64::conj) }
+    pub fn conj(self) -> Tensor<Complex64> { self.par_map_refs(Complex64::conj) }
 
     /// Returns the conjugate transpose of a `Tensor<Complex64>`. This uses the multithreaded
     /// implementation of `transpose`.
     pub fn conj_transpose_mt(&self, transpose: &Transpose) -> Result<Tensor<Complex64>, TensorErrors> {
-        Ok(self.transpose_mt(&transpose)?.map(|x| x.conj()))
+        Ok(self.transpose_mt(&transpose)?.par_map(|x| x.conj()))
     }
 
     /// Returns the conjugate transpose of a `Tensor<Complex64>`. This uses the single-threaded
     /// implementation of `transpose`.
     pub fn conj_transpose(&self, transpose: &Transpose) -> Result<Tensor<Complex64>, TensorErrors> {
-        Ok(self.transpose(&transpose)?.map(|x| x.conj()))
+        Ok(self.transpose(&transpose)?.par_map(|x| x.conj()))
     }
 
     /// Computes the sum of the square of the absolute values, then square roots the result
-    pub fn mag(self) -> f64 { self.map(|x| (x * x).abs()).sum().sqrt() }
+    pub fn mag(self) -> f64 { self.par_map(|x| (x * x).abs()).sum().sqrt() }
 
     /// Computes the sum of the square of the absolute values
-    pub fn mag_2(self) -> f64 { self.map(|x| (x * x).abs()).sum() }
+    pub fn mag_2(self) -> f64 { self.par_map(|x| (x * x).abs()).sum() }
 
     /// Computes the absolute value of every element
-    pub fn abs(self) -> Tensor<f64> { self.map(|x| x.abs()) }
+    pub fn abs(self) -> Tensor<f64> { self.par_map(|x| x.abs()) }
 
     /// Computes the squared norms of each element, then divides by the square of the magnitude.
     /// May return `Complex64` NaN if the sum of the squares of the magnitudes is zero.
@@ -506,115 +506,115 @@ impl Tensor<Complex64> {
 
 impl Matrix<Complex64> {
     /// Gives the real parts of all the elements
-    pub fn re(self) -> Matrix<f64> { self.map(Complex64::re) }
+    pub fn re(self) -> Matrix<f64> { self.par_map(Complex64::re) }
     
     /// Gives the imaginary parts of all the elements
-    pub fn im(self) -> Matrix<f64> { self.map(Complex64::im) }
+    pub fn im(self) -> Matrix<f64> { self.par_map(Complex64::im) }
     
     /// Computes the exponential of each element
     pub fn exp(self) -> Matrix<Complex64> {
-        self.map(Complex64::exp)
+        self.par_map(Complex64::exp)
     }
 
     /// Computes the natural logarithm of each element in the tensor.
     /// For complex numbers, this uses the principal branch.
-    pub fn ln(self) -> Matrix<Complex64> { self.map(Complex64::ln) }
+    pub fn ln(self) -> Matrix<Complex64> { self.par_map(Complex64::ln) }
 
     /// Computes the log base n of each element in the tensor
-    pub fn log(self, n: f64) -> Matrix<Complex64> { self.map(|x| x.log(n)) }
+    pub fn log(self, n: f64) -> Matrix<Complex64> { self.par_map(|x| x.log(n)) }
 
     /// Computes the log base 2 of each element in the tensor
-    pub fn log2(self) -> Matrix<Complex64> { self.map(Complex64::log2) }
+    pub fn log2(self) -> Matrix<Complex64> { self.par_map(Complex64::log2) }
 
     /// Computes the log base 10 of each element in the tensor
-    pub fn log10(self) -> Matrix<Complex64> { self.map(Complex64::log10) }
+    pub fn log10(self) -> Matrix<Complex64> { self.par_map(Complex64::log10) }
 
     /// Raises n to the power of each element
     pub fn exp_base_n(self, n: Complex64) -> Matrix<Complex64> {
-        self.map(|x| n.powc(x))
+        self.par_map(|x| n.powc(x))
     }
 
     /// Raises each element to the power of n
     pub fn pow(self, n: Complex64) -> Matrix<Complex64> {
-        self.map(|x| x.powc(n))
+        self.par_map(|x| x.powc(n))
     }
 
     /// Computes the sin of each element
     pub fn sin(self) -> Matrix<Complex64> {
-        self.map(Complex64::sin)
+        self.par_map(Complex64::sin)
     }
 
     /// Computes the cos of each element
     pub fn cos(self) -> Matrix<Complex64> {
-        self.map(Complex64::cos)
+        self.par_map(Complex64::cos)
     }
 
     /// Computes the tan of each element
     pub fn tan(self) -> Matrix<Complex64> {
-        self.map(Complex64::tan)
+        self.par_map(Complex64::tan)
     }
 
     /// Computes the arcsin of each element
     pub fn asin(self) -> Matrix<Complex64> {
-        self.map(Complex64::asin)
+        self.par_map(Complex64::asin)
     }
 
     /// Computes the arccos of each element
     pub fn acos(self) -> Matrix<Complex64> {
-        self.map(Complex64::acos)
+        self.par_map(Complex64::acos)
     }
 
     /// Computes the arctan of each element
     pub fn atan(self) -> Matrix<Complex64> {
-        self.map(Complex64::atan)
+        self.par_map(Complex64::atan)
     }
 
     /// Computes the sinh of each element
     pub fn sinh(self) -> Matrix<Complex64> {
-        self.map(Complex64::sinh)
+        self.par_map(Complex64::sinh)
     }
 
     /// Computes the cosh of each element
     pub fn cosh(self) -> Matrix<Complex64> {
-        self.map(Complex64::cosh)
+        self.par_map(Complex64::cosh)
     }
 
     /// Computes the tanh of each element
     pub fn tanh(self) -> Matrix<Complex64> {
-        self.map(Complex64::tanh)
+        self.par_map(Complex64::tanh)
     }
 
     /// Computes the arsinh of each element
     pub fn asinh(self) -> Matrix<Complex64> {
-        self.map(Complex64::asinh)
+        self.par_map(Complex64::asinh)
     }
 
     /// Computes the arcosh of each element
     pub fn acosh(self) -> Matrix<Complex64> {
-        self.map(Complex64::acosh)
+        self.par_map(Complex64::acosh)
     }
 
     /// Computes the artanh of each element
     pub fn atanh(self) -> Matrix<Complex64> {
-        self.map(Complex64::atanh)
+        self.par_map(Complex64::atanh)
     }
 
     /// Computes the reciprocal of each element.
     /// Use in conjunction with trigonometric functions to get sec(x), coth(x) etc.
     pub fn recip(self) -> Matrix<Complex64> {
-        self.map(Complex64::recip)
+        self.par_map(Complex64::recip)
     }
 
     /// Computes the square root of every element
-    pub fn sqrt(self) -> Matrix<Complex64> { self.map(Complex64::sqrt) }
+    pub fn sqrt(self) -> Matrix<Complex64> { self.par_map(Complex64::sqrt) }
 
     /// Computes the cube root of every element
-    pub fn cbrt(self) -> Matrix<Complex64> { self.map(Complex64::cbrt) }
+    pub fn cbrt(self) -> Matrix<Complex64> { self.par_map(Complex64::cbrt) }
 
     /// Normalises the tensor so the sum of magnitudes is 1.
     /// May return `Complex64` NaN if the sum of magnitudes is zero.
     pub fn norm_l1(self) -> Matrix<Complex64> {
-        let mag: Complex64 = self.clone().map(|x| x.abs()).sum().into();
+        let mag: Complex64 = self.clone().par_map(|x| x.abs()).sum().into();
         self / mag
     }
 
@@ -623,7 +623,7 @@ impl Matrix<Complex64> {
     pub fn norm_l2(self) -> Matrix<Complex64> {
         let mag: Complex64 = self
             .clone()
-            .map(|x| (x * x).abs())
+            .par_map(|x| (x * x).abs())
             .sum()
             .sqrt()
             .into();
@@ -631,28 +631,28 @@ impl Matrix<Complex64> {
     }
 
     /// Conjugates every element in the matrix
-    pub fn conj(self) -> Matrix<Complex64> { self.map_refs(Complex64::conj) }
+    pub fn conj(self) -> Matrix<Complex64> { self.par_map_refs(Complex64::conj) }
 
     /// Returns the conjugate transpose of a `Matrix<Complex64>`. This uses the multithreaded
     /// implementation of `transpose`.
     pub fn conj_transpose_mt(&self) -> Matrix<Complex64> {
-        self.transpose_mt().map(|x| x.conj())
+        self.transpose_mt().par_map(|x| x.conj())
     }
 
     /// Returns the conjugate transpose of a `Matrix<Complex64>`. This uses the single-threaded
     /// implementation of `transpose`.
     pub fn conj_transpose(&self) -> Matrix<Complex64> {
-        self.transpose().map(|x| x.conj())
+        self.transpose().par_map(|x| x.conj())
     }
 
     /// Computes the sum of the square of the absolute values, then square roots the result
-    pub fn mag(self) -> f64 { self.map(|x| (x * x).abs()).sum().sqrt() }
+    pub fn mag(self) -> f64 { self.par_map(|x| (x * x).abs()).sum().sqrt() }
 
     /// Computes the sum of the square of the absolute values
-    pub fn mag_2(self) -> f64 { self.map(|x| (x * x).abs()).sum() }
+    pub fn mag_2(self) -> f64 { self.par_map(|x| (x * x).abs()).sum() }
 
     /// Computes the absolute value of every element
-    pub fn abs(self) -> Matrix<f64> { self.map(|x| x.abs()) }
+    pub fn abs(self) -> Matrix<f64> { self.par_map(|x| x.abs()) }
 
     /// Computes the squared norms of each element, then divides by the square of the magnitude
     pub fn born_probabilities(self) -> Matrix<f64> {
