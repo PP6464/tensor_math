@@ -283,7 +283,7 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Matrix<T> {
         if self.is_empty() || other.is_empty() {
             return Err(TensorErrors::TensorEmpty { op: "Correlation" });
         }
-        
+
         let (padded_rows, padded_cols) = (
             self.rows + 2 * (other.rows - 1),
             self.cols + 2 * (other.cols - 1),
@@ -532,7 +532,7 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Send + Sync> Matrix<T
         if self.is_empty() || other.is_empty() {
             return Err(TensorErrors::TensorEmpty { op: "Correlation" });
         }
-        
+
         let (padded_rows, padded_cols) = (
             self.rows + 2 * (other.rows - 1),
             self.cols + 2 * (other.cols - 1),

@@ -1,11 +1,11 @@
-use rayon::iter::ParallelIterator;
-use rayon::iter::IndexedParallelIterator;
-use std::f64::consts::PI;
-use std::ops::{Add, Mul};
 use num::complex::Complex64;
 use num::{One, Zero};
+use rayon::iter::IndexedParallelIterator;
 use rayon::iter::IntoParallelRefMutIterator;
+use rayon::iter::ParallelIterator;
 use rayon::prelude::ParallelSliceMut;
+use std::f64::consts::PI;
+use std::ops::{Add, Mul};
 
 /// This computes the dot product of two vectors of any type `T` that implements `Add` and `Mul`
 pub(crate) fn dot_vectors<T: Add<Output = T> + Mul<Output = T> + Zero + Clone>(
@@ -34,22 +34,18 @@ pub(crate) fn radix_2_fft_vec(x: &[Complex64]) -> Vec<Complex64> {
     let omega = Complex64::from_polar(1.0, -2.0 * PI / n as f64);
 
     // Bit-reverse indices
-    res
-        .par_iter_mut()
-        .enumerate()
-        .for_each(|(i, val)| {
-            let mut orig = i;
-            let mut rev = 0;
+    res.par_iter_mut().enumerate().for_each(|(i, val)| {
+        let mut orig = i;
+        let mut rev = 0;
 
-            for _ in 0..log2_n {
-                rev <<= 1;
-                rev |= orig & 1;
-                orig >>= 1;
-            }
+        for _ in 0..log2_n {
+            rev <<= 1;
+            rev |= orig & 1;
+            orig >>= 1;
+        }
 
-            *val = x[rev];
-        });
-
+        *val = x[rev];
+    });
 
     // Compute twiddle factors
     let mut twiddle_factors: Vec<Complex64> = Vec::with_capacity(n);
@@ -63,25 +59,23 @@ pub(crate) fn radix_2_fft_vec(x: &[Complex64]) -> Vec<Complex64> {
     for iters in 1..=log2_n {
         let half_len = (1 << iters) >> 1;
 
-        res
-            .par_chunks_exact_mut(1 << iters)
-            .for_each(|chunk| {
-                let (firsts, seconds) = chunk.split_at_mut(half_len);
-                firsts
-                    .par_iter_mut()
-                    .zip(seconds.par_iter_mut())
-                    .enumerate()
-                    .for_each(|(i, (first_val, second_val))| {
-                        let twiddle_index = (n >> iters) * (i & n - 1);
-                        let twiddle = twiddle_factors[twiddle_index];
+        res.par_chunks_exact_mut(1 << iters).for_each(|chunk| {
+            let (firsts, seconds) = chunk.split_at_mut(half_len);
+            firsts
+                .par_iter_mut()
+                .zip(seconds.par_iter_mut())
+                .enumerate()
+                .for_each(|(i, (first_val, second_val))| {
+                    let twiddle_index = (n >> iters) * (i & n - 1);
+                    let twiddle = twiddle_factors[twiddle_index];
 
-                        let first = first_val.clone();
-                        let second = second_val.clone();
+                    let first = first_val.clone();
+                    let second = second_val.clone();
 
-                        *first_val = first + twiddle * second;
-                        *second_val = first - twiddle * second;
-                    });
-            });
+                    *first_val = first + twiddle * second;
+                    *second_val = first - twiddle * second;
+                });
+        });
     }
 
     res
@@ -116,10 +110,12 @@ pub(crate) fn bluestein_fft_vec(x: &[Complex64]) -> Vec<Complex64> {
     u = radix_2_fft_vec(&u);
     v = radix_2_fft_vec(&v);
 
-
     // Note that IFFT(x) = FFT(x.conj_each()).conj_each()
     let mut conv_res = (0..l).map(|i| (u[i] * v[i]).conj()).collect::<Vec<_>>();
-    conv_res = radix_2_fft_vec(&conv_res).iter().map(|x| x.conj() / l as f64).collect();
+    conv_res = radix_2_fft_vec(&conv_res)
+        .iter()
+        .map(|x| x.conj() / l as f64)
+        .collect();
 
     for i in 0..n {
         res[i] = conv_res[i] * v_star[i];
@@ -151,5 +147,8 @@ pub(crate) fn ifft_vec(x: &[Complex64]) -> Vec<Complex64> {
     if n == 0.0 {
         return vec![];
     }
-    fft_vec(&x.iter().map(|z| z.conj()).collect::<Vec<_>>()).iter().map(|z| z.conj() / n).collect()
+    fft_vec(&x.iter().map(|z| z.conj()).collect::<Vec<_>>())
+        .iter()
+        .map(|z| z.conj() / n)
+        .collect()
 }

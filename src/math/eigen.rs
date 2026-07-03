@@ -1,8 +1,8 @@
-use num::complex::{Complex64, ComplexFloat};
 use crate::definitions::errors::TensorErrors;
 use crate::definitions::matrix::Matrix;
 use crate::math::polynomials::solve_quadratic;
 use crate::utilities::matrix::identity;
+use num::complex::{Complex64, ComplexFloat};
 
 impl Matrix<Complex64> {
     /// Returns the eigendecomposition for a matrix in the form `(values, vectors)`
@@ -30,7 +30,7 @@ impl Matrix<Complex64> {
             // Calculate the Wilkinson shift
             let bottom_right_mat = h.slice(ord - 2..ord, ord - 2..ord)?;
             let bottom_right = h[(ord - 1, ord - 1)];
-            
+
             let roots = solve_quadratic(&[
                 bottom_right_mat.det()?,
                 -bottom_right_mat.trace()?,
@@ -45,7 +45,7 @@ impl Matrix<Complex64> {
             if dist1 < dist0 {
                 ws = roots[1]
             }
-            
+
             let shifted = h.clone() - identity(ord) * ws;
             let (qs, rs) = shifted.householder();
 

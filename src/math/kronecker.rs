@@ -1,12 +1,12 @@
-use rayon::iter::ParallelIterator;
-use rayon::iter::IndexedParallelIterator;
-use std::ops::Mul;
-use std::sync::Arc;
-use rayon::prelude::{IntoParallelRefMutIterator, ParallelSliceMut};
 use crate::definitions::matrix::Matrix;
 use crate::definitions::shape::Shape;
 use crate::definitions::tensor::Tensor;
 use crate::definitions::traits::{IntoMatrix, IntoTensor};
+use rayon::iter::IndexedParallelIterator;
+use rayon::iter::ParallelIterator;
+use rayon::prelude::{IntoParallelRefMutIterator, ParallelSliceMut};
+use std::ops::Mul;
+use std::sync::Arc;
 
 impl<T: Clone + Mul<Output = T>> Tensor<T> {
     /// Implements the Kronecker product for any two things that can be converted to tensors.
@@ -88,7 +88,9 @@ impl<T: Clone + Mul<Output = T> + Send + Sync> Tensor<T> {
             return Tensor::new(&new_shape, vec![]).unwrap();
         }
 
-        let mut new_elements = (0..new_shape.element_count()).map(|_| self.first().unwrap().clone()).collect::<Vec<T>>();
+        let mut new_elements = (0..new_shape.element_count())
+            .map(|_| self.first().unwrap().clone())
+            .collect::<Vec<T>>();
 
         let self_elems_arc = Arc::new(&self.elements);
 
@@ -98,7 +100,7 @@ impl<T: Clone + Mul<Output = T> + Send + Sync> Tensor<T> {
             .for_each(|(index, chunk)| {
                 let res = other.par_map_refs(|e| self_elems_arc[index].clone() * e.clone());
                 chunk.par_iter_mut().enumerate().for_each(|(j, e)| {
-                   *e = res[&res.shape.tensor_index(j).unwrap()].clone();
+                    *e = res[&res.shape.tensor_index(j).unwrap()].clone();
                 });
             });
 
@@ -129,6 +131,9 @@ impl<T: Clone + Mul<Output = T> + Send + Sync> Matrix<T> {
                 });
             });
 
-        new_elements.into_matrix().reshape(self.rows * other.rows, self.cols * other.cols).unwrap()
+        new_elements
+            .into_matrix()
+            .reshape(self.rows * other.rows, self.cols * other.cols)
+            .unwrap()
     }
 }

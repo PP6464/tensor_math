@@ -1,15 +1,15 @@
-use rayon::iter::ParallelIterator;
-use rayon::iter::IndexedParallelIterator;
-use std::ops::{Add, Mul};
-use num::Zero;
-use rayon::iter::IntoParallelRefIterator;
 use crate::definitions::errors::TensorErrors;
 use crate::definitions::matrix::Matrix;
 use crate::definitions::shape::Shape;
 use crate::definitions::tensor::Tensor;
-use crate::definitions::traits::{IntoTensor};
+use crate::definitions::traits::IntoTensor;
 use crate::shape;
 use crate::utilities::internal_functions::dot_vectors;
+use num::Zero;
+use rayon::iter::IndexedParallelIterator;
+use rayon::iter::IntoParallelRefIterator;
+use rayon::iter::ParallelIterator;
+use std::ops::{Add, Mul};
 
 impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Tensor<T> {
     /// Perform tensor-contraction multiplication,
@@ -20,11 +20,11 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Tensor<T> {
     /// This fails if the tensors have shapes that are not compatible.
     pub fn contract_mul(&self, other: &Tensor<T>) -> Result<Tensor<T>, TensorErrors> {
         if self.rank() == 0 {
-            return Ok(other.map_refs(|x| self.elements[0].clone() * x.clone()))
+            return Ok(other.map_refs(|x| self.elements[0].clone() * x.clone()));
         }
 
         if other.rank() == 0 {
-            return Ok(self * other.elements[0].clone())
+            return Ok(self * other.elements[0].clone());
         }
 
         if self.shape.0.last().unwrap() != other.shape.0.first().unwrap() {
@@ -98,15 +98,15 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Matrix<T> {
     pub fn mat_mul(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
         self.contract_mul(other)
     }
-    
+
     /// Computes the dot product of the two matrices, i.e. the elementwise product, then the sum of the result.
     /// This fails if the matrices do not have the same shape.
     pub fn dot(&self, other: &Matrix<T>) -> Result<T, TensorErrors> {
         if self.shape != other.shape {
             return Err(TensorErrors::ShapesIncompatible);
         }
-        
-        Ok((self * other).sum())    
+
+        Ok((self * other).sum())
     }
 }
 
@@ -152,22 +152,28 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Send + Sync> Tensor<T
 
         let mut res = Tensor::from_value(&res_shape, T::zero());
 
-        res
-            .enumerated_par_iter_mut()
-            .for_each(|(pos, val)| {
-                let (self_part, other_part) = pos.split_at(self.rank() - 1);
+        res.enumerated_par_iter_mut().for_each(|(pos, val)| {
+            let (self_part, other_part) = pos.split_at(self.rank() - 1);
 
-                let mut self_indices = self_part.iter().map(|&x| x..x+1).collect::<Vec<_>>();
-                self_indices.push(0..self.shape.0.last().unwrap().clone());
+            let mut self_indices = self_part.iter().map(|&x| x..x + 1).collect::<Vec<_>>();
+            self_indices.push(0..self.shape.0.last().unwrap().clone());
 
-                let mut other_indices = other_part.iter().map(|&x| x..x+1).collect::<Vec<_>>();
-                other_indices.insert(0, 0..other.shape.0.first().unwrap().clone());
+            let mut other_indices = other_part.iter().map(|&x| x..x + 1).collect::<Vec<_>>();
+            other_indices.insert(0, 0..other.shape.0.first().unwrap().clone());
 
-                let self_elems = self.slice(&self_indices).unwrap().reshape(&shape![self.shape.0.last().unwrap().clone()]).unwrap();
-                let other_elems = other.slice(&other_indices).unwrap().reshape(&shape![other.shape.0.first().unwrap().clone()]).unwrap();
+            let self_elems = self
+                .slice(&self_indices)
+                .unwrap()
+                .reshape(&shape![self.shape.0.last().unwrap().clone()])
+                .unwrap();
+            let other_elems = other
+                .slice(&other_indices)
+                .unwrap()
+                .reshape(&shape![other.shape.0.first().unwrap().clone()])
+                .unwrap();
 
-                *val = self_elems.dot_mt(&other_elems).unwrap();
-            });
+            *val = self_elems.dot_mt(&other_elems).unwrap();
+        });
 
         Ok(res)
 

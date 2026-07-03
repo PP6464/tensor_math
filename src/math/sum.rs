@@ -1,8 +1,8 @@
-use std::ops::Add;
-use num::Zero;
 use crate::definitions::errors::TensorErrors;
 use crate::definitions::matrix::Matrix;
 use crate::definitions::tensor::Tensor;
+use num::Zero;
+use std::ops::Add;
 
 impl<T: Add<Output = T> + Clone + Zero> Tensor<T> {
     /// Compute the sum of a `Tensor`

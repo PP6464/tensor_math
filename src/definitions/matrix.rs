@@ -1,13 +1,13 @@
-use rayon::iter::ParallelIterator;
 use crate::definitions::errors::TensorErrors;
 use crate::definitions::shape::Shape;
 use crate::definitions::tensor::Tensor;
 use crate::definitions::traits::IntoTensor;
 use crate::shape;
+use rayon::iter::ParallelIterator;
+use rayon::iter::{FromParallelIterator, IntoParallelIterator};
 use std::ops::{Deref, DerefMut, Index, IndexMut};
 use std::slice::Iter;
 use std::vec::IntoIter;
-use rayon::iter::{FromParallelIterator, IntoParallelIterator};
 
 /// This struct represents a matrix, i.e. a rank 2 tensor.
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -156,7 +156,7 @@ impl<T: Send> FromParallelIterator<T> for Matrix<T> {
     /// Converts a parallel iterator into a matrix of shape `(1, iter.len())`
     fn from_par_iter<I>(par_iter: I) -> Self
     where
-        I: IntoParallelIterator<Item=T>,
+        I: IntoParallelIterator<Item = T>,
     {
         let elements: Vec<T> = par_iter.into_par_iter().collect();
         Matrix::new(1, elements.len(), elements).unwrap()

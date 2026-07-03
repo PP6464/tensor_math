@@ -7,10 +7,10 @@ use crate::definitions::traits::IntoTensor;
 use crate::definitions::transpose::Transpose;
 use crate::shape;
 use crate::utilities::internal_functions::dot_vectors;
-use rayon::prelude::*;
 use num::{ToPrimitive, Zero};
 use rand::distr::{Distribution, StandardUniform};
 use rand::{Fill, Rng};
+use rayon::prelude::*;
 use std::collections::HashSet;
 use std::ops::{Add, Div, Range};
 
@@ -557,8 +557,9 @@ impl<T: Clone + Send + Sync> Tensor<T> {
 
                 chunk[..self_chunk_size]
                     .clone_from_slice(&self.elements[self_offset..self_offset + self_chunk_size]);
-                chunk[self_chunk_size..]
-                    .clone_from_slice(&other.elements[other_offset..other_offset + other_chunk_size]);
+                chunk[self_chunk_size..].clone_from_slice(
+                    &other.elements[other_offset..other_offset + other_chunk_size],
+                );
             });
 
         Ok(result)
@@ -572,9 +573,11 @@ impl<T: Clone + Send + Sync> Tensor<T> {
             .enumerate()
             .map(|(index, element)| (self.shape.tensor_index(index).unwrap(), element))
     }
-    
+
     /// Returns a parallel mutable iterator that is enumerated with tensor indices.
-    pub fn enumerated_par_iter_mut(&mut self) -> impl ParallelIterator<Item = (Vec<usize>, &mut T)> + '_ {
+    pub fn enumerated_par_iter_mut(
+        &mut self,
+    ) -> impl ParallelIterator<Item = (Vec<usize>, &mut T)> + '_ {
         self.elements
             .par_iter_mut()
             .enumerate()
@@ -626,9 +629,11 @@ impl<T: Clone + Send + Sync> Tensor<T> {
         let new_shape = transpose.new_shape(self.shape())?;
         let mut new_tensor = self.clone().reshape(&new_shape)?;
 
-        new_tensor.enumerated_par_iter_mut().for_each(|(index, elem)| {
-            *elem = self[&transpose.old_index(&index).unwrap()].clone();
-        });
+        new_tensor
+            .enumerated_par_iter_mut()
+            .for_each(|(index, elem)| {
+                *elem = self[&transpose.old_index(&index).unwrap()].clone();
+            });
 
         Ok(new_tensor)
     }
@@ -877,7 +882,7 @@ impl<T: PartialOrd + Clone + Send + Sync> Tensor<T> {
                 })
                 .collect(),
         )
-            .unwrap()
+        .unwrap()
     }
 }
 

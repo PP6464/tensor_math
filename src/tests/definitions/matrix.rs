@@ -1,15 +1,15 @@
 #[cfg(test)]
 mod matrix_definition_tests {
-    use crate::definitions::shape::Shape;
-use crate::definitions::errors::TensorErrors;
+    use crate::definitions::errors::TensorErrors;
     use crate::definitions::matrix::Matrix;
+    use crate::definitions::shape::Shape;
     use crate::definitions::tensor::Tensor;
     use crate::definitions::traits::IntoTensor;
     use crate::shape;
 
     #[test]
     fn invalid_shape_and_elements() {
-        let err = Matrix::new(1,1, vec![1, 2]).unwrap_err();
+        let err = Matrix::new(1, 1, vec![1, 2]).unwrap_err();
         assert_eq!(err, TensorErrors::ShapeSizeDoesNotMatch);
     }
 
@@ -31,10 +31,7 @@ use crate::definitions::errors::TensorErrors;
 
     #[test]
     fn get_is_safe_indexing() {
-        let m1 = Matrix::<i32>::new(
-            2, 2,
-            vec![0, 1, 2, 3]
-        ).unwrap();
+        let m1 = Matrix::<i32>::new(2, 2, vec![0, 1, 2, 3]).unwrap();
 
         assert_eq!(m1.get((1, 1)), Some(&3));
         assert_eq!(m1.get((2, 2)), None);
@@ -42,10 +39,7 @@ use crate::definitions::errors::TensorErrors;
 
     #[test]
     fn rows_cols_gives_shape() {
-        let m1 = Matrix::<i32>::new(
-            2, 3,
-            vec![0, 1, 2, 3, 4, 5],
-        ).unwrap();
+        let m1 = Matrix::<i32>::new(2, 3, vec![0, 1, 2, 3, 4, 5]).unwrap();
 
         assert_eq!(m1.rows(), 2);
         assert_eq!(m1.cols(), 3);
@@ -53,22 +47,10 @@ use crate::definitions::errors::TensorErrors;
 
     #[test]
     fn convert_into_tensor() {
-        let m1 = Matrix::<i32>::new(
-            2, 3,
-            vec![0, 1, 2, 3, 4, 5],
-        ).unwrap();
-        let t1 = Tensor::<i32>::new(
-            &shape![2, 3],
-            vec![0, 1, 2, 3, 4, 5],
-        ).unwrap();
-        let m2 = Matrix::<usize>::new(
-            0,0,
-            vec![],
-        ).unwrap();
-        let t2 = Tensor::<usize>::new(
-            &shape![0, 0],
-            vec![],
-        ).unwrap();
+        let m1 = Matrix::<i32>::new(2, 3, vec![0, 1, 2, 3, 4, 5]).unwrap();
+        let t1 = Tensor::<i32>::new(&shape![2, 3], vec![0, 1, 2, 3, 4, 5]).unwrap();
+        let m2 = Matrix::<usize>::new(0, 0, vec![]).unwrap();
+        let t2 = Tensor::<usize>::new(&shape![0, 0], vec![]).unwrap();
 
         assert_eq!(m1.into_tensor(), t1);
         assert_eq!(m2.into_tensor(), t2);
@@ -85,22 +67,19 @@ use crate::definitions::errors::TensorErrors;
         let v1 = vec![1, 2, 3, 4, 5, 6];
         let m1 = Matrix::from(v1.iter());
 
-        let ans = Matrix::new(
-            1, 6,
-            v1,
-        ).unwrap();
+        let ans = Matrix::new(1, 6, v1).unwrap();
 
         assert_eq!(m1, ans);
     }
 
     #[test]
     fn try_from_tensor() {
-        let t1 = (0..6).collect::<Tensor<_>>().reshape(&shape![2, 3]).unwrap();
+        let t1 = (0..6)
+            .collect::<Tensor<_>>()
+            .reshape(&shape![2, 3])
+            .unwrap();
         let m1 = Matrix::try_from(t1).unwrap();
-        let ans = Matrix::new(
-            2, 3,
-            vec![0, 1, 2, 3, 4, 5],
-        ).unwrap();
+        let ans = Matrix::new(2, 3, vec![0, 1, 2, 3, 4, 5]).unwrap();
         assert_eq!(m1, ans);
     }
 
@@ -109,7 +88,7 @@ use crate::definitions::errors::TensorErrors;
         let t1 = vec![1, 2, 3, 4, 5, 6].into_tensor();
         let err = Matrix::try_from(t1).unwrap_err();
         match err {
-            TensorErrors::ShapesIncompatible => {},
+            TensorErrors::ShapesIncompatible => {}
             _ => panic!("Incorrect error"),
         }
     }

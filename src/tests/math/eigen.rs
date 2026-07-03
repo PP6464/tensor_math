@@ -1,11 +1,11 @@
 #[cfg(test)]
 mod eigen_tests {
+    use crate::definitions::errors::TensorErrors;
     use crate::definitions::matrix::Matrix;
+    use crate::utilities::matrix::eye;
     use float_cmp::approx_eq;
     use num::complex::{Complex64, ComplexFloat};
-    use crate::definitions::errors::TensorErrors;
-    use crate::utilities::matrix::eye;
-    
+
     #[test]
     fn zero_by_zero_case() {
         let m = Matrix::<Complex64>::new(0, 0, vec![]).unwrap();
@@ -28,20 +28,32 @@ mod eigen_tests {
     fn eigenvalues() {
         let ms = vec![
             Matrix::<Complex64>::new(
-                3, 3,
+                3,
+                3,
                 vec![
-                    Complex64::new(1.0, 0.0), Complex64::new(0.0, 0.0), Complex64::new(0.0, 0.0),
-                    Complex64::new(0.0, 0.0), Complex64::new(ComplexFloat::sqrt(0.5), 0.0), Complex64::new(-ComplexFloat::sqrt(0.5), 0.0),
-                    Complex64::new(0.0, 0.0), Complex64::new(ComplexFloat::sqrt(0.5), 0.0), Complex64::new(ComplexFloat::sqrt(0.5), 0.0),
+                    Complex64::new(1.0, 0.0),
+                    Complex64::new(0.0, 0.0),
+                    Complex64::new(0.0, 0.0),
+                    Complex64::new(0.0, 0.0),
+                    Complex64::new(ComplexFloat::sqrt(0.5), 0.0),
+                    Complex64::new(-ComplexFloat::sqrt(0.5), 0.0),
+                    Complex64::new(0.0, 0.0),
+                    Complex64::new(ComplexFloat::sqrt(0.5), 0.0),
+                    Complex64::new(ComplexFloat::sqrt(0.5), 0.0),
                 ],
-            ).unwrap(),
+            )
+            .unwrap(),
             Matrix::<Complex64>::new(
-                2, 2,
+                2,
+                2,
                 vec![
-                    Complex64::new(1.0, 0.0), Complex64::new(1.0, 0.0),
-                    Complex64::new(1.0, 0.0), Complex64::new(1.0, 0.0),
+                    Complex64::new(1.0, 0.0),
+                    Complex64::new(1.0, 0.0),
+                    Complex64::new(1.0, 0.0),
+                    Complex64::new(1.0, 0.0),
                 ],
-            ).unwrap(),
+            )
+            .unwrap(),
         ];
 
         for m in ms {
@@ -52,14 +64,22 @@ mod eigen_tests {
                 let vec = vecs.slice(0..ord, i..i + 1).unwrap();
                 let val = vals[i];
 
-                assert!(approx_eq!(Matrix<Complex64>, vec.clone() * val, m.contract_mul_mt(&vec).unwrap(), epsilon = 1e-10));
+                assert!(approx_eq!(
+                    Matrix<Complex64>,
+                    vec.clone() * val,
+                    m.contract_mul_mt(&vec).unwrap(),
+                    epsilon = 1e-10
+                ));
             }
         }
     }
 
     #[test]
     fn invalid_eigendecomposition_non_square() {
-        let err = Matrix::<Complex64>::new(2, 1, vec![Complex64::ONE, Complex64::ZERO]).unwrap().eigendecompose().unwrap_err();
+        let err = Matrix::<Complex64>::new(2, 1, vec![Complex64::ONE, Complex64::ZERO])
+            .unwrap()
+            .eigendecompose()
+            .unwrap_err();
         assert_eq!(err, TensorErrors::NonSquareMatrix);
     }
 }

@@ -1,8 +1,8 @@
-use float_cmp::approx_eq;
-use num::complex::{Complex64, ComplexFloat};
 use crate::definitions::errors::TensorErrors;
 use crate::definitions::matrix::Matrix;
 use crate::utilities::matrix::identity;
+use float_cmp::approx_eq;
+use num::complex::{Complex64, ComplexFloat};
 
 impl Matrix<f64> {
     /// Computes the upper Hessenberg form for square matrices.
@@ -23,12 +23,12 @@ impl Matrix<f64> {
         let (mut h, mut q) = (self.clone(), identity(ord));
 
         for i in 0..ord - 2 {
-            let vec_bottom = h.slice(i+1..ord, i..i + 1)?;
-            let alpha = -1.0
-                * match vec_bottom[&[0, 0]] {
-                0.0 => 1.0,
-                x => x.signum(),
-            } * vec_bottom.iter().map(|x| x * x).sum::<f64>().sqrt();
+            let vec_bottom = h.slice(i + 1..ord, i..i + 1)?;
+            let alpha =
+                -1.0 * match vec_bottom[&[0, 0]] {
+                    0.0 => 1.0,
+                    x => x.signum(),
+                } * vec_bottom.iter().map(|x| x * x).sum::<f64>().sqrt();
             let mut e1 = Matrix::<f64>::from_shape(vec_bottom.rows, vec_bottom.cols);
             e1[&[0, 0]] = 1.0;
             let v = vec_bottom - e1 * alpha;
@@ -40,9 +40,8 @@ impl Matrix<f64> {
             let u = v.norm_l2();
             let u_clone = u.clone();
             let u_t = u_clone.transpose_mt();
-            let reflector = identity::<f64>(u.shape.0.first().unwrap().clone()) - u
-                .contract_mul(&u_t)?
-                * 2.0;
+            let reflector =
+                identity::<f64>(u.shape.0.first().unwrap().clone()) - u.contract_mul(&u_t)? * 2.0;
             let reflector_transpose = reflector.transpose_mt();
             let reflector_ord = reflector.rows;
 
@@ -97,12 +96,17 @@ impl Matrix<Complex64> {
         let (mut h, mut q) = (self.clone(), identity(ord));
 
         for i in 0..ord - 2 {
-            let vec_bottom = h.slice(i+1..ord, i..i + 1)?;
+            let vec_bottom = h.slice(i + 1..ord, i..i + 1)?;
             let alpha = Complex64::from(-1.0)
                 * match vec_bottom[&[0, 0]] {
-                Complex64::ZERO => Complex64::ONE,
-                x => x / Complex64::abs(x),
-            } * vec_bottom.iter().map(|x| <f64 as Into<Complex64>>::into((x * x).abs())).sum::<Complex64>().sqrt();
+                    Complex64::ZERO => Complex64::ONE,
+                    x => x / Complex64::abs(x),
+                }
+                * vec_bottom
+                    .iter()
+                    .map(|x| <f64 as Into<Complex64>>::into((x * x).abs()))
+                    .sum::<Complex64>()
+                    .sqrt();
             let mut e1 = Matrix::<Complex64>::from_shape(vec_bottom.rows, vec_bottom.cols);
             e1[&[0, 0]] = Complex64::ONE;
             let v = vec_bottom - e1 * alpha;
@@ -114,9 +118,13 @@ impl Matrix<Complex64> {
             let u = v.norm_l2();
             let u_clone = u.clone();
             let u_t = u_clone.transpose_mt();
-            let u_star = u_t.iter().map(|x| x.conj()).collect::<Matrix<Complex64>>().reshape(u_t.rows, u_t.cols)?;
-            let reflector = identity::<Complex64>(u.shape.0[0].clone()) - u.mat_mul_mt(&u_star)?
-                * Complex64 { re: 2.0, im: 0.0 };
+            let u_star = u_t
+                .iter()
+                .map(|x| x.conj())
+                .collect::<Matrix<Complex64>>()
+                .reshape(u_t.rows, u_t.cols)?;
+            let reflector = identity::<Complex64>(u.shape.0[0].clone())
+                - u.mat_mul_mt(&u_star)? * Complex64 { re: 2.0, im: 0.0 };
             let reflector_star = reflector.conj_transpose_mt();
             let reflector_ord = reflector.rows;
 

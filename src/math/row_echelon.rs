@@ -1,6 +1,6 @@
+use crate::definitions::matrix::Matrix;
 use float_cmp::approx_eq;
 use num::complex::{Complex64, ComplexFloat};
-use crate::definitions::matrix::Matrix;
 
 impl Matrix<f64> {
     /// Gives whether the matrix is in row echelon form or not
@@ -9,7 +9,7 @@ impl Matrix<f64> {
         let mut prev_pivot_col: i32 = -1;
 
         for i in 0..self.rows {
-            let current_row = self.slice(i..i+1, 0..self.cols).unwrap();
+            let current_row = self.slice(i..i + 1, 0..self.cols).unwrap();
 
             if all_zero_rows && !current_row.iter().all(|x| approx_eq!(f64, *x, 0.0)) {
                 return false; // There is a row below a row of all 0 that is not itself all 0
@@ -17,10 +17,14 @@ impl Matrix<f64> {
 
             if current_row.iter().all(|x| approx_eq!(f64, *x, 0.0)) {
                 all_zero_rows = true;
-                continue
+                continue;
             }
 
-            let (current_pivot_col, _) = current_row.iter().enumerate().find(|(_, &x)| !approx_eq!(f64, x, 0.0)).unwrap();
+            let (current_pivot_col, _) = current_row
+                .iter()
+                .enumerate()
+                .find(|(_, &x)| !approx_eq!(f64, x, 0.0))
+                .unwrap();
 
             if (current_pivot_col as i32) <= prev_pivot_col {
                 return false;
@@ -41,7 +45,9 @@ impl Matrix<f64> {
 
             // Note everything below must be 0
             if pivot.0 < self.rows - 1 {
-                let below_slice = self.slice(pivot.0 + 1..self.rows, pivot.1..pivot.1 + 1).unwrap();
+                let below_slice = self
+                    .slice(pivot.0 + 1..self.rows, pivot.1..pivot.1 + 1)
+                    .unwrap();
 
                 if below_slice.iter().any(|x| !approx_eq!(f64, *x, 0.0)) {
                     return false;
@@ -53,29 +59,42 @@ impl Matrix<f64> {
                 if pivot.1 == self.cols - 1 {
                     // If this is the last row then return true because we are done checking everything else
                     if pivot.0 == self.rows - 1 {
-                        return true
+                        return true;
                     }
 
                     // This row is all 0 otherwise, so just check everything below is all 0 as well
-                    return self.slice(pivot.0 + 1..self.rows, 0..self.cols).unwrap().iter().all(|x| approx_eq!(f64, *x, 0.0));
+                    return self
+                        .slice(pivot.0 + 1..self.rows, 0..self.cols)
+                        .unwrap()
+                        .iter()
+                        .all(|x| approx_eq!(f64, *x, 0.0));
                 }
 
                 // Check for all 0, otherwise just move to the first non-zero element
-                let right_slice = self.slice(pivot.0..pivot.0 + 1, pivot.1 + 1..self.cols).unwrap();
-                let option_pivot = right_slice.iter().enumerate().find(|(_, &x)| !approx_eq!(f64, x, 0.0));
+                let right_slice = self
+                    .slice(pivot.0..pivot.0 + 1, pivot.1 + 1..self.cols)
+                    .unwrap();
+                let option_pivot = right_slice
+                    .iter()
+                    .enumerate()
+                    .find(|(_, &x)| !approx_eq!(f64, x, 0.0));
 
                 match option_pivot {
                     Some((index, _)) => {
                         pivot = (pivot.0, pivot.1 + 1 + index);
-                        continue
+                        continue;
                     }
                     None => {
                         // This row is all 0, check rows below
                         if pivot.0 + 1 == self.rows {
-                            return true
+                            return true;
                         }
 
-                        return self.slice(pivot.0 + 1..self.rows, 0..self.cols).unwrap().iter().all(|x| approx_eq!(f64, *x, 0.0));
+                        return self
+                            .slice(pivot.0 + 1..self.rows, 0..self.cols)
+                            .unwrap()
+                            .iter()
+                            .all(|x| approx_eq!(f64, *x, 0.0));
                     }
                 }
             }
@@ -93,7 +112,11 @@ impl Matrix<f64> {
             if pivot.0 > 0 {
                 let above_slice = self.slice(0..pivot.0, pivot.1..pivot.1 + 1);
 
-                if above_slice.unwrap().iter().any(|x| !approx_eq!(f64, *x, 0.0)) {
+                if above_slice
+                    .unwrap()
+                    .iter()
+                    .any(|x| !approx_eq!(f64, *x, 0.0))
+                {
                     return false;
                 }
             }
@@ -125,34 +148,55 @@ impl Matrix<f64> {
 
                 // Check if any of the other rows below have a non-zero value
                 // at this pivot column and if so then use that row's value instead
-                let slice_below = res.slice(pivot.0 + 1..res.rows, pivot.1..pivot.1 + 1).unwrap();
+                let slice_below = res
+                    .slice(pivot.0 + 1..res.rows, pivot.1..pivot.1 + 1)
+                    .unwrap();
 
-                let (index, max_abs) = slice_below.iter().enumerate().rev().max_by(|(_, &x), (_, &y)| { x.abs().total_cmp(&y.abs()) }).unwrap();
+                let (index, max_abs) = slice_below
+                    .iter()
+                    .enumerate()
+                    .rev()
+                    .max_by(|(_, &x), (_, &y)| x.abs().total_cmp(&y.abs()))
+                    .unwrap();
 
                 if approx_eq!(f64, max_abs.abs(), 0.0) {
                     // There is no suitable pivot on this row
                     pivot = (pivot.0, pivot.1 + 1);
-                    continue
+                    continue;
                 }
 
                 // There is a suitable pivot on this column in another row, so need to swap those rows
-                let chosen_copy = res.slice(index + pivot.0 + 1..index + pivot.0 + 2, pivot.1..res.cols).unwrap();
+                let chosen_copy = res
+                    .slice(index + pivot.0 + 1..index + pivot.0 + 2, pivot.1..res.cols)
+                    .unwrap();
                 let current_copy = res.slice(pivot.0..pivot.0 + 1, pivot.1..res.cols).unwrap();
 
-                res.slice_mut(pivot.0..pivot.0 + 1, pivot.1..res.cols).unwrap().set_all(&chosen_copy).unwrap();
-                res.slice_mut(index + pivot.0 + 1..index + pivot.0 + 2, pivot.1..res.cols).unwrap().set_all(&current_copy).unwrap();
+                res.slice_mut(pivot.0..pivot.0 + 1, pivot.1..res.cols)
+                    .unwrap()
+                    .set_all(&chosen_copy)
+                    .unwrap();
+                res.slice_mut(index + pivot.0 + 1..index + pivot.0 + 2, pivot.1..res.cols)
+                    .unwrap()
+                    .set_all(&current_copy)
+                    .unwrap();
 
                 // Now multiply determinant scale factor by -1 because we swapped rows
                 det_scale *= -1;
 
                 // Now we can resume with normal Gauss-Jordan elimination
-                continue
+                continue;
             } else {
                 // Eliminate all rows below
                 for i in pivot.0 + 1..res.rows {
                     let val_for_row = res[(i, pivot.1)];
-                    let new_row = res.slice(i..i+1, pivot.1..res.cols).unwrap() - res.slice(pivot.0..pivot.0 + 1, pivot.1..res.cols).unwrap() * (val_for_row) / pivot_val;
-                    res.slice_mut(i..i+1, pivot.1..res.cols).unwrap().set_all(&new_row).unwrap();
+                    let new_row = res.slice(i..i + 1, pivot.1..res.cols).unwrap()
+                        - res.slice(pivot.0..pivot.0 + 1, pivot.1..res.cols).unwrap()
+                            * (val_for_row)
+                            / pivot_val;
+                    res.slice_mut(i..i + 1, pivot.1..res.cols)
+                        .unwrap()
+                        .set_all(&new_row)
+                        .unwrap();
                 }
 
                 // We slide the pivot one down and to the right in the normal case
@@ -188,59 +232,86 @@ impl Matrix<f64> {
                 if pivot.0 == res.rows - 1 {
                     if pivot.1 == res.cols - 1 {
                         // There is nothing to check
-                        break
+                        break;
                     }
 
                     let rest_of_row = res.slice(pivot.0..res.rows, pivot.1 + 1..res.cols).unwrap();
 
-                    let (index, max_abs) = rest_of_row.iter().enumerate().rev().max_by(|(_, &x), (_, &y)| { x.abs().total_cmp(&y.abs()) }).unwrap();
+                    let (index, max_abs) = rest_of_row
+                        .iter()
+                        .enumerate()
+                        .rev()
+                        .max_by(|(_, &x), (_, &y)| x.abs().total_cmp(&y.abs()))
+                        .unwrap();
 
                     if !approx_eq!(f64, *max_abs, 0.0) {
                         // There is a suitable pivot so change the position of the pivot to it
                         pivot = (pivot.0, pivot.1 + 1 + index);
-                        continue
+                        continue;
                     }
 
                     // Otherwise we are done here
-                    break
+                    break;
                 }
 
                 // Check if any of the other rows below have a non-zero value
                 // at this pivot column and if so then use that row's value instead
-                let slice_below = res.slice(pivot.0 + 1..res.rows, pivot.1..pivot.1 + 1).unwrap();
+                let slice_below = res
+                    .slice(pivot.0 + 1..res.rows, pivot.1..pivot.1 + 1)
+                    .unwrap();
 
-                let (index, max_abs) = slice_below.iter().enumerate().max_by(|(_, &x), (_, &y)| { x.abs().total_cmp(&y.abs()) }).unwrap();
+                let (index, max_abs) = slice_below
+                    .iter()
+                    .enumerate()
+                    .max_by(|(_, &x), (_, &y)| x.abs().total_cmp(&y.abs()))
+                    .unwrap();
 
                 if approx_eq!(f64, max_abs.abs(), 0.0) {
                     // There is no suitable pivot on this row
                     pivot = (pivot.0, pivot.1 + 1);
-                    continue
+                    continue;
                 }
 
                 // There is a suitable pivot on this column in another row, so need to swap those rows
-                let chosen_copy = res.slice(index + pivot.0 + 1..index + pivot.0 + 2, pivot.1..res.cols).unwrap();
+                let chosen_copy = res
+                    .slice(index + pivot.0 + 1..index + pivot.0 + 2, pivot.1..res.cols)
+                    .unwrap();
                 let current_copy = res.slice(pivot.0..pivot.0 + 1, pivot.1..res.cols).unwrap();
 
-                res.slice_mut(pivot.0..pivot.0 + 1, pivot.1..res.cols).unwrap().set_all(&chosen_copy).unwrap();
-                res.slice_mut(index + pivot.0 + 1..index + pivot.0 + 2, pivot.1..res.cols).unwrap().set_all(&current_copy).unwrap();
+                res.slice_mut(pivot.0..pivot.0 + 1, pivot.1..res.cols)
+                    .unwrap()
+                    .set_all(&chosen_copy)
+                    .unwrap();
+                res.slice_mut(index + pivot.0 + 1..index + pivot.0 + 2, pivot.1..res.cols)
+                    .unwrap()
+                    .set_all(&current_copy)
+                    .unwrap();
 
                 // Now we can resume with normal Gauss-Jordan elimination
-                continue
+                continue;
             } else {
                 // Normalise the row
-                let norm_row = res.slice(pivot.0 .. pivot.0 + 1, pivot.1 .. res.cols).unwrap() / pivot_val;
-                res.slice_mut(pivot.0..pivot.0 + 1, pivot.1..res.cols).unwrap().set_all(&norm_row).unwrap();
+                let norm_row =
+                    res.slice(pivot.0..pivot.0 + 1, pivot.1..res.cols).unwrap() / pivot_val;
+                res.slice_mut(pivot.0..pivot.0 + 1, pivot.1..res.cols)
+                    .unwrap()
+                    .set_all(&norm_row)
+                    .unwrap();
             }
 
             // Eliminate all other rows
             for i in 0..res.rows {
                 if i == pivot.0 {
-                    continue
+                    continue;
                 }
 
                 let val_for_row = res[(i, pivot.1)];
-                let new_row = res.slice(i..i+1, pivot.1..res.cols).unwrap() - res.slice(pivot.0..pivot.0 + 1, pivot.1..res.cols).unwrap() * val_for_row;
-                res.slice_mut(i..i + 1, pivot.1..res.cols).unwrap().set_all(&new_row).unwrap();
+                let new_row = res.slice(i..i + 1, pivot.1..res.cols).unwrap()
+                    - res.slice(pivot.0..pivot.0 + 1, pivot.1..res.cols).unwrap() * val_for_row;
+                res.slice_mut(i..i + 1, pivot.1..res.cols)
+                    .unwrap()
+                    .set_all(&new_row)
+                    .unwrap();
             }
 
             // We slide the pivot one down and to the right as we are in the normal case
@@ -258,7 +329,7 @@ impl Matrix<Complex64> {
         let mut prev_pivot_col: i32 = -1;
 
         for i in 0..self.rows {
-            let current_row = self.slice(i..i+1, 0..self.cols).unwrap();
+            let current_row = self.slice(i..i + 1, 0..self.cols).unwrap();
 
             if all_zero_rows && !current_row.iter().all(|x| approx_eq!(f64, (*x).abs(), 0.0)) {
                 return false; // There is a row below a row of all 0 that is not itself all 0
@@ -266,10 +337,14 @@ impl Matrix<Complex64> {
 
             if current_row.iter().all(|x| approx_eq!(f64, (*x).abs(), 0.0)) {
                 all_zero_rows = true;
-                continue
+                continue;
             }
 
-            let (current_pivot_col, _) = current_row.iter().enumerate().find(|(_, &x)| !approx_eq!(f64, x.abs(), 0.0)).unwrap();
+            let (current_pivot_col, _) = current_row
+                .iter()
+                .enumerate()
+                .find(|(_, &x)| !approx_eq!(f64, x.abs(), 0.0))
+                .unwrap();
 
             if (current_pivot_col as i32) <= prev_pivot_col {
                 return false;
@@ -290,9 +365,14 @@ impl Matrix<Complex64> {
 
             // Note everything below must be 0
             if pivot.0 < self.rows - 1 {
-                let below_slice = self.slice(pivot.0 + 1..self.rows, pivot.1..pivot.1 + 1).unwrap();
+                let below_slice = self
+                    .slice(pivot.0 + 1..self.rows, pivot.1..pivot.1 + 1)
+                    .unwrap();
 
-                if below_slice.iter().any(|x| !approx_eq!(f64, (*x).abs(), 0.0)) {
+                if below_slice
+                    .iter()
+                    .any(|x| !approx_eq!(f64, (*x).abs(), 0.0))
+                {
                     return false;
                 }
             }
@@ -302,29 +382,42 @@ impl Matrix<Complex64> {
                 if pivot.1 == self.cols - 1 {
                     // If this is the last row then return true because we are done checking everything else
                     if pivot.0 == self.rows - 1 {
-                        return true
+                        return true;
                     }
 
                     // This row is all 0 otherwise, so just check everything below is all 0 as well
-                    return self.slice(pivot.0 + 1..self.rows, 0..self.cols).unwrap().iter().all(|x| approx_eq!(f64, (*x).abs(), 0.0));
+                    return self
+                        .slice(pivot.0 + 1..self.rows, 0..self.cols)
+                        .unwrap()
+                        .iter()
+                        .all(|x| approx_eq!(f64, (*x).abs(), 0.0));
                 }
 
                 // Check for all 0, otherwise just move to the first non-zero element
-                let right_slice = self.slice(pivot.0..pivot.0 + 1, pivot.1 + 1..self.cols).unwrap();
-                let option_pivot = right_slice.iter().enumerate().find(|(_, &x)| !approx_eq!(f64, x.abs(), 0.0));
+                let right_slice = self
+                    .slice(pivot.0..pivot.0 + 1, pivot.1 + 1..self.cols)
+                    .unwrap();
+                let option_pivot = right_slice
+                    .iter()
+                    .enumerate()
+                    .find(|(_, &x)| !approx_eq!(f64, x.abs(), 0.0));
 
                 match option_pivot {
                     Some((index, _)) => {
                         pivot = (pivot.0, pivot.1 + 1 + index);
-                        continue
+                        continue;
                     }
                     None => {
                         // This row is all 0, check rows below
                         if pivot.0 + 1 == self.rows {
-                            return true
+                            return true;
                         }
 
-                        return self.slice(pivot.0 + 1..self.rows, 0..self.cols).unwrap().iter().all(|x| approx_eq!(f64, (*x).abs(), 0.0));
+                        return self
+                            .slice(pivot.0 + 1..self.rows, 0..self.cols)
+                            .unwrap()
+                            .iter()
+                            .all(|x| approx_eq!(f64, (*x).abs(), 0.0));
                     }
                 }
             }
@@ -342,7 +435,10 @@ impl Matrix<Complex64> {
             if pivot.0 > 0 {
                 let above_slice = self.slice(0..pivot.0, pivot.1..pivot.1 + 1).unwrap();
 
-                if above_slice.iter().any(|x| !approx_eq!(f64, (*x).abs(), 0.0)) {
+                if above_slice
+                    .iter()
+                    .any(|x| !approx_eq!(f64, (*x).abs(), 0.0))
+                {
                     return false;
                 }
             }
@@ -377,34 +473,55 @@ impl Matrix<Complex64> {
 
                 // Check if any of the other rows below have a non-zero value
                 // at this pivot column and if so then use that row's value instead
-                let slice_below = res.slice(pivot.0 + 1..res.rows, pivot.1..pivot.1 + 1).unwrap();
+                let slice_below = res
+                    .slice(pivot.0 + 1..res.rows, pivot.1..pivot.1 + 1)
+                    .unwrap();
 
-                let (index, max_abs) = slice_below.iter().enumerate().rev().max_by(|(_, &x), (_, &y)| { x.abs().total_cmp(&y.abs()) }).unwrap();
+                let (index, max_abs) = slice_below
+                    .iter()
+                    .enumerate()
+                    .rev()
+                    .max_by(|(_, &x), (_, &y)| x.abs().total_cmp(&y.abs()))
+                    .unwrap();
 
                 if approx_eq!(f64, max_abs.abs(), 0.0) {
                     // There is no suitable pivot on this row
                     pivot = (pivot.0, pivot.1 + 1);
-                    continue
+                    continue;
                 }
 
                 // There is a suitable pivot on this column in another row, so need to swap those rows
-                let chosen_copy = res.slice(index + pivot.0 + 1..index + pivot.0 + 2, pivot.1..res.cols).unwrap();
+                let chosen_copy = res
+                    .slice(index + pivot.0 + 1..index + pivot.0 + 2, pivot.1..res.cols)
+                    .unwrap();
                 let current_copy = res.slice(pivot.0..pivot.0 + 1, pivot.1..res.cols).unwrap();
 
-                res.slice_mut(pivot.0..pivot.0 + 1, pivot.1..res.cols).unwrap().set_all(&chosen_copy).unwrap();
-                res.slice_mut(index + pivot.0 + 1..index + pivot.0 + 2, pivot.1..res.cols).unwrap().set_all(&current_copy).unwrap();
+                res.slice_mut(pivot.0..pivot.0 + 1, pivot.1..res.cols)
+                    .unwrap()
+                    .set_all(&chosen_copy)
+                    .unwrap();
+                res.slice_mut(index + pivot.0 + 1..index + pivot.0 + 2, pivot.1..res.cols)
+                    .unwrap()
+                    .set_all(&current_copy)
+                    .unwrap();
 
                 // Multiply the determinant scale factor by -1 because we swapped a row
                 det_scale *= -1;
 
                 // Now we can resume with normal Gauss-Jordan elimination
-                continue
+                continue;
             } else {
                 // Eliminate all rows below
                 for i in pivot.0 + 1..res.rows {
                     let val_for_row = res[(i, pivot.1)];
-                    let new_row = res.slice(i..i+1, pivot.1..res.cols).unwrap() - res.slice(pivot.0..pivot.0 + 1, pivot.1..res.cols).unwrap() * (val_for_row) / pivot_val;
-                    res.slice_mut(i..i + 1, pivot.1..res.cols).unwrap().set_all(&new_row).unwrap();
+                    let new_row = res.slice(i..i + 1, pivot.1..res.cols).unwrap()
+                        - res.slice(pivot.0..pivot.0 + 1, pivot.1..res.cols).unwrap()
+                            * (val_for_row)
+                            / pivot_val;
+                    res.slice_mut(i..i + 1, pivot.1..res.cols)
+                        .unwrap()
+                        .set_all(&new_row)
+                        .unwrap();
                 }
 
                 // We slide the pivot one down and to the right in the normal case
@@ -440,59 +557,86 @@ impl Matrix<Complex64> {
                 if pivot.0 == res.rows - 1 {
                     if pivot.1 == res.cols - 1 {
                         // There is nothing to check
-                        break
+                        break;
                     }
 
                     let rest_of_row = res.slice(pivot.0..res.rows, pivot.1 + 1..res.cols).unwrap();
 
-                    let (index, max_abs) = rest_of_row.iter().enumerate().rev().max_by(|(_, &x), (_, &y)| { x.abs().total_cmp(&y.abs()) }).unwrap();
+                    let (index, max_abs) = rest_of_row
+                        .iter()
+                        .enumerate()
+                        .rev()
+                        .max_by(|(_, &x), (_, &y)| x.abs().total_cmp(&y.abs()))
+                        .unwrap();
 
                     if !approx_eq!(f64, max_abs.abs(), 0.0) {
                         // There is a suitable pivot so change the position of the pivot to it
                         pivot = (pivot.0, pivot.1 + 1 + index);
-                        continue
+                        continue;
                     }
 
                     // Otherwise we are done here
-                    break
+                    break;
                 }
 
                 // Check if any of the other rows below have a non-zero value
                 // at this pivot column and if so then use that row's value instead
-                let slice_below = res.slice(pivot.0 + 1..res.rows, pivot.1..pivot.1 + 1).unwrap();
+                let slice_below = res
+                    .slice(pivot.0 + 1..res.rows, pivot.1..pivot.1 + 1)
+                    .unwrap();
 
-                let (index, max_abs) = slice_below.iter().enumerate().max_by(|(_, &x), (_, &y)| { x.abs().total_cmp(&y.abs()) }).unwrap();
+                let (index, max_abs) = slice_below
+                    .iter()
+                    .enumerate()
+                    .max_by(|(_, &x), (_, &y)| x.abs().total_cmp(&y.abs()))
+                    .unwrap();
 
                 if approx_eq!(f64, max_abs.abs(), 0.0) {
                     // There is no suitable pivot on this row
                     pivot = (pivot.0, pivot.1 + 1);
-                    continue
+                    continue;
                 }
 
                 // There is a suitable pivot on this column in another row, so need to swap those rows
-                let chosen_copy = res.slice(index + pivot.0 + 1..index + pivot.0 + 2, pivot.1..res.cols).unwrap();
+                let chosen_copy = res
+                    .slice(index + pivot.0 + 1..index + pivot.0 + 2, pivot.1..res.cols)
+                    .unwrap();
                 let current_copy = res.slice(pivot.0..pivot.0 + 1, pivot.1..res.cols).unwrap();
 
-                res.slice_mut(pivot.0..pivot.0 + 1, pivot.1..res.cols).unwrap().set_all(&chosen_copy).unwrap();
-                res.slice_mut(index + pivot.0 + 1..index + pivot.0 + 2, pivot.1..res.cols).unwrap().set_all(&current_copy).unwrap();
+                res.slice_mut(pivot.0..pivot.0 + 1, pivot.1..res.cols)
+                    .unwrap()
+                    .set_all(&chosen_copy)
+                    .unwrap();
+                res.slice_mut(index + pivot.0 + 1..index + pivot.0 + 2, pivot.1..res.cols)
+                    .unwrap()
+                    .set_all(&current_copy)
+                    .unwrap();
 
                 // Now we can resume with normal Gauss-Jordan elimination
-                continue
+                continue;
             } else {
                 // Normalise the row
-                let norm_row = res.slice(pivot.0 .. pivot.0 + 1, pivot.1 .. res.cols).unwrap() / pivot_val;
-                res.slice_mut(pivot.0 .. pivot.0 + 1, pivot.1 .. res.cols).unwrap().set_all(&norm_row).unwrap();
+                let norm_row =
+                    res.slice(pivot.0..pivot.0 + 1, pivot.1..res.cols).unwrap() / pivot_val;
+                res.slice_mut(pivot.0..pivot.0 + 1, pivot.1..res.cols)
+                    .unwrap()
+                    .set_all(&norm_row)
+                    .unwrap();
             }
 
             // Eliminate all other rows
             for i in 0..res.rows {
                 if i == pivot.0 {
-                    continue
+                    continue;
                 }
 
                 let val_for_row = res[(i, pivot.1)];
-                let new_row = res.slice(i..i+1, pivot.1..res.cols).unwrap() - res.slice(pivot.0..pivot.0 + 1, pivot.1..res.cols).unwrap() * val_for_row;
-                res.slice_mut(i..i+1, pivot.1..res.cols).unwrap().set_all(&new_row).unwrap();
+                let new_row = res.slice(i..i + 1, pivot.1..res.cols).unwrap()
+                    - res.slice(pivot.0..pivot.0 + 1, pivot.1..res.cols).unwrap() * val_for_row;
+                res.slice_mut(i..i + 1, pivot.1..res.cols)
+                    .unwrap()
+                    .set_all(&new_row)
+                    .unwrap();
             }
 
             // We slide the pivot one down and to the right as we are in the normal case

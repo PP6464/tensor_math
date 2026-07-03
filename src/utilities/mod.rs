@@ -1,3 +1,3 @@
 pub(crate) mod internal_functions;
-pub mod tensor;
 pub mod matrix;
+pub mod tensor;

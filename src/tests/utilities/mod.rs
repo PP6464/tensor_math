@@ -1,3 +1,3 @@
-mod tensor;
-mod matrix;
 mod internal_functions;
+mod matrix;
+mod tensor;

@@ -11,10 +11,10 @@ mod tensor_slice_mut_tests {
         let shape = shape![2, 3, 4];
         let mut tensor = Tensor::<i32>::from_shape(&shape);
         let slice = tensor.slice_mut(&[0..1, 0..1, 0..1]).unwrap();
-    
+
         slice[&[1, 0, 0]];
     }
-    
+
     #[test]
     fn index_mut() {
         let shape = shape![2, 3, 4];
@@ -22,12 +22,12 @@ mod tensor_slice_mut_tests {
         let mut slice = tensor.slice_mut(&[0..1, 0..1, 0..1]).unwrap();
 
         assert_eq!(slice[&[0, 0, 0]], 0);
-        
+
         slice[&[0, 0, 0]] = 67;
 
         assert_eq!(slice[&[0, 0, 0]], 67);
     }
-    
+
     #[test]
     fn get_is_safe_index() {
         let shape = shape![2, 3, 4];
@@ -37,24 +37,21 @@ mod tensor_slice_mut_tests {
         assert_eq!(slice.get(&[0, 0]), None);
         assert_eq!(slice.get(&[0, 0, 0]), Some(&0));
     }
-    
+
     #[test]
     fn convert_into_tensor() {
         let shape = shape![2, 3, 4];
         let mut tensor = Tensor::<i32>::from_shape(&shape);
         let slice = tensor.slice_mut(&[0..1, 0..1, 0..1]).unwrap();
-        let ans = Tensor::new(
-            &shape![1, 1, 1],
-            vec![0]
-        ).unwrap();
-        
+        let ans = Tensor::new(&shape![1, 1, 1], vec![0]).unwrap();
+
         assert_eq!(slice.into_tensor(), ans);
 
         let slice = tensor.slice_mut(&[0..1, 0..1, 0..1]).unwrap();
-        
+
         assert_eq!(slice.try_into_tensor().unwrap(), ans);
     }
-    
+
     #[test]
     fn slicing_on_scalar_tensor() {
         let mut tensor = Tensor::<i32>::new(&shape![], vec![42]).unwrap();
@@ -62,9 +59,12 @@ mod tensor_slice_mut_tests {
 
         assert_eq!(slice.get(&[]), Some(&42));
         slice[&[]] = 10;
-        assert_eq!(slice.into_tensor(), Tensor::new(&shape![], vec![10]).unwrap());
+        assert_eq!(
+            slice.into_tensor(),
+            Tensor::new(&shape![], vec![10]).unwrap()
+        );
     }
-    
+
     #[test]
     fn slicing_on_empty_tensor() {
         let mut tensor = Tensor::<i32>::new(&shape![0, 3], vec![]).unwrap();

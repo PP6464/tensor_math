@@ -1,8 +1,8 @@
-use std::cmp::min;
-use float_cmp::approx_eq;
-use num::complex::{Complex64, ComplexFloat};
 use crate::definitions::matrix::Matrix;
 use crate::utilities::matrix::identity;
+use float_cmp::approx_eq;
+use num::complex::{Complex64, ComplexFloat};
+use std::cmp::min;
 
 impl Matrix<f64> {
     /// Computes the Householder transformation for the given matrix `t` (of shape (rows, cols)).
@@ -16,11 +16,11 @@ impl Matrix<f64> {
 
         for k in 0..min(cols, rows) {
             let vec_bottom = r.slice(k..rows, k..k + 1).unwrap();
-            let alpha = -1.0
-                * match vec_bottom[&[0, 0]] {
-                0.0 => 1.0,
-                x => x.signum(),
-            } * vec_bottom.iter().map(|x| x * x).sum::<f64>().sqrt();
+            let alpha =
+                -1.0 * match vec_bottom[&[0, 0]] {
+                    0.0 => 1.0,
+                    x => x.signum(),
+                } * vec_bottom.iter().map(|x| x * x).sum::<f64>().sqrt();
             let mut e1 = Matrix::<f64>::from_shape(vec_bottom.rows, vec_bottom.cols);
             e1[&[0, 0]] = 1.0;
             let v = vec_bottom - e1 * alpha;
@@ -32,10 +32,8 @@ impl Matrix<f64> {
             let u = v.norm_l2();
             let u_clone = u.clone();
             let u_t = u_clone.transpose_mt();
-            let h_sub = identity::<f64>(u.shape.0.first().unwrap().clone()) - u
-                .contract_mul(&u_t)
-                .unwrap()
-                * 2.0;
+            let h_sub = identity::<f64>(u.shape.0.first().unwrap().clone())
+                - u.contract_mul(&u_t).unwrap() * 2.0;
 
             // Update R
             let r_slice_copy = r.slice(k..rows, k..cols).unwrap();
@@ -68,11 +66,15 @@ impl Matrix<Complex64> {
 
         for k in 0..min(cols, rows) {
             let vec_bottom = r.slice(k..rows, k..k + 1).unwrap();
-            let alpha = -1.0
-                * match vec_bottom[&[0, 0]] {
-                Complex64::ZERO => Complex64::ONE,
-                x => x / Complex64::abs(x),
-            } * vec_bottom.iter().map(|x| Complex64::from((x * x).abs())).sum::<Complex64>().sqrt();
+            let alpha =
+                -1.0 * match vec_bottom[&[0, 0]] {
+                    Complex64::ZERO => Complex64::ONE,
+                    x => x / Complex64::abs(x),
+                } * vec_bottom
+                    .iter()
+                    .map(|x| Complex64::from((x * x).abs()))
+                    .sum::<Complex64>()
+                    .sqrt();
             let mut e1 = Matrix::<Complex64>::from_shape(vec_bottom.rows, vec_bottom.cols);
             e1[&[0, 0]] = Complex64::ONE;
             let v = vec_bottom - e1 * alpha;
@@ -84,11 +86,14 @@ impl Matrix<Complex64> {
             let u = v.norm_l2();
             let u_clone = u.clone();
             let u_t = u_clone.transpose_mt();
-            let u_star = u_t.iter().map(|x| x.conj()).collect::<Matrix<Complex64>>().reshape(u_t.rows, u_t.cols).unwrap();
-            let h_sub = identity::<Complex64>(u.shape.0.first().unwrap().clone()) - u
-                .contract_mul(&u_star)
-                .unwrap()
-                * Complex64 { re: 2.0, im: 0.0 };
+            let u_star = u_t
+                .iter()
+                .map(|x| x.conj())
+                .collect::<Matrix<Complex64>>()
+                .reshape(u_t.rows, u_t.cols)
+                .unwrap();
+            let h_sub = identity::<Complex64>(u.shape.0.first().unwrap().clone())
+                - u.contract_mul(&u_star).unwrap() * Complex64 { re: 2.0, im: 0.0 };
 
             // Update R
             let r_slice_copy = r.slice(k..rows, k..cols).unwrap();

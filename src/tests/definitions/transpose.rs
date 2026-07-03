@@ -1,9 +1,9 @@
 #[cfg(test)]
 mod transpose_tests {
+    use crate::definitions::errors::TensorErrors;
     use crate::definitions::shape::Shape;
     use crate::definitions::transpose::Transpose;
     use crate::{shape, transpose};
-    use crate::definitions::errors::TensorErrors;
 
     #[test]
     fn old_and_new_shapes() {
@@ -18,13 +18,13 @@ mod transpose_tests {
         let shape = shape![2, 3];
         let err = transpose.old_shape(&shape).unwrap_err();
         match err {
-            TensorErrors::TransposeIncompatibleRank { .. } => {},
+            TensorErrors::TransposeIncompatibleRank { .. } => {}
             _ => panic!("Incorrect error"),
         }
 
         let err = transpose.inverse().new_shape(&shape).unwrap_err();
         match err {
-            TensorErrors::TransposeIncompatibleRank { .. } => {},
+            TensorErrors::TransposeIncompatibleRank { .. } => {}
             _ => panic!("Incorrect error"),
         }
     }
@@ -33,7 +33,7 @@ mod transpose_tests {
     fn invalid_perm() {
         let err = Transpose::new(&vec![4, 1]).unwrap_err();
         match err {
-            TensorErrors::TransposePermutationInvalid => {},
+            TensorErrors::TransposePermutationInvalid => {}
             _ => panic!("Incorrect error"),
         }
     }
@@ -45,13 +45,13 @@ mod transpose_tests {
 
         let err = transpose.new_index(&index).unwrap_err();
         match err {
-            TensorErrors::TransposeIncompatibleRank { .. } => {},
+            TensorErrors::TransposeIncompatibleRank { .. } => {}
             _ => panic!("Incorrect error"),
         }
 
         let err = transpose.old_index(&index).unwrap_err();
         match err {
-            TensorErrors::TransposeIncompatibleRank { .. } => {},
+            TensorErrors::TransposeIncompatibleRank { .. } => {}
             _ => panic!("Incorrect error"),
         }
     }
@@ -72,11 +72,11 @@ mod transpose_tests {
 
         let err = transpose.swap_axes(1, 10).unwrap_err();
         match err {
-            TensorErrors::TransposePermutationInvalid => {},
+            TensorErrors::TransposePermutationInvalid => {}
             _ => panic!("Incorrect error"),
         }
     }
-    
+
     #[test]
     fn transpose_for_scalar_tensor() {
         let transpose = Transpose::identity(0);

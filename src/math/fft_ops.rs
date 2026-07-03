@@ -14,18 +14,19 @@ impl Tensor<Complex64> {
     /// Fails if the tensor is rank zero or the axis is out of bounds.
     pub fn fft_single_axis(&self, axis: usize) -> Result<Tensor<Complex64>, TensorErrors> {
         if self.rank() == 0 {
-            return Err(TensorErrors::RankZero { op: "fft_single_axis" });
+            return Err(TensorErrors::RankZero {
+                op: "fft_single_axis",
+            });
         }
         if axis >= self.rank() {
             return Err(TensorErrors::AxisOutOfBounds {
                 axis,
                 rank: self.rank(),
-            })
+            });
         }
 
         let transpose = Transpose::identity(self.rank()).swap_axes(self.rank() - 1, axis)?;
-        self
-            .transpose_mt(&transpose)?
+        self.transpose_mt(&transpose)?
             .par_chunks_exact(self.shape[axis])
             .map(fft_vec)
             .flatten()
@@ -63,19 +64,20 @@ impl Tensor<Complex64> {
     /// Fails if the tensor is rank zero or the axis is out of bounds.
     pub fn ifft_single_axis(&self, axis: usize) -> Result<Tensor<Complex64>, TensorErrors> {
         if self.rank() == 0 {
-            return Err(TensorErrors::RankZero { op: "fft_single_axis" });
+            return Err(TensorErrors::RankZero {
+                op: "fft_single_axis",
+            });
         }
         if axis >= self.rank() {
             return Err(TensorErrors::AxisOutOfBounds {
                 axis,
                 rank: self.rank(),
-            })
+            });
         }
 
         let transpose = Transpose::identity(self.rank()).swap_axes(self.rank() - 1, axis)?;
 
-        self
-            .transpose_mt(&transpose)?
+        self.transpose_mt(&transpose)?
             .par_chunks_exact(self.shape[axis])
             .map(ifft_vec)
             .flatten()
@@ -111,18 +113,30 @@ impl Tensor<Complex64> {
 
     /// Computes the correlation of this and another tensor along a specified list of axes.
     /// Fails if the tensors have different ranks, if non-correlation shapes do not match, or if the tensor is rank zero.
-    pub fn fft_corr_axes(&self, other: &Tensor<Complex64>, axes: &HashSet<usize>) -> Result<Tensor<Complex64>, TensorErrors> {
+    pub fn fft_corr_axes(
+        &self,
+        other: &Tensor<Complex64>,
+        axes: &HashSet<usize>,
+    ) -> Result<Tensor<Complex64>, TensorErrors> {
         if self.rank() == 0 {
-            return Err(TensorErrors::RankZero { op: "fft_corr_axes" });
+            return Err(TensorErrors::RankZero {
+                op: "fft_corr_axes",
+            });
         }
         self.fft_conv_axes(&other.flip_axes_mt(axes)?, axes)
     }
 
     /// Computes the convolution of this and another tensor along a specified list of axes.
     /// Fails if the tensors have different ranks, if non-convolution shapes do not match, or if the tensor is rank zero.
-    pub fn fft_conv_axes(&self, other: &Tensor<Complex64>, axes: &HashSet<usize>) -> Result<Tensor<Complex64>, TensorErrors> {
+    pub fn fft_conv_axes(
+        &self,
+        other: &Tensor<Complex64>,
+        axes: &HashSet<usize>,
+    ) -> Result<Tensor<Complex64>, TensorErrors> {
         if self.rank() == 0 {
-            return Err(TensorErrors::RankZero { op: "fft_conv_axes" });
+            return Err(TensorErrors::RankZero {
+                op: "fft_conv_axes",
+            });
         }
         // Check that the shapes match on all non-convolution axes
         if self.rank() != other.rank() {
@@ -160,10 +174,25 @@ impl Tensor<Complex64> {
         let mut other_padded = Self::zeros(&new_shape);
 
         self_padded
-            .slice_mut(self.shape.0.iter().map(|x| 0..*x).collect::<Vec<_>>().as_slice())?
+            .slice_mut(
+                self.shape
+                    .0
+                    .iter()
+                    .map(|x| 0..*x)
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+            )?
             .set_all(&self)?;
         other_padded
-            .slice_mut(other.shape.0.iter().map(|x| 0..*x).collect::<Vec<_>>().as_slice())?
+            .slice_mut(
+                other
+                    .shape
+                    .0
+                    .iter()
+                    .map(|x| 0..*x)
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+            )?
             .set_all(&other)?;
 
         let self_fft = self_padded
@@ -176,7 +205,8 @@ impl Tensor<Complex64> {
 
         let res = self_fft * other_fft;
 
-        res.ifft_axes(&(1..=k).map(|i| rank - i).collect())?.transpose_mt(&inv_perm)
+        res.ifft_axes(&(1..=k).map(|i| rank - i).collect())?
+            .transpose_mt(&inv_perm)
     }
 
     /// Computes the correlation of this and another tensor.
@@ -210,10 +240,25 @@ impl Tensor<Complex64> {
         let mut other_padded = Self::zeros(&new_shape);
 
         self_padded
-            .slice_mut(self.shape.0.iter().map(|x| 0..*x).collect::<Vec<_>>().as_slice())?
+            .slice_mut(
+                self.shape
+                    .0
+                    .iter()
+                    .map(|x| 0..*x)
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+            )?
             .set_all(&self)?;
         other_padded
-            .slice_mut(other.shape.0.iter().map(|x| 0..*x).collect::<Vec<_>>().as_slice())?
+            .slice_mut(
+                other
+                    .shape
+                    .0
+                    .iter()
+                    .map(|x| 0..*x)
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+            )?
             .set_all(&other)?;
 
         let self_fft = self_padded.fft()?;
@@ -227,8 +272,7 @@ impl Tensor<Complex64> {
 impl Matrix<Complex64> {
     /// Computes the FFT along the rows
     pub fn fft_rows(&self) -> Matrix<Complex64> {
-        self
-            .par_chunks_exact(self.cols)
+        self.par_chunks_exact(self.cols)
             .map(fft_vec)
             .flatten()
             .collect::<Matrix<_>>()
@@ -238,8 +282,7 @@ impl Matrix<Complex64> {
 
     /// Computes the FFT along the columns
     pub fn fft_cols(&self) -> Matrix<Complex64> {
-        self
-            .transpose_mt()
+        self.transpose_mt()
             .par_chunks_exact(self.rows)
             .map(fft_vec)
             .flatten()
@@ -256,8 +299,7 @@ impl Matrix<Complex64> {
 
     /// Computes an IFFT along the rows
     pub fn ifft_rows(&self) -> Matrix<Complex64> {
-        self
-            .par_chunks_exact(self.cols)
+        self.par_chunks_exact(self.cols)
             .map(ifft_vec)
             .flatten()
             .collect::<Matrix<_>>()
@@ -267,8 +309,7 @@ impl Matrix<Complex64> {
 
     /// Computes an IFFT along the columns
     pub fn ifft_cols(&self) -> Matrix<Complex64> {
-        self
-            .transpose_mt()
+        self.transpose_mt()
             .par_chunks_exact(self.rows)
             .map(ifft_vec)
             .flatten()
@@ -284,7 +325,10 @@ impl Matrix<Complex64> {
     }
 
     /// Computes convolution along the columns
-    pub fn fft_conv_cols(&self, other: &Matrix<Complex64>) -> Result<Matrix<Complex64>, TensorErrors> {
+    pub fn fft_conv_cols(
+        &self,
+        other: &Matrix<Complex64>,
+    ) -> Result<Matrix<Complex64>, TensorErrors> {
         if self.cols != other.cols {
             return Err(TensorErrors::ShapesIncompatible);
         }
@@ -296,12 +340,18 @@ impl Matrix<Complex64> {
     }
 
     /// Computes correlation along the columns
-    pub fn fft_corr_cols(&self, other: &Matrix<Complex64>) -> Result<Matrix<Complex64>, TensorErrors> {
+    pub fn fft_corr_cols(
+        &self,
+        other: &Matrix<Complex64>,
+    ) -> Result<Matrix<Complex64>, TensorErrors> {
         self.fft_conv_cols(&other.flip_cols_mt())
     }
 
     /// Computes convolution along the rows
-    pub fn fft_conv_rows(&self, other: &Matrix<Complex64>) -> Result<Matrix<Complex64>, TensorErrors> {
+    pub fn fft_conv_rows(
+        &self,
+        other: &Matrix<Complex64>,
+    ) -> Result<Matrix<Complex64>, TensorErrors> {
         if self.rows != other.rows {
             return Err(TensorErrors::ShapesIncompatible);
         }
@@ -313,7 +363,10 @@ impl Matrix<Complex64> {
     }
 
     /// Computes correlation along the columns
-    pub fn fft_corr_rows(&self, other: &Matrix<Complex64>) -> Result<Matrix<Complex64>, TensorErrors> {
+    pub fn fft_corr_rows(
+        &self,
+        other: &Matrix<Complex64>,
+    ) -> Result<Matrix<Complex64>, TensorErrors> {
         self.fft_conv_rows(&other.flip_rows_mt())
     }
 
@@ -322,8 +375,16 @@ impl Matrix<Complex64> {
         let mut self_padded = Self::zeros(self.rows + other.rows - 1, self.cols + other.cols - 1);
         let mut other_padded = Self::zeros(self.rows + other.rows - 1, self.cols + other.cols - 1);
 
-        self_padded.slice_mut(0..self.rows, 0..self.cols).unwrap().set_all(&self).unwrap();
-        other_padded.slice_mut(0..other.rows, 0..other.cols).unwrap().set_all(&other).unwrap();
+        self_padded
+            .slice_mut(0..self.rows, 0..self.cols)
+            .unwrap()
+            .set_all(&self)
+            .unwrap();
+        other_padded
+            .slice_mut(0..other.rows, 0..other.cols)
+            .unwrap()
+            .set_all(&other)
+            .unwrap();
 
         (self_padded.fft() * other_padded.fft()).ifft()
     }

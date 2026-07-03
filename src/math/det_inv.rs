@@ -117,7 +117,9 @@ pub fn det_slow<T: Add<Output = T> + Mul<Output = T> + Sub<Output = T> + Clone +
     }
 
     if ord == 2 {
-        return Ok(m[&[0, 0]].clone() * m[&[1, 1]].clone() - m[&[0, 1]].clone() * m[&[1, 0]].clone());
+        return Ok(
+            m[&[0, 0]].clone() * m[&[1, 1]].clone() - m[&[0, 1]].clone() * m[&[1, 0]].clone()
+        );
     }
 
     if ord == 1 {
@@ -212,7 +214,9 @@ where
                 _ if i == 0 => Ok(m
                     .slice(1..ord, 0..j)?
                     .concat_cols(&m.slice(1..ord, j + 1..ord)?)?),
-                _ if i == ord - 1 => m.slice(0..i, 0..j)?.concat_cols(&m.slice(0..i, j + 1..ord)?),
+                _ if i == ord - 1 => m
+                    .slice(0..i, 0..j)?
+                    .concat_cols(&m.slice(0..i, j + 1..ord)?),
                 _ if j == 0 => Ok(m
                     .slice(0..i, 1..ord)?
                     .concat_rows(&m.slice((i + 1)..ord, 1..ord)?)?),
@@ -229,7 +233,7 @@ where
                         .concat_cols(&m.slice((i + 1)..ord, (j + 1)..ord)?)?;
 
                     slice_top.concat_rows(&slice_bottom)?
-                })
+                }),
             }?;
 
             res[&[j, i]] = if is_minus {

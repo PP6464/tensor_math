@@ -1,14 +1,14 @@
-use std::f64::consts::PI;
-use std::ops::Add;
-use float_cmp::approx_eq;
-use num::complex::Complex64;
-use num::ToPrimitive;
-use rand::distr::Distribution;
-use rand::distr::weighted::WeightedIndex;
 use crate::definitions::errors::TensorErrors;
 use crate::definitions::matrix::Matrix;
 use crate::definitions::shape::Shape;
 use crate::definitions::tensor::Tensor;
+use float_cmp::approx_eq;
+use num::complex::Complex64;
+use num::ToPrimitive;
+use rand::distr::weighted::WeightedIndex;
+use rand::distr::Distribution;
+use std::f64::consts::PI;
+use std::ops::Add;
 
 /// Creates a tensor of values of the Gaussian pdf with a specified standard deviation.
 /// The shape of the result is also specified by the user. The mean is the centre value,
@@ -53,11 +53,17 @@ pub fn gaussian_pdf_single_sigma(sigma: f64, shape: &Shape) -> Result<Tensor<f64
 /// but when tensors have an even number of elements in a certain axis, then the centre
 /// is treated as being in between the two.
 /// This fails if any of the standard deviations are not positive.
-pub fn gaussian_pdf_multi_sigma(sigma: Vec<f64>, shape: &Shape) -> Result<Tensor<f64>, TensorErrors> {
+pub fn gaussian_pdf_multi_sigma(
+    sigma: Vec<f64>,
+    shape: &Shape,
+) -> Result<Tensor<f64>, TensorErrors> {
     if sigma.len() != shape.rank() {
-        return Err(TensorErrors::SigmaListLengthIncompatible(sigma.len(), shape.rank()));
+        return Err(TensorErrors::SigmaListLengthIncompatible(
+            sigma.len(),
+            shape.rank(),
+        ));
     }
-    
+
     if !sigma.iter().all(|x| x > &0.0) {
         return Err(TensorErrors::SigmaListNotAllPositive);
     }
@@ -97,14 +103,16 @@ pub fn gaussian_pdf_multi_sigma(sigma: Vec<f64>, shape: &Shape) -> Result<Tensor
 /// Gaussian distribution. The min and max values allow you to specify the range of the outputs.
 /// The possible outputs will be 1001 different outputs spaced evenly across the interval [min, max\].
 /// This fails if the standard deviation is not positive or if `max <= min`.
-pub fn gaussian_sample(sigma: f64, shape: &Shape, min: f64, max: f64) -> Result<Tensor<f64>, TensorErrors> {
+pub fn gaussian_sample(
+    sigma: f64,
+    shape: &Shape,
+    min: f64,
+    max: f64,
+) -> Result<Tensor<f64>, TensorErrors> {
     if max <= min {
-        return Err(TensorErrors::InvalidInterval {
-            min,
-            max,
-        });
+        return Err(TensorErrors::InvalidInterval { min, max });
     }
-    
+
     if sigma <= 0.0 {
         return Err(TensorErrors::NonPositiveSigma(sigma));
     }
@@ -122,7 +130,7 @@ pub fn gaussian_sample(sigma: f64, shape: &Shape, min: f64, max: f64) -> Result<
             .map(|x| f64::exp(-(x.to_f64().unwrap() - 500.0).powi(2)) / (2.0 * sigma.powi(2)))
             .collect::<Vec<f64>>(),
     )
-        .unwrap();
+    .unwrap();
     let mut rng = rand::rng();
 
     for val in res.iter_mut() {
@@ -138,7 +146,10 @@ pub fn gaussian_sample(sigma: f64, shape: &Shape, min: f64, max: f64) -> Result<
 /// but when tensors have an even number of elements in a certain axis, then the centre
 /// is treated as being in between the two.
 /// This fails if the standard deviation matrix is not positive definite.
-pub fn gaussian_pdf_cov_mat(sigma: Matrix<f64>, shape: &Shape) -> Result<Tensor<f64>, TensorErrors> {
+pub fn gaussian_pdf_cov_mat(
+    sigma: Matrix<f64>,
+    shape: &Shape,
+) -> Result<Tensor<f64>, TensorErrors> {
     if !sigma.is_square() {
         return Err(TensorErrors::NonSquareMatrix);
     }
@@ -149,9 +160,15 @@ pub fn gaussian_pdf_cov_mat(sigma: Matrix<f64>, shape: &Shape) -> Result<Tensor<
         return Err(TensorErrors::RanksDoNotMatch(ord, shape.rank()));
     }
 
-    let (vals, _) = sigma.clone().map(|x| Complex64::new(x, 0.0)).eigendecompose()?;
-    
-    if !vals.iter().all(|x| x.re > 0.0 && approx_eq!(f64, x.im, 0.0, epsilon = 1e-15)) {
+    let (vals, _) = sigma
+        .clone()
+        .map(|x| Complex64::new(x, 0.0))
+        .eigendecompose()?;
+
+    if !vals
+        .iter()
+        .all(|x| x.re > 0.0 && approx_eq!(f64, x.im, 0.0, epsilon = 1e-15))
+    {
         return Err(TensorErrors::CovMatNotPositiveDefinite);
     }
 
@@ -163,14 +180,23 @@ pub fn gaussian_pdf_cov_mat(sigma: Matrix<f64>, shape: &Shape) -> Result<Tensor<
 
     let sigma_inv = sigma.inv()?;
 
-    let centre = shape.0.iter().map(|x| { (x - 1).to_f64().unwrap() / 2.0 }).collect::<Vec<f64>>();
+    let centre = shape
+        .0
+        .iter()
+        .map(|x| (x - 1).to_f64().unwrap() / 2.0)
+        .collect::<Vec<f64>>();
 
     let denom = (2.0 * PI).powf(0.5 * ord as f64) * sigma.det()?.sqrt();
 
     for (pos, val) in res.enumerated_iter_mut() {
-        let offset = pos.iter().zip(centre.iter()).map(|(i, j)| *i as f64 - j).collect::<Matrix<f64>>();
+        let offset = pos
+            .iter()
+            .zip(centre.iter())
+            .map(|(i, j)| *i as f64 - j)
+            .collect::<Matrix<f64>>();
 
-        let exponent = -0.5 * offset.contract_mul_mt(&sigma_inv.contract_mul_mt(&offset.transpose_mt())?)?[(0, 0)];
+        let exponent = -0.5
+            * offset.contract_mul_mt(&sigma_inv.contract_mul_mt(&offset.transpose_mt())?)?[(0, 0)];
 
         *val = exponent.exp() / denom;
     }

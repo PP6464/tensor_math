@@ -164,10 +164,8 @@ pub fn bench_eigendecompose(c: &mut Criterion) {
 }
 
 pub fn bench_tensor_fft(c: &mut Criterion) {
-    let t1 = Tensor::<f64>::rand(&shape![256, 50, 20])
-        .map(|x| Complex64 { re: x, im: 0.0 });
-    let t2 = Tensor::<f64>::rand(&shape![256, 50, 20])
-        .map(|x| Complex64 { re: 0.0, im: x });
+    let t1 = Tensor::<f64>::rand(&shape![256, 50, 20]).map(|x| Complex64 { re: x, im: 0.0 });
+    let t2 = Tensor::<f64>::rand(&shape![256, 50, 20]).map(|x| Complex64 { re: 0.0, im: x });
     let t = &t1 + &t2;
 
     c.bench_function("tensor_fft", |b| {
@@ -248,16 +246,12 @@ pub fn bench_fft_conv_mat(c: &mut Criterion) {
 }
 
 pub fn bench_fft_conv_tensor(c: &mut Criterion) {
-    let t1 = Tensor::<f64>::rand(&shape![16, 20, 8])
-        .map(|x| Complex64 { re: x, im: 0.0 });
-    let t2 = Tensor::<f64>::rand(&shape![16, 20, 8])
-        .map(|x| Complex64 { re: 0.0, im: x });
+    let t1 = Tensor::<f64>::rand(&shape![16, 20, 8]).map(|x| Complex64 { re: x, im: 0.0 });
+    let t2 = Tensor::<f64>::rand(&shape![16, 20, 8]).map(|x| Complex64 { re: 0.0, im: x });
     let in1 = &t1 + &t2;
 
-    let t1 = Tensor::<f64>::rand(&shape![16, 20, 8])
-        .map(|x| Complex64 { re: x, im: 0.0 });
-    let t2 = Tensor::<f64>::rand(&shape![16, 20, 8])
-        .map(|x| Complex64 { re: 0.0, im: x });
+    let t1 = Tensor::<f64>::rand(&shape![16, 20, 8]).map(|x| Complex64 { re: x, im: 0.0 });
+    let t2 = Tensor::<f64>::rand(&shape![16, 20, 8]).map(|x| Complex64 { re: 0.0, im: x });
     let in2 = &t1 + &t2;
 
     c.bench_function("fft_conv_tensor", |b| {

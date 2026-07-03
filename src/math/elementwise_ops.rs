@@ -1,6 +1,6 @@
+use crate::definitions::errors::TensorErrors;
 use crate::definitions::matrix::Matrix;
 use crate::definitions::tensor::Tensor;
-use crate::definitions::errors::TensorErrors;
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Rem, Sub};
 
 #[macro_export]

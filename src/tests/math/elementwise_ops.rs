@@ -5,9 +5,9 @@ mod elementwise_ops_tests {
     use crate::definitions::tensor::Tensor;
     use crate::definitions::traits::IntoMatrix;
     use crate::shape;
+    use crate::tests::test_helpers::assert_panics;
     use crate::utilities::matrix::identity;
     use num::complex::Complex64;
-    use crate::tests::test_helpers::assert_panics;
 
     #[test]
     fn add_tensors() {
@@ -46,12 +46,20 @@ mod elementwise_ops_tests {
         let t1 = Tensor::<i32>::rand(&shape![2, 3]);
         let t2 = Tensor::<i32>::rand(&shape![2, 2]);
 
-        assert_panics(|| { let _ = &t1 + &t2; });
-        assert_panics(|| { let _ = &t1 + t2.clone(); });
-        assert_panics(|| { let _ = t1.clone() + &t2; });
-        assert_panics(|| { let _ = t1 + t2; });
+        assert_panics(|| {
+            let _ = &t1 + &t2;
+        });
+        assert_panics(|| {
+            let _ = &t1 + t2.clone();
+        });
+        assert_panics(|| {
+            let _ = t1.clone() + &t2;
+        });
+        assert_panics(|| {
+            let _ = t1 + t2;
+        });
     }
-    
+
     #[test]
     fn mat_operators() {
         let m1 = -identity::<Complex64>(2) / Complex64::from(2.0);
@@ -76,10 +84,18 @@ mod elementwise_ops_tests {
         let m1 = Matrix::<i32>::rand(2, 2);
         let m2 = Matrix::<i32>::rand(3, 3);
 
-        assert_panics(|| { let _ = &m1 + &m2; });
-        assert_panics(|| { let _ = &m1 + m2.clone(); });
-        assert_panics(|| { let _ = m1.clone() + &m2; });
-        assert_panics(|| { let _ = m1 + m2; });
+        assert_panics(|| {
+            let _ = &m1 + &m2;
+        });
+        assert_panics(|| {
+            let _ = &m1 + m2.clone();
+        });
+        assert_panics(|| {
+            let _ = m1.clone() + &m2;
+        });
+        assert_panics(|| {
+            let _ = m1 + m2;
+        });
     }
 
     #[test]

@@ -79,20 +79,20 @@ mod shape_definition_tests {
             _ => panic!("Incorrect error"),
         }
     }
-    
+
     #[test]
     fn tensor_index() {
         let shape = shape![];
         let index = shape.tensor_index(0).unwrap();
         assert_eq!(index, vec![]);
-        
+
         let shape = shape![0];
         let err = shape.tensor_index(0).unwrap_err();
         match err {
             TensorErrors::AddressOutOfBounds(_) => {}
             _ => panic!("Incorrect error"),
         }
-        
+
         let shape = shape![4, 2, 3];
         let index = shape.tensor_index(17).unwrap();
         assert_eq!(index, vec![2, 1, 2]);

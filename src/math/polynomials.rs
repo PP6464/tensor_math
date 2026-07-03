@@ -1,6 +1,6 @@
+use crate::definitions::errors::TensorErrors;
 use float_cmp::approx_eq;
 use num::complex::{Complex64, ComplexFloat};
-use crate::definitions::errors::TensorErrors;
 
 /// Solves a quadratic. The coefficients are entered as a `&[Complex64; 3]` where the index of the
 /// coefficient corresponds to the power of x, e.g. [1, 2, 3\] would be 1 + 2x + 3x².
@@ -8,7 +8,7 @@ pub fn solve_quadratic(coefficients: &[Complex64; 3]) -> Result<Vec<Complex64>, 
     if approx_eq!(f64, coefficients[2].abs(), 0.0) {
         return Err(TensorErrors::PolynomialLeadingCoefficientZero);
     }
-    
+
     let a = coefficients[2];
     let b = coefficients[1];
     let c = coefficients[0];
@@ -28,7 +28,7 @@ pub fn solve_cubic(coefficients: &[Complex64; 4]) -> Result<Vec<Complex64>, Tens
     if approx_eq!(f64, coefficients[3].abs(), 0.0) {
         return Err(TensorErrors::PolynomialLeadingCoefficientZero);
     }
-    
+
     let a = coefficients[3];
     let b = coefficients[2];
     let c = coefficients[1];
@@ -41,7 +41,10 @@ pub fn solve_cubic(coefficients: &[Complex64; 4]) -> Result<Vec<Complex64>, Tens
 
     let s_cubed = r + d.sqrt();
 
-    let omega = Complex64 { re: -0.5, im: f64::sqrt(3.0) / 2.0 };
+    let omega = Complex64 {
+        re: -0.5,
+        im: f64::sqrt(3.0) / 2.0,
+    };
 
     let s = s_cubed.cbrt();
     let t = (-q) / s;
@@ -61,7 +64,7 @@ pub fn solve_quartic(coefficients: &[Complex64; 5]) -> Result<Vec<Complex64>, Te
     if approx_eq!(f64, coefficients[4].abs(), 0.0) {
         return Err(TensorErrors::PolynomialLeadingCoefficientZero);
     }
-    
+
     let a = coefficients[4];
     let b = coefficients[3];
     let c = coefficients[2];
@@ -70,7 +73,9 @@ pub fn solve_quartic(coefficients: &[Complex64; 5]) -> Result<Vec<Complex64>, Te
 
     let yi_squared = solve_cubic(&[
         -(-b.powi(3) + 4.0 * a * b * c - 8.0 * a.powi(2) * d).powi(2),
-        3.0 * b.powi(4) + 16.0 * a.powi(2) * c.powi(2) + 16.0 * a.powi(2) * b * d - 16.0 * a * b.powi(2) * c - 64.0 * a.powi(3) * e,
+        3.0 * b.powi(4) + 16.0 * a.powi(2) * c.powi(2) + 16.0 * a.powi(2) * b * d
+            - 16.0 * a * b.powi(2) * c
+            - 64.0 * a.powi(3) * e,
         -(3.0 * b.powi(2) - 8.0 * a * c),
         1.0.into(),
     ])?;
@@ -87,9 +92,11 @@ pub fn solve_quartic(coefficients: &[Complex64; 5]) -> Result<Vec<Complex64>, Te
                 y1 = yi_squared[1].sqrt() * (-1.0).powi(j);
                 y2 = yi_squared[2].sqrt() * (-1.0).powi(k);
 
-                if (y0 * y1 * y2 - (-b.powi(3) + 4.0 * a * b * c - 8.0 * a.powi(2) * d)).abs() < 2e-10 {
+                if (y0 * y1 * y2 - (-b.powi(3) + 4.0 * a * b * c - 8.0 * a.powi(2) * d)).abs()
+                    < 2e-10
+                {
                     found = true;
-                    break
+                    break;
                 }
             }
         }

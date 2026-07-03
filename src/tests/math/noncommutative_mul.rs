@@ -72,10 +72,7 @@ mod noncommutative_mul_tests {
         //                = [NC(6, 4),    NC(8, 5),     NC(10, 6)]
         let expected = Tensor::<NC>::new(
             &shape![6],
-            vec![
-                NC(3, 4), NC(4, 5), NC(5, 6),
-                NC(6, 4), NC(8, 5), NC(10, 6),
-            ],
+            vec![NC(3, 4), NC(4, 5), NC(5, 6), NC(6, 4), NC(8, 5), NC(10, 6)],
         )
         .unwrap();
 
@@ -128,10 +125,30 @@ mod noncommutative_mul_tests {
             6,
             4,
             vec![
-                NC(5, 6), NC(6, 7), NC(7, 8), NC(8, 9), NC(9, 10), NC(10, 11),
-                NC(10, 6), NC(12, 7), NC(14, 8), NC(16, 9), NC(18, 10), NC(20, 11),
-                NC(15, 6), NC(18, 7), NC(21, 8), NC(24, 9), NC(27, 10), NC(30, 11),
-                NC(20, 6), NC(24, 7), NC(28, 8), NC(32, 9), NC(36, 10), NC(40, 11),
+                NC(5, 6),
+                NC(6, 7),
+                NC(7, 8),
+                NC(8, 9),
+                NC(9, 10),
+                NC(10, 11),
+                NC(10, 6),
+                NC(12, 7),
+                NC(14, 8),
+                NC(16, 9),
+                NC(18, 10),
+                NC(20, 11),
+                NC(15, 6),
+                NC(18, 7),
+                NC(21, 8),
+                NC(24, 9),
+                NC(27, 10),
+                NC(30, 11),
+                NC(20, 6),
+                NC(24, 7),
+                NC(28, 8),
+                NC(32, 9),
+                NC(36, 10),
+                NC(40, 11),
             ],
         )
         .unwrap();
@@ -229,12 +246,9 @@ mod noncommutative_mul_tests {
         let a = Matrix::<NC>::new(2, 3, vec![nc(1), nc(2), nc(3), nc(4), nc(5), nc(6)]).unwrap();
         let b = Matrix::<NC>::new(3, 2, vec![nc(7), nc(8), nc(9), nc(10), nc(11), nc(12)]).unwrap();
 
-        let expected = Matrix::<NC>::new(
-            2,
-            2,
-            vec![NC(58, 30), NC(64, 33), NC(139, 30), NC(154, 33)],
-        )
-        .unwrap();
+        let expected =
+            Matrix::<NC>::new(2, 2, vec![NC(58, 30), NC(64, 33), NC(139, 30), NC(154, 33)])
+                .unwrap();
 
         let got = a.contract_mul(&b).unwrap();
         assert_eq!(got, expected);
@@ -293,7 +307,8 @@ mod noncommutative_mul_tests {
 
         // Row-major products: NC(1,1)*NC(5,1)=NC(5,6), NC(2,1)*NC(6,1)=NC(12,7),
         //                     NC(3,1)*NC(7,1)=NC(21,8), NC(4,1)*NC(8,1)=NC(32,9)
-        let expected = Matrix::<NC>::new(2, 2, vec![NC(5, 6), NC(12, 7), NC(21, 8), NC(32, 9)]).unwrap();
+        let expected =
+            Matrix::<NC>::new(2, 2, vec![NC(5, 6), NC(12, 7), NC(21, 8), NC(32, 9)]).unwrap();
 
         assert_eq!((&m1 * &m2), expected);
         assert_ne!((&m1 * &m2), (&m2 * &m1));

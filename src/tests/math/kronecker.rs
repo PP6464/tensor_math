@@ -56,7 +56,7 @@ mod kronecker_tests {
 
         assert_eq!(mt_ans, ans);
     }
-    
+
     #[test]
     fn kronecker_product_with_scalar_tensor() {
         let t = Tensor::<i32>::new(&shape![2, 2], vec![1, 2, 3, 4]).unwrap();
@@ -70,7 +70,7 @@ mod kronecker_tests {
         assert_eq!(s.kronecker(&t), ans_s_a);
         assert_eq!(s.kronecker_mt(&t), ans_s_a);
     }
-    
+
     #[test]
     fn kronecker_product_with_empty_matrices_and_tensors() {
         let empty_t = Tensor::<i32>::new(&shape![0, 2], vec![]).unwrap();

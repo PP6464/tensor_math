@@ -1,14 +1,14 @@
-use rayon::iter::ParallelIterator;
 use crate::definitions::errors::TensorErrors;
 use crate::definitions::matrix::Matrix;
 use crate::definitions::shape::Shape;
 use crate::definitions::strides::Strides;
 use crate::shape;
 use crate::utilities::internal_functions::dot_vectors;
+use rayon::iter::ParallelIterator;
+use rayon::iter::{FromParallelIterator, IntoParallelIterator};
 use std::ops::{Deref, DerefMut, Index, IndexMut};
 use std::slice::Iter;
 use std::vec::IntoIter;
-use rayon::iter::{FromParallelIterator, IntoParallelIterator};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Tensor<T> {
@@ -39,7 +39,7 @@ impl<T> Tensor<T> {
         if indices.len() != self.rank() {
             return None;
         }
-        
+
         self.elements
             .get(dot_vectors(&indices.to_vec(), &self.strides.0))
     }
@@ -132,7 +132,7 @@ impl<T: Send> FromParallelIterator<T> for Tensor<T> {
     /// Converts a parallel iterator into a tensor of shape `(iter.len())`
     fn from_par_iter<I>(par_iter: I) -> Self
     where
-        I: IntoParallelIterator<Item=T>,
+        I: IntoParallelIterator<Item = T>,
     {
         let elements: Vec<T> = par_iter.into_par_iter().collect();
         Tensor::new(&shape![elements.len()], elements).unwrap()

@@ -6,9 +6,9 @@ mod tensor_utils_tests {
     use crate::definitions::transpose::Transpose;
     use crate::utilities::tensor::{pool_avg, pool_max, pool_min, pool_sum};
     use crate::{shape, transpose};
+    use rayon::prelude::*;
     use std::collections::HashSet;
     use std::f64::consts::PI;
-    use rayon::prelude::*;
 
     #[test]
     fn concat() {
@@ -560,12 +560,10 @@ mod tensor_utils_tests {
             TensorErrors::RankZero { .. } => {}
             _ => panic!("Incorrect error for scalar pooling"),
         }
-        
+
         let empty = Tensor::<f64>::new(&shape![0, 3], vec![]).unwrap();
 
-        let err = empty
-            .pool(pool_avg, &shape![], &shape![], 0.0)
-            .unwrap_err();
+        let err = empty.pool(pool_avg, &shape![], &shape![], 0.0).unwrap_err();
         match err {
             TensorErrors::TensorEmpty { .. } => {}
             _ => panic!("Incorrect error for scalar pooling"),
@@ -745,7 +743,7 @@ mod tensor_utils_tests {
             t1.enumerated_iter().map(|(i, v)| (i, v)).collect();
         assert_eq!(actual_mut, expected_mut);
     }
-    
+
     #[test]
     fn enumerated_iter_rank_0() {
         let mut t1 = Tensor::<i32>::new(&shape![], vec![42]).unwrap();

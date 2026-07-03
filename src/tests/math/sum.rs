@@ -30,13 +30,13 @@ mod sum_tests {
         let result = matrix.trace();
         assert!(matches!(result, Err(TensorErrors::NonSquareMatrix)));
     }
-    
+
     #[test]
     fn zero_by_zero_trace() {
         let matrix = Matrix::<usize>::new(0, 0, vec![]).unwrap();
         assert_eq!(matrix.trace().unwrap(), 0);
     }
-    
+
     #[test]
     fn empty_matrix_tensor_sum() {
         let tensor = Tensor::<i32>::new(&shape![0], vec![]).unwrap();

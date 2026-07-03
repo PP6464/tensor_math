@@ -16,7 +16,7 @@ mod matrix_utils_tests {
             Matrix::new(3, 5, vec![0, 1, 2, 9, 10, 3, 4, 5, 11, 12, 6, 7, 8, 13, 14]).unwrap();
         assert_eq!(ans, res);
     }
-    
+
     #[test]
     fn concat_with_empty_matrix() {
         let m1 = Matrix::new(3, 3, (0..9).collect()).unwrap();
@@ -28,7 +28,7 @@ mod matrix_utils_tests {
         let res = m1.concat_rows(&m3).unwrap();
         assert_eq!(res, m1);
     }
-    
+
     #[test]
     fn concat_multithreaded_with_empty_matrix() {
         let m1 = Matrix::new(30, 30, (0..900).collect()).unwrap();
@@ -56,7 +56,7 @@ mod matrix_utils_tests {
         let m1 = (0..6).collect::<Matrix<_>>();
         let ans = Matrix::new(2, 3, (0..6).collect()).unwrap();
         assert_eq!(m1.reshape(2, 3).unwrap(), ans);
-        
+
         let m2 = Matrix::<usize>::new(0, 2, vec![]).unwrap();
         let ans = m2.reshape(0, 100).unwrap();
         assert_eq!(ans, Matrix::new(0, 100, vec![]).unwrap());
@@ -76,7 +76,7 @@ mod matrix_utils_tests {
             TensorErrors::ShapeSizeDoesNotMatch
         )
     }
-    
+
     #[test]
     fn flip_axes_with_empty_matrix() {
         let m1 = Matrix::<i32>::new(0, 3, vec![]).unwrap();
@@ -93,7 +93,7 @@ mod matrix_utils_tests {
         assert_eq!(m2.flip_rows(), m2);
         assert_eq!(m2.flip(), m2);
     }
-    
+
     #[test]
     fn collect_empty_matrix() {
         let empty_vec: Vec<i32> = vec![];
@@ -358,16 +358,18 @@ mod matrix_utils_tests {
             TensorErrors::ShapeContainsZero => {}
             _ => panic!("Incorrect error"),
         }
-        
+
         let m2 = Matrix::<f64>::new(0, 3, vec![]).unwrap();
-        
+
         let err = m2.pool(pool_avg_mat, (1, 1), (1, 1), 0.0).unwrap_err();
         match err {
             TensorErrors::TensorEmpty { .. } => {}
             _ => panic!("Incorrect error"),
         }
 
-        let err = m2.pool_indexed(&|_, m| pool_sum_mat(m), (1, 1), (1, 1), 0.0).unwrap_err();
+        let err = m2
+            .pool_indexed(&|_, m| pool_sum_mat(m), (1, 1), (1, 1), 0.0)
+            .unwrap_err();
         match err {
             TensorErrors::TensorEmpty { .. } => {}
             _ => panic!("Incorrect error"),
@@ -379,7 +381,9 @@ mod matrix_utils_tests {
             _ => panic!("Incorrect error"),
         }
 
-        let err = m2.pool_indexed_mt(&|_, m| pool_max_mat(m), (1, 1), (1, 1), 0.0).unwrap_err();
+        let err = m2
+            .pool_indexed_mt(&|_, m| pool_max_mat(m), (1, 1), (1, 1), 0.0)
+            .unwrap_err();
         match err {
             TensorErrors::TensorEmpty { .. } => {}
             _ => panic!("Incorrect error"),
@@ -397,14 +401,14 @@ mod matrix_utils_tests {
         assert_eq!(slice.rows, 2);
         assert_eq!(slice.cols, 0);
     }
-    
+
     #[test]
     fn enumerated_iter() {
         let m1 = Matrix::new(2, 2, vec![10, 20, 30, 40]).unwrap();
         let expected = vec![((0, 0), 10), ((0, 1), 20), ((1, 0), 30), ((1, 1), 40)];
         let res: Vec<_> = m1.enumerated_iter().collect();
         assert_eq!(res, expected);
-        
+
         let m2 = Matrix::new(0, 2, vec![]).unwrap();
         let res2: Vec<((usize, usize), i32)> = m2.enumerated_iter().collect();
         assert!(res2.is_empty());
@@ -423,7 +427,7 @@ mod matrix_utils_tests {
         let res2 = m2.enumerated_iter_mut().collect::<Vec<_>>();
         assert!(res2.is_empty());
     }
-    
+
     #[test]
     fn enumerated_iter_empty_variants() {
         let m_row_empty = Matrix::<i32>::new(0, 3, vec![]).unwrap();
