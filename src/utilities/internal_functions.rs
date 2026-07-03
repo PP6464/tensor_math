@@ -1,8 +1,11 @@
-use std::collections::HashSet;
+use rayon::iter::ParallelIterator;
+use rayon::iter::IndexedParallelIterator;
 use std::f64::consts::PI;
 use std::ops::{Add, Mul};
 use num::complex::Complex64;
 use num::{One, Zero};
+use rayon::iter::IntoParallelRefMutIterator;
+use rayon::prelude::ParallelSliceMut;
 
 /// This computes the dot product of two vectors of any type `T` that implements `Add` and `Mul`
 pub(crate) fn dot_vectors<T: Add<Output = T> + Mul<Output = T> + Zero + Clone>(
@@ -18,7 +21,7 @@ pub(crate) fn dot_vectors<T: Add<Output = T> + Mul<Output = T> + Zero + Clone>(
 
 /// This computes the FFT of a vector of Complex64 values
 /// where the length of the vector is a power of 2. This
-pub(crate) fn radix_2_fft_vec(x: &Vec<Complex64>) -> Vec<Complex64> {
+pub(crate) fn radix_2_fft_vec(x: &[Complex64]) -> Vec<Complex64> {
     let n = x.len();
 
     if n == 0 {
@@ -26,34 +29,27 @@ pub(crate) fn radix_2_fft_vec(x: &Vec<Complex64>) -> Vec<Complex64> {
     }
 
     let log2_n = n.trailing_zeros() as usize;
-    let mut res = x.clone();
+    let mut res = x.to_vec();
 
     let omega = Complex64::from_polar(1.0, -2.0 * PI / n as f64);
 
     // Bit-reverse indices
-    let mut swapped = HashSet::<usize>::new();
+    res
+        .par_iter_mut()
+        .enumerate()
+        .for_each(|(i, val)| {
+            let mut orig = i;
+            let mut rev = 0;
 
-    for i in 0..n {
-        if swapped.contains(&i) {
-            continue;
-        }
+            for _ in 0..log2_n {
+                rev <<= 1;
+                rev |= orig & 1;
+                orig >>= 1;
+            }
 
-        let mut orig = i;
-        let mut rev = 0;
+            *val = x[rev];
+        });
 
-        for _ in 0..log2_n {
-            rev <<= 1;
-            rev |= orig & 1;
-            orig >>= 1;
-        }
-
-        swapped.insert(i);
-        swapped.insert(rev);
-
-        let orig_copy = res[i];
-        res[i] = res[rev];
-        res[rev] = orig_copy;
-    }
 
     // Compute twiddle factors
     let mut twiddle_factors: Vec<Complex64> = Vec::with_capacity(n);
@@ -67,28 +63,32 @@ pub(crate) fn radix_2_fft_vec(x: &Vec<Complex64>) -> Vec<Complex64> {
     for iters in 1..=log2_n {
         let half_len = (1 << iters) >> 1;
 
-        for chunk in 0..n >> iters {
-            for i in 0..half_len {
-                let first_pos = (chunk << iters) + i;
-                let second_pos = (chunk << iters) + i + half_len;
+        res
+            .par_chunks_exact_mut(1 << iters)
+            .for_each(|chunk| {
+                let (firsts, seconds) = chunk.split_at_mut(half_len);
+                firsts
+                    .par_iter_mut()
+                    .zip(seconds.par_iter_mut())
+                    .enumerate()
+                    .for_each(|(i, (first_val, second_val))| {
+                        let twiddle_index = (n >> iters) * (i & n - 1);
+                        let twiddle = twiddle_factors[twiddle_index];
 
-                let twiddle_index = (n >> iters) * (i & n - 1);
-                let twiddle = twiddle_factors[twiddle_index];
+                        let first = first_val.clone();
+                        let second = second_val.clone();
 
-                let first = res[first_pos];
-                let second = res[second_pos];
-
-                res[first_pos] = first + twiddle * second;
-                res[second_pos] = first - twiddle * second;
-            }
-        }
+                        *first_val = first + twiddle * second;
+                        *second_val = first - twiddle * second;
+                    });
+            });
     }
 
     res
 }
 
 /// Computes an FFT for an arbitrarily long vector using the Bluestein method.
-pub(crate) fn bluestein_fft_vec(x: &Vec<Complex64>) -> Vec<Complex64> {
+pub(crate) fn bluestein_fft_vec(x: &[Complex64]) -> Vec<Complex64> {
     let n = x.len();
     if n == 0 {
         return vec![];
@@ -130,7 +130,7 @@ pub(crate) fn bluestein_fft_vec(x: &Vec<Complex64>) -> Vec<Complex64> {
 
 /// Computes an FFT for an arbitrarily long vector, using radix 2 FFT
 /// directly where appropriate, otherwise using the Bluestein method.
-pub(crate) fn fft_vec(x: &Vec<Complex64>) -> Vec<Complex64> {
+pub(crate) fn fft_vec(x: &[Complex64]) -> Vec<Complex64> {
     let n = x.len();
     if n == 0 {
         return vec![];
@@ -146,10 +146,10 @@ pub(crate) fn fft_vec(x: &Vec<Complex64>) -> Vec<Complex64> {
 /// Computes an inverse FFT using the `fft` function and the identity
 /// IFFT(x) === 1/N × FFT(x*)* where * means conjugating every element
 /// and N is the size of the list x.
-pub(crate) fn ifft_vec(x: &Vec<Complex64>) -> Vec<Complex64> {
+pub(crate) fn ifft_vec(x: &[Complex64]) -> Vec<Complex64> {
     let n = x.len() as f64;
     if n == 0.0 {
         return vec![];
     }
-    fft_vec(&x.iter().map(|z| z.conj()).collect()).iter().map(|z| z.conj() / n).collect()
+    fft_vec(&x.iter().map(|z| z.conj()).collect::<Vec<_>>()).iter().map(|z| z.conj() / n).collect()
 }

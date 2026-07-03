@@ -13,3 +13,4 @@ mod fft_ops;
 mod corr_conv;
 mod elementwise_ops;
 mod sum;
+mod noncommutative_mul;

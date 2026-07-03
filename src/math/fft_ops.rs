@@ -1,13 +1,13 @@
-use std::collections::HashSet;
-use std::sync::{Arc, Mutex, RwLock};
-use std::thread::scope;
-use num::complex::Complex64;
 use crate::definitions::errors::TensorErrors;
 use crate::definitions::matrix::Matrix;
 use crate::definitions::shape::Shape;
 use crate::definitions::tensor::Tensor;
 use crate::definitions::transpose::Transpose;
 use crate::utilities::internal_functions::{fft_vec, ifft_vec};
+use num::complex::Complex64;
+use rayon::iter::ParallelIterator;
+use rayon::prelude::ParallelSlice;
+use std::collections::HashSet;
 
 impl Tensor<Complex64> {
     /// Computes an FFT along a single axis.
@@ -23,49 +23,15 @@ impl Tensor<Complex64> {
             })
         }
 
-        let res_shape = self.shape();
-        let res_mutexes = Arc::new(
-            RwLock::new(
-                Tensor::new(
-                    res_shape,
-                    (0..res_shape.element_count()).map(|_| Mutex::new(Complex64::ZERO)).collect(),
-                )?,
-            )
-        );
-
-        // The shape of the rest of the tensor, i.e. what tensor we move along
-        // when taking slices to FFT and then write into the result
-        let mut fft_along_shape_vec = res_shape.0.clone();
-        fft_along_shape_vec.remove(axis);
-
-        let fft_along_shape = Shape::new(fft_along_shape_vec);
-        let axis_len = res_shape[axis];
-
-        scope(|s| {
-            for index in fft_along_shape.indices() {
-                let res_arc = res_mutexes.clone();
-
-                s.spawn(move || {
-                    let res_read = res_arc.read().unwrap();
-
-                    let mut ranges = index.iter().map(|x| *x..x+1).collect::<Vec<_>>();
-                    ranges.insert(axis, 0..axis_len);
-                    let in_vec = self.slice(&ranges).unwrap().elements;
-                    let out_vec = fft_vec(&in_vec);
-
-                    for i in 0..axis_len {
-                        let mut idx = index.clone();
-                        idx.insert(axis, i);
-
-                        let mut write_lock = res_read[&idx].lock().unwrap();
-                        *write_lock = out_vec[i];
-                    }
-                });
-            }
-        });
-
-        let res_read = res_mutexes.read().unwrap();
-        res_read.iter().map(|x| x.lock().unwrap().clone()).collect::<Tensor<_>>().reshape(&res_shape)
+        let transpose = Transpose::identity(self.rank()).swap_axes(self.rank() - 1, axis)?;
+        self
+            .transpose_mt(&transpose)?
+            .par_chunks_exact(self.shape[axis])
+            .map(fft_vec)
+            .flatten()
+            .collect::<Tensor<_>>()
+            .reshape(&transpose.new_shape(self.shape())?)?
+            .transpose_mt(&transpose.inverse())
     }
 
     /// Computes an FFT along a list of axes
@@ -74,6 +40,7 @@ impl Tensor<Complex64> {
         if self.rank() == 0 {
             return Err(TensorErrors::RankZero { op: "fft_axes" });
         }
+
         let mut res = self.clone();
 
         for &axis in axes {
@@ -96,7 +63,7 @@ impl Tensor<Complex64> {
     /// Fails if the tensor is rank zero or the axis is out of bounds.
     pub fn ifft_single_axis(&self, axis: usize) -> Result<Tensor<Complex64>, TensorErrors> {
         if self.rank() == 0 {
-            return Err(TensorErrors::RankZero { op: "ifft_single_axis" });
+            return Err(TensorErrors::RankZero { op: "fft_single_axis" });
         }
         if axis >= self.rank() {
             return Err(TensorErrors::AxisOutOfBounds {
@@ -105,49 +72,16 @@ impl Tensor<Complex64> {
             })
         }
 
-        let res_shape = self.shape();
-        let res_mutexes = Arc::new(
-            RwLock::new(
-                Tensor::new(
-                    res_shape,
-                    (0..res_shape.element_count()).map(|_| Mutex::new(Complex64::ZERO)).collect(),
-                )?,
-            )
-        );
+        let transpose = Transpose::identity(self.rank()).swap_axes(self.rank() - 1, axis)?;
 
-        // The shape of the rest of the tensor, i.e. what tensor we move along
-        // when taking slices to FFT and then write into the result
-        let mut fft_along_shape_vec = res_shape.0.clone();
-        fft_along_shape_vec.remove(axis);
-
-        let fft_along_shape = Shape::new(fft_along_shape_vec);
-        let axis_len = res_shape[axis];
-
-        scope(|s| {
-            for index in fft_along_shape.indices() {
-                let res_arc = res_mutexes.clone();
-
-                s.spawn(move || {
-                    let res_read = res_arc.read().unwrap();
-
-                    let mut ranges = index.iter().map(|x| *x..x+1).collect::<Vec<_>>();
-                    ranges.insert(axis, 0..axis_len);
-                    let in_vec = self.slice(&ranges).unwrap().elements;
-                    let out_vec = ifft_vec(&in_vec);
-
-                    for i in 0..axis_len {
-                        let mut idx = index.clone();
-                        idx.insert(axis, i);
-
-                        let mut write_lock = res_read[&idx].lock().unwrap();
-                        *write_lock = out_vec[i];
-                    }
-                });
-            }
-        });
-
-        let res_read = res_mutexes.read().unwrap();
-        res_read.iter().map(|x| x.lock().unwrap().clone()).collect::<Tensor<_>>().reshape(&res_shape)
+        self
+            .transpose_mt(&transpose)?
+            .par_chunks_exact(self.shape[axis])
+            .map(ifft_vec)
+            .flatten()
+            .collect::<Tensor<_>>()
+            .reshape(&transpose.new_shape(self.shape())?)?
+            .transpose_mt(&transpose.inverse())
     }
 
     /// Computes an inverse FFT along a list of axes
@@ -156,6 +90,7 @@ impl Tensor<Complex64> {
         if self.rank() == 0 {
             return Err(TensorErrors::RankZero { op: "ifft_axes" });
         }
+
         let mut res = self.clone();
 
         for &axis in axes {
@@ -292,70 +227,26 @@ impl Tensor<Complex64> {
 impl Matrix<Complex64> {
     /// Computes the FFT along the rows
     pub fn fft_rows(&self) -> Matrix<Complex64> {
-        let res_mutexes = Arc::new(
-            RwLock::new(
-                Matrix::new(
-                    self.rows, self.cols,
-                    (0..self.shape.element_count()).map(|_| Mutex::new(Complex64::ZERO)).collect(),
-                ).unwrap(),
-            )
-        );
-
-        scope(|s| {
-            for i in 0..self.rows {
-                let res_arc = res_mutexes.clone();
-
-                s.spawn(move || {
-                    let res_read = res_arc.read().unwrap();
-
-                    let in_vec = &self.slice(i..i+1, 0..self.cols).unwrap().elements;
-                    let out_vec = fft_vec(&in_vec);
-
-                    for j in 0..self.cols {
-                        let mut write_lock = res_read[(i, j)].lock().unwrap();
-
-                        *write_lock = out_vec[j].clone();
-                    }
-                });
-            }
-        });
-
-        let res_read = res_mutexes.read().unwrap();
-        res_read.iter().map(|m| m.lock().unwrap().clone()).collect::<Matrix<_>>().reshape(self.rows, self.cols).unwrap()
+        self
+            .par_chunks_exact(self.cols)
+            .map(fft_vec)
+            .flatten()
+            .collect::<Matrix<_>>()
+            .reshape(self.rows, self.cols)
+            .unwrap()
     }
 
     /// Computes the FFT along the columns
     pub fn fft_cols(&self) -> Matrix<Complex64> {
-        let res_mutexes = Arc::new(
-            RwLock::new(
-                Matrix::new(
-                    self.rows, self.cols,
-                    (0..self.shape.element_count()).map(|_| Mutex::new(Complex64::ZERO)).collect(),
-                ).unwrap(),
-            )
-        );
-
-        scope(|s| {
-            for i in 0..self.cols {
-                let res_arc = res_mutexes.clone();
-
-                s.spawn(move || {
-                    let res_read = res_arc.read().unwrap();
-
-                    let in_vec = &self.slice(0..self.rows, i..i+1).unwrap().elements;
-                    let out_vec = fft_vec(&in_vec);
-
-                    for j in 0..self.rows {
-                        let mut write_lock = res_read[(j, i)].lock().unwrap();
-
-                        *write_lock = out_vec[j].clone();
-                    }
-                });
-            }
-        });
-
-        let res_read = res_mutexes.read().unwrap();
-        res_read.iter().map(|m| m.lock().unwrap().clone()).collect::<Matrix<_>>().reshape(self.rows, self.cols).unwrap()
+        self
+            .transpose_mt()
+            .par_chunks_exact(self.rows)
+            .map(fft_vec)
+            .flatten()
+            .collect::<Matrix<_>>()
+            .reshape(self.cols, self.rows)
+            .unwrap()
+            .transpose_mt()
     }
 
     /// Computes an FFT along the rows and the columns
@@ -365,70 +256,26 @@ impl Matrix<Complex64> {
 
     /// Computes an IFFT along the rows
     pub fn ifft_rows(&self) -> Matrix<Complex64> {
-        let res_mutexes = Arc::new(
-            RwLock::new(
-                Matrix::new(
-                    self.rows, self.cols,
-                    (0..self.shape.element_count()).map(|_| Mutex::new(Complex64::ZERO)).collect(),
-                ).unwrap(),
-            )
-        );
-
-        scope(|s| {
-            for i in 0..self.rows {
-                let res_arc = res_mutexes.clone();
-
-                s.spawn(move || {
-                    let res_read = res_arc.read().unwrap();
-
-                    let in_vec = &self.slice(i..i+1, 0..self.cols).unwrap().elements;
-                    let out_vec = ifft_vec(&in_vec);
-
-                    for j in 0..self.cols {
-                        let mut write_lock = res_read[(i, j)].lock().unwrap();
-
-                        *write_lock = out_vec[j].clone();
-                    }
-                });
-            }
-        });
-
-        let res_read = res_mutexes.read().unwrap();
-        res_read.iter().map(|m| m.lock().unwrap().clone()).collect::<Matrix<_>>().reshape(self.rows, self.cols).unwrap()
+        self
+            .par_chunks_exact(self.cols)
+            .map(ifft_vec)
+            .flatten()
+            .collect::<Matrix<_>>()
+            .reshape(self.rows, self.cols)
+            .unwrap()
     }
 
     /// Computes an IFFT along the columns
     pub fn ifft_cols(&self) -> Matrix<Complex64> {
-        let res_mutexes = Arc::new(
-            RwLock::new(
-                Matrix::new(
-                    self.rows, self.cols,
-                    (0..self.shape.element_count()).map(|_| Mutex::new(Complex64::ZERO)).collect(),
-                ).unwrap(),
-            )
-        );
-
-        scope(|s| {
-            for i in 0..self.cols {
-                let res_arc = res_mutexes.clone();
-
-                s.spawn(move || {
-                    let res_read = res_arc.read().unwrap();
-
-                    let in_vec = &self.slice(0..self.rows, i..i+1).unwrap().elements;
-                    let out_vec = ifft_vec(&in_vec);
-
-                    for j in 0..self.rows {
-                        let mut write_lock = res_read[(j, i)].lock().unwrap();
-
-                        *write_lock = out_vec[j].clone();
-                    }
-                });
-            }
-        });
-
-        let res_read = res_mutexes.read().unwrap();
-        res_read.iter().map(|m| m.lock().unwrap().clone()).collect::<Matrix<_>>().reshape(self.rows, self.cols).unwrap()
+        self
+            .transpose_mt()
+            .par_chunks_exact(self.rows)
+            .map(ifft_vec)
+            .flatten()
+            .collect::<Matrix<_>>()
+            .reshape(self.cols, self.rows)
+            .unwrap()
+            .transpose_mt()
     }
 
     /// Computes an IFFT along the rows and the columns
