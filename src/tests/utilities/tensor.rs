@@ -600,13 +600,13 @@ mod tensor_utils_tests {
     fn invalid_transpose_rank() {
         let t1 = Tensor::new(&shape![2, 3, 4], (0..24).collect()).unwrap();
 
-        let err = t1.transpose(&Transpose::default(1)).unwrap_err();
+        let err = t1.transpose(&Transpose::identity(1)).unwrap_err();
         match err {
             TensorErrors::TransposeIncompatibleRank { .. } => {}
             _ => panic!("Incorrect error"),
         }
 
-        let err = t1.transpose_mt(&Transpose::default(4)).unwrap_err();
+        let err = t1.transpose_mt(&Transpose::identity(4)).unwrap_err();
         match err {
             TensorErrors::TransposeIncompatibleRank { .. } => {}
             _ => panic!("Incorrect error"),

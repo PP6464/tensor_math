@@ -58,7 +58,7 @@ mod transpose_tests {
 
     #[test]
     fn default_perm() {
-        let transpose = Transpose::default(3);
+        let transpose = Transpose::identity(3);
         let ans = transpose![0, 1, 2];
 
         assert_eq!(transpose, ans);
@@ -79,7 +79,7 @@ mod transpose_tests {
     
     #[test]
     fn transpose_for_scalar_tensor() {
-        let transpose = Transpose::default(0);
+        let transpose = Transpose::identity(0);
         assert_eq!(transpose.permutation().len(), 0);
 
         let shape = shape![];

@@ -28,7 +28,7 @@ impl Transpose {
     }
 
     /// Returns the identity transpose for rank `n` tensors.
-    pub fn default(n: usize) -> Self {
+    pub fn identity(n: usize) -> Self {
         Transpose::new(&(0..n).collect()).unwrap()
     }
 
