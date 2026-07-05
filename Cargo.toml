@@ -11,6 +11,9 @@ criterion = "0.8.2"
 float-cmp = "0.10.0"
 rayon = "1.12.0"
 
+[profile.release]
+debug = true
+
 [[bench]]
 name = "tensor_benches"
 path = "src/benches/mod.rs"
