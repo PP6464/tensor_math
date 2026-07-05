@@ -9,7 +9,7 @@ use crate::shape;
 use crate::utilities::internal_functions::dot_vectors;
 use num::{ToPrimitive, Zero};
 use rand::distr::{Distribution, StandardUniform};
-use rand::{Fill, Rng};
+use rand::RngExt;
 use rayon::prelude::*;
 use std::collections::HashSet;
 use std::ops::{Add, Div, Range};
@@ -548,7 +548,6 @@ impl<T: Clone + Send + Sync> Tensor<T> {
         let combined_chunk_size = self_chunk_size + other_chunk_size;
 
         result
-            .elements
             .par_chunks_mut(combined_chunk_size)
             .enumerate()
             .for_each(|(i, chunk)| {
@@ -556,10 +555,13 @@ impl<T: Clone + Send + Sync> Tensor<T> {
                 let other_offset = i * other_chunk_size;
 
                 chunk[..self_chunk_size]
-                    .clone_from_slice(&self.elements[self_offset..self_offset + self_chunk_size]);
-                chunk[self_chunk_size..].clone_from_slice(
-                    &other.elements[other_offset..other_offset + other_chunk_size],
-                );
+                    .par_iter_mut()
+                    .enumerate()
+                    .for_each(|(i, v)| *v = self.elements[self_offset + i].clone());
+                chunk[self_chunk_size..]
+                    .par_iter_mut()
+                    .enumerate()
+                    .for_each(|(i, v)| *v = other.elements[other_offset + i].clone());
             });
 
         Ok(result)
@@ -808,14 +810,13 @@ impl<T: Default + Clone> Tensor<T> {
 impl<T: Default + Clone> Tensor<T>
 where
     StandardUniform: Distribution<T>,
-    [T]: Fill,
 {
     /// Generate a tensor of the specified shape filled with random values.
     pub fn rand(shape: &Shape) -> Tensor<T> {
         let mut elements = vec![T::default(); shape.element_count()];
         let mut rng = rand::rng();
 
-        rng.fill(elements.as_mut_slice());
+        elements.iter_mut().for_each(|e| *e = rng.random());
 
         Tensor::new(shape, elements).unwrap()
     }

@@ -8,7 +8,6 @@ use crate::definitions::transpose::Transpose;
 use crate::{shape, transpose};
 use num::{One, ToPrimitive, Zero};
 use rand::distr::{Distribution, StandardUniform};
-use rand::Fill;
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
 use std::cmp::min;
 use std::ops::{Add, Div, Range};
@@ -505,8 +504,7 @@ impl<T: Default + Clone> Matrix<T> {
 
 impl<T: Default + Clone> Matrix<T>
 where
-    StandardUniform: Distribution<T>,
-    [T]: Fill,
+    StandardUniform: Distribution<T>
 {
     /// Returns a matrix of the specified shape filled with random values.
     pub fn rand(rows: usize, cols: usize) -> Matrix<T> {
