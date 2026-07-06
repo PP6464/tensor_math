@@ -314,6 +314,10 @@ impl<T: Clone> Tensor<T> {
             });
         }
 
+        if *transpose == Transpose::identity(self.rank()) {
+            return Ok(self.clone())
+        }
+
         let new_shape = transpose.new_shape(self.shape())?;
         let new_strides = Strides::from_shape(&new_shape);
         let mut new_elements = self.elements().clone();
@@ -637,6 +641,10 @@ impl<T: Clone + Send + Sync> Tensor<T> {
                 rank: self.rank(),
                 trank: transpose.permutation.len(),
             });
+        }
+
+        if *transpose == Transpose::identity(self.rank()) {
+            return Ok(self.clone())
         }
 
         let new_shape = transpose.new_shape(self.shape())?;
