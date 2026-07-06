@@ -7,6 +7,6 @@ use criterion::criterion_main;
 
 mod utilities;
 
-use utilities::concat_benches;
+use utilities::{concat_benches, transpose_benches};
 
-criterion_main!(concat_benches);
+criterion_main!(concat_benches, transpose_benches);
