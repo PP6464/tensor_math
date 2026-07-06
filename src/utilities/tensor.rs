@@ -12,6 +12,7 @@ use rand::distr::{Distribution, StandardUniform};
 use rand::RngExt;
 use rayon::prelude::*;
 use std::collections::HashSet;
+use std::mem::MaybeUninit;
 use std::ops::{Add, Div, Range};
 
 impl<T> Tensor<T> {
@@ -541,13 +542,14 @@ impl<T: Clone + Send + Sync> Tensor<T> {
             return Ok(Tensor::new(&resultant_shape, res_elems)?);
         }
 
-        let mut result = Tensor::from_value(&resultant_shape, self.first().unwrap().clone());
+        let mut buf = Vec::with_capacity(resultant_shape.element_count());
+        let uninit: &mut [MaybeUninit<T>] = buf.spare_capacity_mut();
 
         let self_chunk_size = self.strides[axis - 1];
         let other_chunk_size = other.strides[axis - 1];
         let combined_chunk_size = self_chunk_size + other_chunk_size;
 
-        result
+        uninit
             .par_chunks_mut(combined_chunk_size)
             .enumerate()
             .for_each(|(i, chunk)| {
@@ -557,14 +559,23 @@ impl<T: Clone + Send + Sync> Tensor<T> {
                 chunk[..self_chunk_size]
                     .par_iter_mut()
                     .enumerate()
-                    .for_each(|(i, v)| *v = self.elements[self_offset + i].clone());
+                    .for_each(|(i, v)| {
+                        v.write(self.elements[self_offset + i].clone());
+                    });
+
                 chunk[self_chunk_size..]
                     .par_iter_mut()
                     .enumerate()
-                    .for_each(|(i, v)| *v = other.elements[other_offset + i].clone());
+                    .for_each(|(i, v)| {
+                        v.write(other.elements[other_offset + i].clone());
+                    });
             });
 
-        Ok(result)
+        unsafe {
+            buf.set_len(resultant_shape.element_count());
+        }
+
+        Tensor::new(&resultant_shape, buf)
     }
 
     /// Returns a parallel iterator that is enumerated with tensor indices.
