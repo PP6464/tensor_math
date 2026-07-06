@@ -12,6 +12,24 @@ pub struct TensorSliceMut<'a, T> {
     pub(crate) end: Vec<usize>,
 }
 
+impl<T> TensorSliceMut<'_, T> {
+    /// Returns the rank of the tensor slice.
+    pub fn rank(&self) -> usize {
+        self.end.len()
+    }
+
+    /// Returns the shape of the tensor slice.
+    pub fn shape(&self) -> Shape {
+        Shape::new(
+            self.end
+                .iter()
+                .zip(self.start.iter())
+                .map(|(e, s)| e - s)
+                .collect(),
+        )
+    }
+}
+
 impl<'a, T: Clone> TensorSliceMut<'a, T> {
     /// Sets all the values in the mutable slice to the given values.
     /// This fails if the shape of the values does not match the slice shape.

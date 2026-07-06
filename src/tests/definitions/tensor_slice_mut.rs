@@ -6,6 +6,16 @@ mod tensor_slice_mut_tests {
     use crate::shape;
 
     #[test]
+    fn slice_rank_and_shape() {
+        let shape = shape![4, 5, 6];
+        let mut tensor = Tensor::<i32>::from_shape(&shape);
+        let slice = tensor.slice_mut(&[1..4, 0..2, 3..6]).unwrap();
+
+        assert_eq!(slice.rank(), 3);
+        assert_eq!(slice.shape(), shape![3, 2, 3]);
+    }
+
+    #[test]
     #[should_panic]
     fn invalid_index() {
         let shape = shape![2, 3, 4];

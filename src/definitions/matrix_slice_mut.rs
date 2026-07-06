@@ -13,6 +13,23 @@ pub struct MatrixSliceMut<'a, T> {
     pub(crate) end: (usize, usize),
 }
 
+impl<T> MatrixSliceMut<'_, T> {
+    /// Returns the number of rows of the matrix slice.
+    pub fn rows(&self) -> usize {
+        self.end.0 - self.start.0
+    }
+
+    /// Returns the number of columns of the matrix slice.
+    pub fn cols(&self) -> usize {
+        self.end.0 - self.start.0
+    }
+    
+    /// Returns the shape of the matrix slice.
+    pub fn shape(&self) -> Shape {
+        shape![self.rows(), self.cols()]
+    }
+}
+
 impl<'a, T: Clone> MatrixSliceMut<'a, T> {
     /// Sets all the values in the mutable slice to the values in the given input.
     /// This fails if the input does not have the same shape as the slice.

@@ -1,7 +1,19 @@
 #[cfg(test)]
 mod matrix_slice_mut_tests {
+    use crate::definitions::shape::Shape;
     use crate::definitions::matrix::Matrix;
     use crate::definitions::traits::{IntoMatrix, TryIntoMatrix};
+    use crate::shape;
+
+    #[test]
+    fn slice_mut_dimensions() {
+        let mut m1 = Matrix::new(5, 5, (0..25).collect()).unwrap();
+        let slice = m1.slice_mut(1..4, 2..5).unwrap();
+
+        assert_eq!(slice.rows(), 3);
+        assert_eq!(slice.cols(), 3);
+        assert_eq!(slice.shape(), shape![3, 3]);
+    }
 
     #[test]
     fn empty_slice_mut() {
