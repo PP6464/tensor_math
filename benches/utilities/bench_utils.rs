@@ -52,3 +52,29 @@ pub fn matrix(rows: usize, cols: usize, value: f64) -> Matrix<f64> {
     let elements = vec![value; rows * cols];
     Matrix::new(rows, cols, elements).expect("matrix construction cannot fail")
 }
+
+/// Drain a sequential `enumerated_iter` into a checksum.
+#[inline]
+pub fn drain_iter<I>(it: I) -> u64
+where
+    I: Iterator<Item = (Vec<usize>, f64)>,
+{
+    let mut acc: u64 = 0;
+    for (_, v) in it {
+        acc = acc.wrapping_add(v.to_bits());
+    }
+    acc
+}
+
+/// Drain a sequential `enumerated_iter_mut` into a checksum.
+#[inline]
+pub fn drain_iter_mut<'a, I>(it: I) -> u64
+where
+    I: Iterator<Item = (Vec<usize>, &'a mut f64)>,
+{
+    let mut acc: u64 = 0;
+    for (_, v) in it {
+        acc = acc.wrapping_add((*v).to_bits());
+    }
+    acc
+}
