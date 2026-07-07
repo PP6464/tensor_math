@@ -8,7 +8,7 @@ use std::f64::consts::PI;
 use std::ops::{Add, Mul};
 
 /// This computes the dot product of two vectors of any type `T` that implements `Add` and `Mul`
-pub(crate) fn dot_vectors<T: Add<Output = T> + Mul<Output = T> + Zero + Clone>(
+pub fn dot_vectors<T: Add<Output = T> + Mul<Output = T> + Zero + Clone>(
     vec1: &Vec<T>,
     vec2: &Vec<T>,
 ) -> T {
@@ -21,7 +21,7 @@ pub(crate) fn dot_vectors<T: Add<Output = T> + Mul<Output = T> + Zero + Clone>(
 
 /// This computes the FFT of a vector of Complex64 values
 /// where the length of the vector is a power of 2. This
-pub(crate) fn radix_2_fft_vec(x: &[Complex64]) -> Vec<Complex64> {
+pub fn radix_2_fft_vec(x: &[Complex64]) -> Vec<Complex64> {
     let n = x.len();
 
     if n == 0 {
@@ -82,7 +82,7 @@ pub(crate) fn radix_2_fft_vec(x: &[Complex64]) -> Vec<Complex64> {
 }
 
 /// Computes an FFT for an arbitrarily long vector using the Bluestein method.
-pub(crate) fn bluestein_fft_vec(x: &[Complex64]) -> Vec<Complex64> {
+pub fn bluestein_fft_vec(x: &[Complex64]) -> Vec<Complex64> {
     let n = x.len();
     if n == 0 {
         return vec![];
@@ -126,7 +126,7 @@ pub(crate) fn bluestein_fft_vec(x: &[Complex64]) -> Vec<Complex64> {
 
 /// Computes an FFT for an arbitrarily long vector, using radix 2 FFT
 /// directly where appropriate, otherwise using the Bluestein method.
-pub(crate) fn fft_vec(x: &[Complex64]) -> Vec<Complex64> {
+pub fn fft_vec(x: &[Complex64]) -> Vec<Complex64> {
     let n = x.len();
     if n == 0 {
         return vec![];
@@ -142,7 +142,7 @@ pub(crate) fn fft_vec(x: &[Complex64]) -> Vec<Complex64> {
 /// Computes an inverse FFT using the `fft` function and the identity
 /// IFFT(x) === 1/N × FFT(x*)* where * means conjugating every element
 /// and N is the size of the list x.
-pub(crate) fn ifft_vec(x: &[Complex64]) -> Vec<Complex64> {
+pub fn ifft_vec(x: &[Complex64]) -> Vec<Complex64> {
     let n = x.len() as f64;
     if n == 0.0 {
         return vec![];
