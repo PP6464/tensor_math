@@ -1,9 +1,9 @@
 #[cfg(test)]
 mod shape_definition_tests {
-    use crate::definitions::errors::TensorErrors;
-    use crate::definitions::shape::Shape;
-    use crate::definitions::strides::Strides;
-    use crate::shape;
+    use tensor_math::definitions::errors::TensorErrors;
+    use tensor_math::definitions::shape::Shape;
+    use tensor_math::definitions::strides::Strides;
+    use tensor_math::shape;
 
     #[test]
     fn can_create_empty_shape() {
@@ -84,7 +84,7 @@ mod shape_definition_tests {
     fn tensor_index() {
         let shape = shape![];
         let index = shape.tensor_index(0).unwrap();
-        assert_eq!(index, vec![]);
+        assert_eq!(index, Vec::<usize>::new());
 
         let shape = shape![0];
         let err = shape.tensor_index(0).unwrap_err();

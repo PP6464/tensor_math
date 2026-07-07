@@ -1,10 +1,10 @@
 #[cfg(test)]
 mod tensor_definition_tests {
-    use crate::definitions::errors::TensorErrors;
-    use crate::definitions::matrix::Matrix;
-    use crate::definitions::shape::Shape;
-    use crate::definitions::tensor::Tensor;
-    use crate::shape;
+    use tensor_math::definitions::errors::TensorErrors;
+    use tensor_math::definitions::matrix::Matrix;
+    use tensor_math::definitions::shape::Shape;
+    use tensor_math::definitions::tensor::Tensor;
+    use tensor_math::shape;
 
     #[test]
     fn invalid_shape_size_and_data_length() {
@@ -62,14 +62,14 @@ mod tensor_definition_tests {
     #[test]
     fn can_create_scalar_tensor() {
         let t1 = Tensor::new(&shape![], vec![8]).unwrap();
-        assert_eq!(t1.shape().0, vec![]);
+        assert_eq!(t1.shape(), &shape![]);
         assert_eq!(t1.elements().len(), 1);
     }
 
     #[test]
     fn can_create_empty_tensor() {
         let t1 = Tensor::<usize>::new(&shape![0], vec![]).unwrap();
-        assert_eq!(t1.shape().0, vec![0]);
+        assert_eq!(t1.shape(), &shape![0]);
         assert_eq!(t1.elements().len(), 0);
     }
 

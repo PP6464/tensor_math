@@ -1,10 +1,10 @@
 #[cfg(test)]
 mod det_inv_tests {
-    use crate::definitions::errors::TensorErrors;
-    use crate::definitions::matrix::Matrix;
-    use crate::definitions::traits::IntoMatrix;
-    use crate::math::det_inv::{det_slow, inv_slow};
-    use crate::utilities::matrix::eye;
+    use tensor_math::definitions::errors::TensorErrors;
+    use tensor_math::definitions::matrix::Matrix;
+    use tensor_math::definitions::traits::IntoMatrix;
+    use tensor_math::math::det_inv::{det_slow, inv_slow};
+    use tensor_math::utilities::matrix::eye;
     use float_cmp::approx_eq;
     use num::complex::Complex64;
     use num::FromPrimitive;
@@ -220,12 +220,12 @@ mod det_inv_tests {
         // f64 tests
         assert_eq!(m_f64.det().unwrap(), 1.0);
         assert_eq!(det_slow(&m_f64).unwrap(), 1.0);
-        assert_eq!(m_f64.inv().unwrap().rows, 0);
-        assert_eq!(inv_slow(&m_f64).unwrap().rows, 0);
+        assert_eq!(m_f64.inv().unwrap().rows(), 0);
+        assert_eq!(inv_slow(&m_f64).unwrap().rows(), 0);
 
         // Complex64 tests
         assert_eq!(m_complex.det().unwrap(), Complex64::new(1.0, 0.0));
-        assert_eq!(m_complex.inv().unwrap().rows, 0);
-        assert_eq!(inv_slow(&m_complex).unwrap().rows, 0);
+        assert_eq!(m_complex.inv().unwrap().rows(), 0);
+        assert_eq!(inv_slow(&m_complex).unwrap().rows(), 0);
     }
 }

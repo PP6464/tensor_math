@@ -1,10 +1,10 @@
 #[cfg(test)]
 mod sum_tests {
-    use crate::definitions::errors::TensorErrors;
-    use crate::definitions::matrix::Matrix;
-    use crate::definitions::shape::Shape;
-    use crate::definitions::tensor::Tensor;
-    use crate::shape;
+    use tensor_math::definitions::errors::TensorErrors;
+    use tensor_math::definitions::matrix::Matrix;
+    use tensor_math::definitions::shape::Shape;
+    use tensor_math::definitions::tensor::Tensor;
+    use tensor_math::shape;
 
     #[test]
     fn test_tensor_sum() {

@@ -1,14 +1,14 @@
 #[cfg(test)]
 mod gaussian_distribution_tests {
-    use crate::definitions::errors::TensorErrors;
-    use crate::definitions::matrix::Matrix;
-    use crate::definitions::shape::Shape;
-    use crate::definitions::tensor::Tensor;
-    use crate::math::gaussian::{
+    use tensor_math::definitions::errors::TensorErrors;
+    use tensor_math::definitions::matrix::Matrix;
+    use tensor_math::definitions::shape::Shape;
+    use tensor_math::definitions::tensor::Tensor;
+    use tensor_math::math::gaussian::{
         gaussian_pdf_cov_mat, gaussian_pdf_multi_sigma, gaussian_pdf_single_sigma, gaussian_sample,
     };
-    use crate::shape;
-    use crate::utilities::matrix::eye;
+    use tensor_math::shape;
+    use tensor_math::utilities::matrix::eye;
     use float_cmp::{approx_eq, assert_approx_eq};
     use std::f64::consts::PI;
 

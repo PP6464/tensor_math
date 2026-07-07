@@ -1,12 +1,12 @@
 #[cfg(test)]
 mod f64_c64_ops_tests {
-    use crate::definitions::errors::TensorErrors;
-    use crate::definitions::matrix::Matrix;
-    use crate::definitions::shape::Shape;
-    use crate::definitions::tensor::Tensor;
-    use crate::definitions::traits::{IntoMatrix, IntoTensor};
-    use crate::definitions::transpose::Transpose;
-    use crate::{shape, transpose};
+    use tensor_math::definitions::errors::TensorErrors;
+    use tensor_math::definitions::matrix::Matrix;
+    use tensor_math::definitions::shape::Shape;
+    use tensor_math::definitions::tensor::Tensor;
+    use tensor_math::definitions::traits::{IntoMatrix, IntoTensor};
+    use tensor_math::definitions::transpose::Transpose;
+    use tensor_math::{shape, transpose};
     use float_cmp::{approx_eq, assert_approx_eq};
     use num::complex::{Complex64, ComplexFloat};
 
@@ -32,7 +32,7 @@ mod f64_c64_ops_tests {
         let ans = (0..24)
             .map(f64::from)
             .collect::<Matrix<f64>>()
-            .reshape(m2.rows, m2.cols)
+            .reshape(m2.rows(), m2.cols())
             .unwrap();
 
         assert_eq!(ans, m2.re());
@@ -46,7 +46,7 @@ mod f64_c64_ops_tests {
         let ans = (0..24)
             .map(f64::from)
             .collect::<Matrix<f64>>()
-            .reshape(m2.rows, m2.cols)
+            .reshape(m2.rows(), m2.cols())
             .unwrap();
 
         assert_eq!(ans, m2.im() * -1.0);
@@ -159,29 +159,25 @@ mod f64_c64_ops_tests {
         let (t1, t2, m1, m2) = setup();
 
         let (ans1, ans2, ans3, ans4) = (
-            t1.elements
-                .iter()
+            t1.iter()
                 .map(|&x| f64::exp(x))
                 .collect::<Tensor<_>>()
                 .reshape(t1.shape())
                 .unwrap(),
-            t2.elements
-                .iter()
+            t2.iter()
                 .map(|&x| Complex64::exp(x))
                 .collect::<Tensor<_>>()
                 .reshape(t2.shape())
                 .unwrap(),
-            m1.elements
-                .iter()
+            m1.iter()
                 .map(|&x| f64::exp(x))
                 .collect::<Matrix<_>>()
-                .reshape(m1.rows, m1.cols)
+                .reshape(m1.rows(), m1.cols())
                 .unwrap(),
-            m2.elements
-                .iter()
+            m2.iter()
                 .map(|&x| Complex64::exp(x))
                 .collect::<Matrix<_>>()
-                .reshape(m2.rows, m2.cols)
+                .reshape(m2.rows(), m2.cols())
                 .unwrap(),
         );
 
@@ -206,29 +202,25 @@ mod f64_c64_ops_tests {
         let (t1, t2, m1, m2) = setup();
 
         let (ans1, ans2, ans3, ans4) = (
-            t1.elements
-                .iter()
+            t1.iter()
                 .map(|&x| f64::ln(x))
                 .collect::<Tensor<_>>()
                 .reshape(t1.shape())
                 .unwrap(),
-            t2.elements
-                .iter()
+            t2.iter()
                 .map(|&x| Complex64::ln(x))
                 .collect::<Tensor<_>>()
                 .reshape(t2.shape())
                 .unwrap(),
-            m1.elements
-                .iter()
+            m1.iter()
                 .map(|&x| f64::ln(x))
                 .collect::<Matrix<_>>()
-                .reshape(m1.rows, m1.cols)
+                .reshape(m1.rows(), m1.cols())
                 .unwrap(),
-            m2.elements
-                .iter()
+            m2.iter()
                 .map(|&x| Complex64::ln(x))
                 .collect::<Matrix<_>>()
-                .reshape(m2.rows, m2.cols)
+                .reshape(m2.rows(), m2.cols())
                 .unwrap(),
         );
 
@@ -253,29 +245,25 @@ mod f64_c64_ops_tests {
         let (t1, t2, m1, m2) = setup();
 
         let (ans1, ans2, ans3, ans4) = (
-            t1.elements
-                .iter()
+            t1.iter()
                 .map(|&x| f64::log(x, 5.0))
                 .collect::<Tensor<_>>()
                 .reshape(t1.shape())
                 .unwrap(),
-            t2.elements
-                .iter()
+            t2.iter()
                 .map(|&x| Complex64::log(x, 5.0))
                 .collect::<Tensor<_>>()
                 .reshape(t2.shape())
                 .unwrap(),
-            m1.elements
-                .iter()
+            m1.iter()
                 .map(|&x| f64::log(x, 5.0))
                 .collect::<Matrix<_>>()
-                .reshape(m1.rows, m1.cols)
+                .reshape(m1.rows(), m1.cols())
                 .unwrap(),
-            m2.elements
-                .iter()
+            m2.iter()
                 .map(|&x| Complex64::log(x, 5.0))
                 .collect::<Matrix<_>>()
-                .reshape(m2.rows, m2.cols)
+                .reshape(m2.rows(), m2.cols())
                 .unwrap(),
         );
 
@@ -300,29 +288,25 @@ mod f64_c64_ops_tests {
         let (t1, t2, m1, m2) = setup();
 
         let (ans1, ans2, ans3, ans4) = (
-            t1.elements
-                .iter()
+            t1.iter()
                 .map(|&x| f64::log2(x))
                 .collect::<Tensor<_>>()
                 .reshape(t1.shape())
                 .unwrap(),
-            t2.elements
-                .iter()
+            t2.iter()
                 .map(|&x| Complex64::log2(x))
                 .collect::<Tensor<_>>()
                 .reshape(t2.shape())
                 .unwrap(),
-            m1.elements
-                .iter()
+            m1.iter()
                 .map(|&x| f64::log2(x))
                 .collect::<Matrix<_>>()
-                .reshape(m1.rows, m1.cols)
+                .reshape(m1.rows(), m1.cols())
                 .unwrap(),
-            m2.elements
-                .iter()
+            m2.iter()
                 .map(|&x| Complex64::log2(x))
                 .collect::<Matrix<_>>()
-                .reshape(m2.rows, m2.cols)
+                .reshape(m2.rows(), m2.cols())
                 .unwrap(),
         );
 
@@ -347,29 +331,25 @@ mod f64_c64_ops_tests {
         let (t1, t2, m1, m2) = setup();
 
         let (ans1, ans2, ans3, ans4) = (
-            t1.elements
-                .iter()
+            t1.iter()
                 .map(|&x| f64::log10(x))
                 .collect::<Tensor<_>>()
                 .reshape(t1.shape())
                 .unwrap(),
-            t2.elements
-                .iter()
+            t2.iter()
                 .map(|&x| Complex64::log10(x))
                 .collect::<Tensor<_>>()
                 .reshape(t2.shape())
                 .unwrap(),
-            m1.elements
-                .iter()
+            m1.iter()
                 .map(|&x| f64::log10(x))
                 .collect::<Matrix<_>>()
-                .reshape(m1.rows, m1.cols)
+                .reshape(m1.rows(), m1.cols())
                 .unwrap(),
-            m2.elements
-                .iter()
+            m2.iter()
                 .map(|&x| Complex64::log10(x))
                 .collect::<Matrix<_>>()
-                .reshape(m2.rows, m2.cols)
+                .reshape(m2.rows(), m2.cols())
                 .unwrap(),
         );
 
@@ -394,29 +374,25 @@ mod f64_c64_ops_tests {
         let (t1, t2, m1, m2) = setup();
 
         let (ans1, ans2, ans3, ans4) = (
-            t1.elements
-                .iter()
+            t1.iter()
                 .map(|&x| f64::powf(2.0, x))
                 .collect::<Tensor<_>>()
                 .reshape(t1.shape())
                 .unwrap(),
-            t2.elements
-                .iter()
+            t2.iter()
                 .map(|&x| Complex64::powc(2.0.into(), x))
                 .collect::<Tensor<_>>()
                 .reshape(t2.shape())
                 .unwrap(),
-            m1.elements
-                .iter()
+            m1.iter()
                 .map(|&x| f64::powf(2.0, x))
                 .collect::<Matrix<_>>()
-                .reshape(m1.rows, m1.cols)
+                .reshape(m1.rows(), m1.cols())
                 .unwrap(),
-            m2.elements
-                .iter()
+            m2.iter()
                 .map(|&x| Complex64::powc(2.0.into(), x))
                 .collect::<Matrix<_>>()
-                .reshape(m2.rows, m2.cols)
+                .reshape(m2.rows(), m2.cols())
                 .unwrap(),
         );
 
@@ -451,29 +427,25 @@ mod f64_c64_ops_tests {
         let (t1, t2, m1, m2) = setup();
 
         let (ans1, ans2, ans3, ans4) = (
-            t1.elements
-                .iter()
+            t1.iter()
                 .map(|&x| f64::powf(x, 1.5))
                 .collect::<Tensor<_>>()
                 .reshape(t1.shape())
                 .unwrap(),
-            t2.elements
-                .iter()
+            t2.iter()
                 .map(|&x| Complex64::powf(x, 1.5))
                 .collect::<Tensor<_>>()
                 .reshape(t2.shape())
                 .unwrap(),
-            m1.elements
-                .iter()
+            m1.iter()
                 .map(|&x| f64::powf(x, 1.5))
                 .collect::<Matrix<_>>()
-                .reshape(m1.rows, m1.cols)
+                .reshape(m1.rows(), m1.cols())
                 .unwrap(),
-            m2.elements
-                .iter()
+            m2.iter()
                 .map(|&x| Complex64::powf(x, 1.5))
                 .collect::<Matrix<_>>()
-                .reshape(m2.rows, m2.cols)
+                .reshape(m2.rows(), m2.cols())
                 .unwrap(),
         );
 
@@ -498,29 +470,25 @@ mod f64_c64_ops_tests {
         let (t1, t2, m1, m2) = setup();
 
         let (ans1, ans2, ans3, ans4) = (
-            t1.elements
-                .iter()
+            t1.iter()
                 .map(|&x| f64::sin(x))
                 .collect::<Tensor<_>>()
                 .reshape(t1.shape())
                 .unwrap(),
-            t2.elements
-                .iter()
+            t2.iter()
                 .map(|&x| Complex64::sin(x))
                 .collect::<Tensor<_>>()
                 .reshape(t2.shape())
                 .unwrap(),
-            m1.elements
-                .iter()
+            m1.iter()
                 .map(|&x| f64::sin(x))
                 .collect::<Matrix<_>>()
-                .reshape(m1.rows, m1.cols)
+                .reshape(m1.rows(), m1.cols())
                 .unwrap(),
-            m2.elements
-                .iter()
+            m2.iter()
                 .map(|&x| Complex64::sin(x))
                 .collect::<Matrix<_>>()
-                .reshape(m2.rows, m2.cols)
+                .reshape(m2.rows(), m2.cols())
                 .unwrap(),
         );
 
@@ -545,29 +513,25 @@ mod f64_c64_ops_tests {
         let (t1, t2, m1, m2) = setup();
 
         let (ans1, ans2, ans3, ans4) = (
-            t1.elements
-                .iter()
+            t1.iter()
                 .map(|&x| f64::cos(x))
                 .collect::<Tensor<_>>()
                 .reshape(t1.shape())
                 .unwrap(),
-            t2.elements
-                .iter()
+            t2.iter()
                 .map(|&x| Complex64::cos(x))
                 .collect::<Tensor<_>>()
                 .reshape(t2.shape())
                 .unwrap(),
-            m1.elements
-                .iter()
+            m1.iter()
                 .map(|&x| f64::cos(x))
                 .collect::<Matrix<_>>()
-                .reshape(m1.rows, m1.cols)
+                .reshape(m1.rows(), m1.cols())
                 .unwrap(),
-            m2.elements
-                .iter()
+            m2.iter()
                 .map(|&x| Complex64::cos(x))
                 .collect::<Matrix<_>>()
-                .reshape(m2.rows, m2.cols)
+                .reshape(m2.rows(), m2.cols())
                 .unwrap(),
         );
 
@@ -592,29 +556,25 @@ mod f64_c64_ops_tests {
         let (t1, t2, m1, m2) = setup();
 
         let (ans1, ans2, ans3, ans4) = (
-            t1.elements
-                .iter()
+            t1.iter()
                 .map(|&x| f64::tan(x))
                 .collect::<Tensor<_>>()
                 .reshape(t1.shape())
                 .unwrap(),
-            t2.elements
-                .iter()
+            t2.iter()
                 .map(|&x| Complex64::tan(x))
                 .collect::<Tensor<_>>()
                 .reshape(t2.shape())
                 .unwrap(),
-            m1.elements
-                .iter()
+            m1.iter()
                 .map(|&x| f64::tan(x))
                 .collect::<Matrix<_>>()
-                .reshape(m1.rows, m1.cols)
+                .reshape(m1.rows(), m1.cols())
                 .unwrap(),
-            m2.elements
-                .iter()
+            m2.iter()
                 .map(|&x| Complex64::tan(x))
                 .collect::<Matrix<_>>()
-                .reshape(m2.rows, m2.cols)
+                .reshape(m2.rows(), m2.cols())
                 .unwrap(),
         );
 
@@ -639,29 +599,25 @@ mod f64_c64_ops_tests {
         let (t1, t2, m1, m2) = setup();
 
         let (ans1, ans2, ans3, ans4) = (
-            t1.elements
-                .iter()
+            t1.iter()
                 .map(|&x| x.tanh().asin())
                 .collect::<Tensor<_>>()
                 .reshape(t1.shape())
                 .unwrap(),
-            t2.elements
-                .iter()
+            t2.iter()
                 .map(|&x| x.tanh().asin())
                 .collect::<Tensor<_>>()
                 .reshape(t2.shape())
                 .unwrap(),
-            m1.elements
-                .iter()
+            m1.iter()
                 .map(|&x| x.tanh().asin())
                 .collect::<Matrix<_>>()
-                .reshape(m1.rows, m1.cols)
+                .reshape(m1.rows(), m1.cols())
                 .unwrap(),
-            m2.elements
-                .iter()
+            m2.iter()
                 .map(|&x| x.tanh().asin())
                 .collect::<Matrix<_>>()
-                .reshape(m2.rows, m2.cols)
+                .reshape(m2.rows(), m2.cols())
                 .unwrap(),
         );
 
@@ -696,29 +652,25 @@ mod f64_c64_ops_tests {
         let (t1, t2, m1, m2) = setup();
 
         let (ans1, ans2, ans3, ans4) = (
-            t1.elements
-                .iter()
+            t1.iter()
                 .map(|&x| x.tanh().acos())
                 .collect::<Tensor<_>>()
                 .reshape(t1.shape())
                 .unwrap(),
-            t2.elements
-                .iter()
+            t2.iter()
                 .map(|&x| x.tanh().acos())
                 .collect::<Tensor<_>>()
                 .reshape(t2.shape())
                 .unwrap(),
-            m1.elements
-                .iter()
+            m1.iter()
                 .map(|&x| x.tanh().acos())
                 .collect::<Matrix<_>>()
-                .reshape(m1.rows, m1.cols)
+                .reshape(m1.rows(), m1.cols())
                 .unwrap(),
-            m2.elements
-                .iter()
+            m2.iter()
                 .map(|&x| x.tanh().acos())
                 .collect::<Matrix<_>>()
-                .reshape(m2.rows, m2.cols)
+                .reshape(m2.rows(), m2.cols())
                 .unwrap(),
         );
 
@@ -753,29 +705,25 @@ mod f64_c64_ops_tests {
         let (t1, t2, m1, m2) = setup();
 
         let (ans1, ans2, ans3, ans4) = (
-            t1.elements
-                .iter()
+            t1.iter()
                 .map(|&x| f64::atan(x))
                 .collect::<Tensor<_>>()
                 .reshape(t1.shape())
                 .unwrap(),
-            t2.elements
-                .iter()
+            t2.iter()
                 .map(|&x| Complex64::atan(x))
                 .collect::<Tensor<_>>()
                 .reshape(t2.shape())
                 .unwrap(),
-            m1.elements
-                .iter()
+            m1.iter()
                 .map(|&x| f64::atan(x))
                 .collect::<Matrix<_>>()
-                .reshape(m1.rows, m1.cols)
+                .reshape(m1.rows(), m1.cols())
                 .unwrap(),
-            m2.elements
-                .iter()
+            m2.iter()
                 .map(|&x| Complex64::atan(x))
                 .collect::<Matrix<_>>()
-                .reshape(m2.rows, m2.cols)
+                .reshape(m2.rows(), m2.cols())
                 .unwrap(),
         );
 
@@ -800,29 +748,25 @@ mod f64_c64_ops_tests {
         let (t1, t2, m1, m2) = setup();
 
         let (ans1, ans2, ans3, ans4) = (
-            t1.elements
-                .iter()
+            t1.iter()
                 .map(|&x| f64::recip(x + 1.0))
                 .collect::<Tensor<_>>()
                 .reshape(t1.shape())
                 .unwrap(),
-            t2.elements
-                .iter()
+            t2.iter()
                 .map(|&x| Complex64::recip(x + Complex64::ONE))
                 .collect::<Tensor<_>>()
                 .reshape(t2.shape())
                 .unwrap(),
-            m1.elements
-                .iter()
+            m1.iter()
                 .map(|&x| f64::recip(x + 1.0))
                 .collect::<Matrix<_>>()
-                .reshape(m1.rows, m1.cols)
+                .reshape(m1.rows(), m1.cols())
                 .unwrap(),
-            m2.elements
-                .iter()
+            m2.iter()
                 .map(|&x| Complex64::recip(x + Complex64::ONE))
                 .collect::<Matrix<_>>()
-                .reshape(m2.rows, m2.cols)
+                .reshape(m2.rows(), m2.cols())
                 .unwrap(),
         );
 
@@ -857,29 +801,25 @@ mod f64_c64_ops_tests {
         let (t1, t2, m1, m2) = setup();
 
         let (ans1, ans2, ans3, ans4) = (
-            t1.elements
-                .iter()
+            t1.iter()
                 .map(|&x| f64::sinh(x))
                 .collect::<Tensor<_>>()
                 .reshape(t1.shape())
                 .unwrap(),
-            t2.elements
-                .iter()
+            t2.iter()
                 .map(|&x| Complex64::sinh(x))
                 .collect::<Tensor<_>>()
                 .reshape(t2.shape())
                 .unwrap(),
-            m1.elements
-                .iter()
+            m1.iter()
                 .map(|&x| f64::sinh(x))
                 .collect::<Matrix<_>>()
-                .reshape(m1.rows, m1.cols)
+                .reshape(m1.rows(), m1.cols())
                 .unwrap(),
-            m2.elements
-                .iter()
+            m2.iter()
                 .map(|&x| Complex64::sinh(x))
                 .collect::<Matrix<_>>()
-                .reshape(m2.rows, m2.cols)
+                .reshape(m2.rows(), m2.cols())
                 .unwrap(),
         );
 
@@ -904,29 +844,25 @@ mod f64_c64_ops_tests {
         let (t1, t2, m1, m2) = setup();
 
         let (ans1, ans2, ans3, ans4) = (
-            t1.elements
-                .iter()
+            t1.iter()
                 .map(|&x| f64::cosh(x))
                 .collect::<Tensor<_>>()
                 .reshape(t1.shape())
                 .unwrap(),
-            t2.elements
-                .iter()
+            t2.iter()
                 .map(|&x| Complex64::cosh(x))
                 .collect::<Tensor<_>>()
                 .reshape(t2.shape())
                 .unwrap(),
-            m1.elements
-                .iter()
+            m1.iter()
                 .map(|&x| f64::cosh(x))
                 .collect::<Matrix<_>>()
-                .reshape(m1.rows, m1.cols)
+                .reshape(m1.rows(), m1.cols())
                 .unwrap(),
-            m2.elements
-                .iter()
+            m2.iter()
                 .map(|&x| Complex64::cosh(x))
                 .collect::<Matrix<_>>()
-                .reshape(m2.rows, m2.cols)
+                .reshape(m2.rows(), m2.cols())
                 .unwrap(),
         );
 
@@ -951,29 +887,25 @@ mod f64_c64_ops_tests {
         let (t1, t2, m1, m2) = setup();
 
         let (ans1, ans2, ans3, ans4) = (
-            t1.elements
-                .iter()
+            t1.iter()
                 .map(|&x| f64::tanh(x))
                 .collect::<Tensor<_>>()
                 .reshape(t1.shape())
                 .unwrap(),
-            t2.elements
-                .iter()
+            t2.iter()
                 .map(|&x| Complex64::tanh(x))
                 .collect::<Tensor<_>>()
                 .reshape(t2.shape())
                 .unwrap(),
-            m1.elements
-                .iter()
+            m1.iter()
                 .map(|&x| f64::tanh(x))
                 .collect::<Matrix<_>>()
-                .reshape(m1.rows, m1.cols)
+                .reshape(m1.rows(), m1.cols())
                 .unwrap(),
-            m2.elements
-                .iter()
+            m2.iter()
                 .map(|&x| Complex64::tanh(x))
                 .collect::<Matrix<_>>()
-                .reshape(m2.rows, m2.cols)
+                .reshape(m2.rows(), m2.cols())
                 .unwrap(),
         );
 
@@ -998,29 +930,25 @@ mod f64_c64_ops_tests {
         let (t1, t2, m1, m2) = setup();
 
         let (ans1, ans2, ans3, ans4) = (
-            t1.elements
-                .iter()
+            t1.iter()
                 .map(|&x| f64::asinh(x))
                 .collect::<Tensor<_>>()
                 .reshape(t1.shape())
                 .unwrap(),
-            t2.elements
-                .iter()
+            t2.iter()
                 .map(|&x| Complex64::asinh(x))
                 .collect::<Tensor<_>>()
                 .reshape(t2.shape())
                 .unwrap(),
-            m1.elements
-                .iter()
+            m1.iter()
                 .map(|&x| f64::asinh(x))
                 .collect::<Matrix<_>>()
-                .reshape(m1.rows, m1.cols)
+                .reshape(m1.rows(), m1.cols())
                 .unwrap(),
-            m2.elements
-                .iter()
+            m2.iter()
                 .map(|&x| Complex64::asinh(x))
                 .collect::<Matrix<_>>()
-                .reshape(m2.rows, m2.cols)
+                .reshape(m2.rows(), m2.cols())
                 .unwrap(),
         );
 
@@ -1045,29 +973,25 @@ mod f64_c64_ops_tests {
         let (t1, t2, m1, m2) = setup();
 
         let (ans1, ans2, ans3, ans4) = (
-            t1.elements
-                .iter()
+            t1.iter()
                 .map(|&x| (x + 1.0).acosh())
                 .collect::<Tensor<_>>()
                 .reshape(t1.shape())
                 .unwrap(),
-            t2.elements
-                .iter()
+            t2.iter()
                 .map(|&x| (x + 1.0).acosh())
                 .collect::<Tensor<_>>()
                 .reshape(t2.shape())
                 .unwrap(),
-            m1.elements
-                .iter()
+            m1.iter()
                 .map(|&x| (x + 1.0).acosh())
                 .collect::<Matrix<_>>()
-                .reshape(m1.rows, m1.cols)
+                .reshape(m1.rows(), m1.cols())
                 .unwrap(),
-            m2.elements
-                .iter()
+            m2.iter()
                 .map(|&x| (x + 1.0).acosh())
                 .collect::<Matrix<_>>()
-                .reshape(m2.rows, m2.cols)
+                .reshape(m2.rows(), m2.cols())
                 .unwrap(),
         );
 
@@ -1102,29 +1026,25 @@ mod f64_c64_ops_tests {
         let (t1, t2, m1, m2) = setup();
 
         let (ans1, ans2, ans3, ans4) = (
-            t1.elements
-                .iter()
+            t1.iter()
                 .map(|&x| f64::atanh(x))
                 .collect::<Tensor<_>>()
                 .reshape(t1.shape())
                 .unwrap(),
-            t2.elements
-                .iter()
+            t2.iter()
                 .map(|&x| Complex64::atanh(x))
                 .collect::<Tensor<_>>()
                 .reshape(t2.shape())
                 .unwrap(),
-            m1.elements
-                .iter()
+            m1.iter()
                 .map(|&x| f64::atanh(x))
                 .collect::<Matrix<_>>()
-                .reshape(m1.rows, m1.cols)
+                .reshape(m1.rows(), m1.cols())
                 .unwrap(),
-            m2.elements
-                .iter()
+            m2.iter()
                 .map(|&x| Complex64::atanh(x))
                 .collect::<Matrix<_>>()
-                .reshape(m2.rows, m2.cols)
+                .reshape(m2.rows(), m2.cols())
                 .unwrap(),
         );
 
@@ -1184,7 +1104,7 @@ mod f64_c64_ops_tests {
         assert!(approx_eq!(
             Matrix<f64>,
             (m1.clone() - 12.0).sigmoid(),
-            ans.into_matrix().reshape(m1.rows, m1.cols).unwrap(),
+            ans.into_matrix().reshape(m1.rows(), m1.cols()).unwrap(),
             epsilon = 1e-5
         ));
     }
@@ -1194,17 +1114,15 @@ mod f64_c64_ops_tests {
         let (t1, _, m1, _) = setup();
 
         let (ans1, ans2) = (
-            t1.elements
-                .iter()
+            t1.iter()
                 .map(|&x| f64::max(f64::atanh(x), 0.0))
                 .collect::<Tensor<_>>()
                 .reshape(t1.shape())
                 .unwrap(),
-            m1.elements
-                .iter()
+            m1.iter()
                 .map(|&x| f64::max(f64::atanh(x), 0.0))
                 .collect::<Matrix<_>>()
-                .reshape(m1.rows, m1.cols)
+                .reshape(m1.rows(), m1.cols())
                 .unwrap(),
         );
 
@@ -1227,17 +1145,15 @@ mod f64_c64_ops_tests {
         let (t1, _, m1, _) = setup();
 
         let (ans1, ans2) = (
-            t1.elements
-                .iter()
+            t1.iter()
                 .map(|&x| if x > 0.0 { x } else { 0.01 * x })
                 .collect::<Tensor<_>>()
                 .reshape(t1.shape())
                 .unwrap(),
-            m1.elements
-                .iter()
+            m1.iter()
                 .map(|&x| if x > 0.0 { x } else { 0.01 * x })
                 .collect::<Matrix<_>>()
-                .reshape(m1.rows, m1.cols)
+                .reshape(m1.rows(), m1.cols())
                 .unwrap(),
         );
 
@@ -1307,29 +1223,25 @@ mod f64_c64_ops_tests {
         let (t1, t2, m1, m2) = setup();
 
         let (ans1, ans2, ans3, ans4) = (
-            t1.elements
-                .iter()
+            t1.iter()
                 .map(|&x| f64::sqrt(x))
                 .collect::<Tensor<_>>()
                 .reshape(t1.shape())
                 .unwrap(),
-            t2.elements
-                .iter()
+            t2.iter()
                 .map(|&x| Complex64::sqrt(x))
                 .collect::<Tensor<_>>()
                 .reshape(t2.shape())
                 .unwrap(),
-            m1.elements
-                .iter()
+            m1.iter()
                 .map(|&x| f64::sqrt(x))
                 .collect::<Matrix<_>>()
-                .reshape(m1.rows, m1.cols)
+                .reshape(m1.rows(), m1.cols())
                 .unwrap(),
-            m2.elements
-                .iter()
+            m2.iter()
                 .map(|&x| Complex64::sqrt(x))
                 .collect::<Matrix<_>>()
-                .reshape(m2.rows, m2.cols)
+                .reshape(m2.rows(), m2.cols())
                 .unwrap(),
         );
 
@@ -1354,29 +1266,25 @@ mod f64_c64_ops_tests {
         let (t1, t2, m1, m2) = setup();
 
         let (ans1, ans2, ans3, ans4) = (
-            t1.elements
-                .iter()
+            t1.iter()
                 .map(|&x| f64::cbrt(x))
                 .collect::<Tensor<_>>()
                 .reshape(t1.shape())
                 .unwrap(),
-            t2.elements
-                .iter()
+            t2.iter()
                 .map(|&x| Complex64::cbrt(x))
                 .collect::<Tensor<_>>()
                 .reshape(t2.shape())
                 .unwrap(),
-            m1.elements
-                .iter()
+            m1.iter()
                 .map(|&x| f64::cbrt(x))
                 .collect::<Matrix<_>>()
-                .reshape(m1.rows, m1.cols)
+                .reshape(m1.rows(), m1.cols())
                 .unwrap(),
-            m2.elements
-                .iter()
+            m2.iter()
                 .map(|&x| Complex64::cbrt(x))
                 .collect::<Matrix<_>>()
-                .reshape(m2.rows, m2.cols)
+                .reshape(m2.rows(), m2.cols())
                 .unwrap(),
         );
 
@@ -1401,31 +1309,27 @@ mod f64_c64_ops_tests {
         let (t1, t2, m1, m2) = setup();
 
         let (ans1, ans2, ans3, ans4) = (
-            t1.elements
-                .iter()
+            t1.iter()
                 .map(|&x| x / 276.0)
                 .collect::<Tensor<_>>()
                 .reshape(t1.shape())
                 .unwrap(),
-            t2.elements
-                .iter()
+            t2.iter()
                 .map(|&x| x / (276.0 * 2.0.sqrt()))
                 .map(Complex64::from)
                 .collect::<Tensor<_>>()
                 .reshape(t2.shape())
                 .unwrap(),
-            m1.elements
-                .iter()
+            m1.iter()
                 .map(|&x| x / 276.0)
                 .collect::<Matrix<_>>()
-                .reshape(m1.rows, m1.cols)
+                .reshape(m1.rows(), m1.cols())
                 .unwrap(),
-            m2.elements
-                .iter()
+            m2.iter()
                 .map(|&x| x / (276.0 * 2.0.sqrt()))
                 .map(Complex64::from)
                 .collect::<Matrix<_>>()
-                .reshape(m2.rows, m2.cols)
+                .reshape(m2.rows(), m2.cols())
                 .unwrap(),
         );
 
@@ -1450,29 +1354,25 @@ mod f64_c64_ops_tests {
         let (t1, t2, m1, m2) = setup();
 
         let (ans1, ans2, ans3, ans4) = (
-            t1.elements
-                .iter()
+            t1.iter()
                 .map(|&x| x / 4324.0.sqrt())
                 .collect::<Tensor<_>>()
                 .reshape(t1.shape())
                 .unwrap(),
-            t2.elements
-                .iter()
+            t2.iter()
                 .map(|&x| x / 8648.0.sqrt())
                 .collect::<Tensor<_>>()
                 .reshape(t2.shape())
                 .unwrap(),
-            m1.elements
-                .iter()
+            m1.iter()
                 .map(|&x| x / 4324.0.sqrt())
                 .collect::<Matrix<_>>()
-                .reshape(m1.rows, m1.cols)
+                .reshape(m1.rows(), m1.cols())
                 .unwrap(),
-            m2.elements
-                .iter()
+            m2.iter()
                 .map(|&x| x / 8648.0.sqrt())
                 .collect::<Matrix<_>>()
-                .reshape(m2.rows, m2.cols)
+                .reshape(m2.rows(), m2.cols())
                 .unwrap(),
         );
 
@@ -1497,14 +1397,12 @@ mod f64_c64_ops_tests {
         let (_, t2, _, m2) = setup();
 
         let ans1 = t2
-            .elements
             .iter()
             .map(Complex64::conj)
             .collect::<Tensor<_>>()
             .reshape(t2.shape())
             .unwrap();
         let ans2 = m2
-            .elements
             .iter()
             .map(Complex64::conj)
             .collect::<Matrix<_>>()
@@ -1522,7 +1420,6 @@ mod f64_c64_ops_tests {
         let transpose = transpose![1, 0, 2];
 
         let ans1 = t2
-            .elements
             .iter()
             .map(Complex64::conj)
             .collect::<Tensor<_>>()
@@ -1531,7 +1428,6 @@ mod f64_c64_ops_tests {
             .transpose(&transpose)
             .unwrap();
         let ans2 = m2
-            .elements
             .iter()
             .map(Complex64::conj)
             .collect::<Matrix<_>>()
@@ -1574,8 +1470,7 @@ mod f64_c64_ops_tests {
         assert_eq!(t1.clone().abs(), t1);
         assert_eq!(
             t2.clone().abs(),
-            t2.elements
-                .iter()
+            t2.iter()
                 .map(|x| x.abs())
                 .collect::<Tensor<_>>()
                 .reshape(t2.shape())
@@ -1584,8 +1479,7 @@ mod f64_c64_ops_tests {
         assert_eq!(m1.clone().abs(), m1);
         assert_eq!(
             m2.clone().abs(),
-            m2.elements
-                .iter()
+            m2.iter()
                 .map(|x| x.abs())
                 .collect::<Matrix<_>>()
                 .reshape(m2.rows(), m2.cols())
@@ -1597,26 +1491,22 @@ mod f64_c64_ops_tests {
     fn born_probabilities() {
         let (t1, t2, m1, m2) = setup();
         let (ans1, ans2, ans3, ans4) = (
-            t1.elements
-                .iter()
+            t1.iter()
                 .map(|x| x * x / 4324.0)
                 .collect::<Tensor<_>>()
                 .reshape(t1.shape())
                 .unwrap(),
-            t2.elements
-                .iter()
+            t2.iter()
                 .map(|x| (x * x).abs() / 8648.0)
                 .collect::<Tensor<_>>()
                 .reshape(t2.shape())
                 .unwrap(),
-            m1.elements
-                .iter()
+            m1.iter()
                 .map(|x| x * x / 4324.0)
                 .collect::<Matrix<_>>()
                 .reshape(m1.rows(), m1.cols())
                 .unwrap(),
-            m2.elements
-                .iter()
+            m2.iter()
                 .map(|x| (x * x).abs() / 8648.0)
                 .collect::<Matrix<_>>()
                 .reshape(m2.rows(), m2.cols())
@@ -1635,31 +1525,31 @@ mod f64_c64_ops_tests {
         let t = Tensor::new(&shape![], vec![val]).unwrap();
 
         // Real/Imag
-        assert_eq!(t.clone().re().elements[0], 3.0);
-        assert_eq!(t.clone().im().elements[0], 4.0);
+        assert_eq!(t.clone().re().elements()[0], 3.0);
+        assert_eq!(t.clone().im().elements()[0], 4.0);
 
         // Basic Math
         assert_approx_eq!(
             f64,
-            t.clone().exp().elements[0].re,
+            t.clone().exp().elements()[0].re,
             val.exp().re,
             epsilon = 1e-15
         );
         assert_approx_eq!(
             f64,
-            t.clone().ln().elements[0].re,
+            t.clone().ln().elements()[0].re,
             val.ln().re,
             epsilon = 1e-15
         );
         assert_approx_eq!(
             f64,
-            t.clone().sin().elements[0].re,
+            t.clone().sin().elements()[0].re,
             val.sin().re,
             epsilon = 1e-15
         );
         assert_approx_eq!(
             f64,
-            t.clone().sqrt().elements[0].re,
+            t.clone().sqrt().elements()[0].re,
             val.sqrt().re,
             epsilon = 1e-15
         );
@@ -1667,11 +1557,11 @@ mod f64_c64_ops_tests {
         // Magnitude and Abs
         assert_approx_eq!(f64, t.clone().mag(), 5.0, epsilon = 1e-15);
         assert_approx_eq!(f64, t.clone().mag_2(), 25.0, epsilon = 1e-15);
-        assert_approx_eq!(f64, t.clone().abs().elements[0], 5.0, epsilon = 1e-15);
+        assert_approx_eq!(f64, t.clone().abs().elements()[0], 5.0, epsilon = 1e-15);
 
         // Born probabilities (rank 0 sum is just the value itself / mag_2)
         let prob = t.clone().born_probabilities();
-        assert_approx_eq!(f64, prob.elements[0], 1.0, epsilon = 1e-15);
+        assert_approx_eq!(f64, prob.elements()[0], 1.0, epsilon = 1e-15);
     }
 
     #[test]
@@ -1680,46 +1570,46 @@ mod f64_c64_ops_tests {
         let m_empty = Matrix::<f64>::new(0, 0, vec![]).unwrap();
 
         // Mapping operations for f64
-        assert_eq!(t_empty.clone().exp().elements.len(), 0);
-        assert_eq!(t_empty.clone().ln().elements.len(), 0);
-        assert_eq!(t_empty.clone().log(10.0).elements.len(), 0);
-        assert_eq!(t_empty.clone().log2().elements.len(), 0);
-        assert_eq!(t_empty.clone().log10().elements.len(), 0);
-        assert_eq!(t_empty.clone().exp_base_n(2.0).elements.len(), 0);
-        assert_eq!(t_empty.clone().pow(2.0).elements.len(), 0);
-        assert_eq!(t_empty.clone().sin().elements.len(), 0);
-        assert_eq!(t_empty.clone().cos().elements.len(), 0);
-        assert_eq!(t_empty.clone().tan().elements.len(), 0);
-        assert_eq!(t_empty.clone().asin().elements.len(), 0);
-        assert_eq!(t_empty.clone().acos().elements.len(), 0);
-        assert_eq!(t_empty.clone().atan().elements.len(), 0);
-        assert_eq!(t_empty.clone().recip().elements.len(), 0);
-        assert_eq!(t_empty.clone().sinh().elements.len(), 0);
-        assert_eq!(t_empty.clone().cosh().elements.len(), 0);
-        assert_eq!(t_empty.clone().tanh().elements.len(), 0);
-        assert_eq!(t_empty.clone().asinh().elements.len(), 0);
-        assert_eq!(t_empty.clone().acosh().elements.len(), 0);
-        assert_eq!(t_empty.clone().atanh().elements.len(), 0);
-        assert_eq!(t_empty.clone().sigmoid().elements.len(), 0);
-        assert_eq!(t_empty.clone().relu().elements.len(), 0);
-        assert_eq!(t_empty.clone().leaky_relu(0.1).elements.len(), 0);
-        assert_eq!(t_empty.clone().sqrt().elements.len(), 0);
-        assert_eq!(t_empty.clone().cbrt().elements.len(), 0);
-        assert_eq!(t_empty.clone().abs().elements.len(), 0);
-        assert_eq!(t_empty.clone().into_complex().elements.len(), 0);
+        assert_eq!(t_empty.clone().exp().elements().len(), 0);
+        assert_eq!(t_empty.clone().ln().elements().len(), 0);
+        assert_eq!(t_empty.clone().log(10.0).elements().len(), 0);
+        assert_eq!(t_empty.clone().log2().elements().len(), 0);
+        assert_eq!(t_empty.clone().log10().elements().len(), 0);
+        assert_eq!(t_empty.clone().exp_base_n(2.0).elements().len(), 0);
+        assert_eq!(t_empty.clone().pow(2.0).elements().len(), 0);
+        assert_eq!(t_empty.clone().sin().elements().len(), 0);
+        assert_eq!(t_empty.clone().cos().elements().len(), 0);
+        assert_eq!(t_empty.clone().tan().elements().len(), 0);
+        assert_eq!(t_empty.clone().asin().elements().len(), 0);
+        assert_eq!(t_empty.clone().acos().elements().len(), 0);
+        assert_eq!(t_empty.clone().atan().elements().len(), 0);
+        assert_eq!(t_empty.clone().recip().elements().len(), 0);
+        assert_eq!(t_empty.clone().sinh().elements().len(), 0);
+        assert_eq!(t_empty.clone().cosh().elements().len(), 0);
+        assert_eq!(t_empty.clone().tanh().elements().len(), 0);
+        assert_eq!(t_empty.clone().asinh().elements().len(), 0);
+        assert_eq!(t_empty.clone().acosh().elements().len(), 0);
+        assert_eq!(t_empty.clone().atanh().elements().len(), 0);
+        assert_eq!(t_empty.clone().sigmoid().elements().len(), 0);
+        assert_eq!(t_empty.clone().relu().elements().len(), 0);
+        assert_eq!(t_empty.clone().leaky_relu(0.1).elements().len(), 0);
+        assert_eq!(t_empty.clone().sqrt().elements().len(), 0);
+        assert_eq!(t_empty.clone().cbrt().elements().len(), 0);
+        assert_eq!(t_empty.clone().abs().elements().len(), 0);
+        assert_eq!(t_empty.clone().into_complex().elements().len(), 0);
 
         // Matrix f64 mapping
-        assert_eq!(m_empty.clone().exp().elements.len(), 0);
-        assert_eq!(m_empty.clone().sigmoid().elements.len(), 0);
+        assert_eq!(m_empty.clone().exp().elements().len(), 0);
+        assert_eq!(m_empty.clone().sigmoid().elements().len(), 0);
 
         // Softmax on empty (nan sum usually, but check length)
-        assert_eq!(t_empty.clone().softmax().elements.len(), 0);
-        assert_eq!(m_empty.clone().softmax().elements.len(), 0);
+        assert_eq!(t_empty.clone().softmax().elements().len(), 0);
+        assert_eq!(m_empty.clone().softmax().elements().len(), 0);
 
         // Normalization on empty
-        assert_eq!(t_empty.clone().norm_l1().elements.len(), 0);
-        assert_eq!(t_empty.clone().norm_l2().elements.len(), 0);
-        assert_eq!(t_empty.clone().born_probabilities().elements.len(), 0);
+        assert_eq!(t_empty.clone().norm_l1().elements().len(), 0);
+        assert_eq!(t_empty.clone().norm_l2().elements().len(), 0);
+        assert_eq!(t_empty.clone().born_probabilities().elements().len(), 0);
 
         // Reduction operations
         assert_eq!(t_empty.clone().mag(), 0.0);
@@ -1731,55 +1621,52 @@ mod f64_c64_ops_tests {
         let t_c_empty = Tensor::<Complex64>::new(&shape![0, 5], vec![]).unwrap();
         let m_c_empty = Matrix::<Complex64>::new(0, 0, vec![]).unwrap();
 
-        assert_eq!(t_c_empty.clone().re().elements.len(), 0);
-        assert_eq!(t_c_empty.clone().im().elements.len(), 0);
-        assert_eq!(t_c_empty.clone().exp().elements.len(), 0);
-        assert_eq!(t_c_empty.clone().conj().elements.len(), 0);
+        assert_eq!(t_c_empty.clone().re().elements().len(), 0);
+        assert_eq!(t_c_empty.clone().im().elements().len(), 0);
+        assert_eq!(t_c_empty.clone().exp().elements().len(), 0);
+        assert_eq!(t_c_empty.clone().conj().elements().len(), 0);
         assert_eq!(
             t_c_empty
                 .conj_transpose(&transpose![1, 0])
                 .unwrap()
-                .elements
                 .len(),
             0
         );
-        assert_eq!(m_c_empty.conj_transpose().elements.len(), 0);
+        assert_eq!(m_c_empty.conj_transpose().elements().len(), 0);
         assert_eq!(t_c_empty.clone().mag(), 0.0);
         assert_eq!(t_c_empty.clone().mag_2(), 0.0);
-        assert_eq!(t_c_empty.clone().abs().elements.len(), 0);
-        assert_eq!(t_c_empty.clone().born_probabilities().elements.len(), 0);
+        assert_eq!(t_c_empty.clone().abs().elements().len(), 0);
+        assert_eq!(t_c_empty.clone().born_probabilities().elements().len(), 0);
     }
 
     #[test]
     fn test_nan_returns() {
         // 1. ln on negative f64
         let t_neg = Tensor::new(&shape![2], vec![-1.0, -2.0]).unwrap();
-        assert!(t_neg.ln().elements.iter().all(|x| x.is_nan()));
+        assert!(t_neg.ln().elements().iter().all(|x| x.is_nan()));
 
         // 2. sqrt on negative f64
         let m_neg = Matrix::new(1, 2, vec![-4.0, -9.0]).unwrap();
-        assert!(m_neg.sqrt().elements.iter().all(|x| x.is_nan()));
+        assert!(m_neg.sqrt().elements().iter().all(|x| x.is_nan()));
 
         // 3. inverse trig/hyperbolic out of range f64
         let t_range = Tensor::new(&shape![1], vec![2.0]).unwrap();
-        assert!(t_range.clone().asin().elements[0].is_nan());
-        assert!(t_range.acos().elements[0].is_nan());
+        assert!(t_range.clone().asin().elements()[0].is_nan());
+        assert!(t_range.acos().elements()[0].is_nan());
 
         let t_acosh = Tensor::new(&shape![1], vec![0.5]).unwrap();
-        assert!(t_acosh.acosh().elements[0].is_nan());
+        assert!(t_acosh.acosh().elements()[0].is_nan());
 
         // 4. Born probabilities on zero tensors (f64 and Complex64)
         let t_zero_f = Tensor::new(&shape![3], vec![0.0, 0.0, 0.0]).unwrap();
         assert!(t_zero_f
             .born_probabilities()
-            .elements
             .iter()
             .all(|x| x.is_nan()));
 
         let t_zero_c = Tensor::new(&shape![2], vec![Complex64::ZERO, Complex64::ZERO]).unwrap();
         assert!(t_zero_c
             .born_probabilities()
-            .elements
             .iter()
             .all(|x| x.is_nan()));
 
@@ -1788,15 +1675,13 @@ mod f64_c64_ops_tests {
         assert!(m_zero_f
             .clone()
             .norm_l1()
-            .elements
             .iter()
             .all(|x| x.is_nan()));
-        assert!(m_zero_f.norm_l2().elements.iter().all(|x| x.is_nan()));
+        assert!(m_zero_f.norm_l2().elements().iter().all(|x| x.is_nan()));
 
         let m_zero_c = Matrix::new(2, 2, vec![Complex64::ZERO; 4]).unwrap();
         assert!(m_zero_c
             .norm_l1()
-            .elements
             .iter()
             .all(|x| x.re.is_nan() && x.im.is_nan()));
     }

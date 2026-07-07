@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod hessenberg_tests {
-    use crate::definitions::errors::TensorErrors;
-    use crate::definitions::matrix::Matrix;
-    use crate::utilities::matrix::eye;
+    use tensor_math::definitions::errors::TensorErrors;
+    use tensor_math::definitions::matrix::Matrix;
+    use tensor_math::utilities::matrix::eye;
     use float_cmp::approx_eq;
     use num::complex::Complex64;
 

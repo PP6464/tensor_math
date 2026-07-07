@@ -1,9 +1,9 @@
 #[cfg(test)]
 mod transpose_tests {
-    use crate::definitions::errors::TensorErrors;
-    use crate::definitions::shape::Shape;
-    use crate::definitions::transpose::Transpose;
-    use crate::{shape, transpose};
+    use tensor_math::definitions::errors::TensorErrors;
+    use tensor_math::definitions::shape::Shape;
+    use tensor_math::definitions::transpose::Transpose;
+    use tensor_math::{shape, transpose};
 
     #[test]
     fn old_and_new_shapes() {

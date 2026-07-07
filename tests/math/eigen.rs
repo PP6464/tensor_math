@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod eigen_tests {
-    use crate::definitions::errors::TensorErrors;
-    use crate::definitions::matrix::Matrix;
-    use crate::utilities::matrix::eye;
+    use tensor_math::definitions::errors::TensorErrors;
+    use tensor_math::definitions::matrix::Matrix;
+    use tensor_math::utilities::matrix::eye;
     use float_cmp::approx_eq;
     use num::complex::{Complex64, ComplexFloat};
 
@@ -11,8 +11,8 @@ mod eigen_tests {
         let m = Matrix::<Complex64>::new(0, 0, vec![]).unwrap();
         let (vals, vecs) = m.eigendecompose().unwrap();
         assert!(vals.is_empty());
-        assert_eq!(vecs.rows, 0);
-        assert_eq!(vecs.cols, 0);
+        assert_eq!(vecs.rows(), 0);
+        assert_eq!(vecs.cols(), 0);
     }
 
     #[test]
@@ -58,7 +58,7 @@ mod eigen_tests {
 
         for m in ms {
             let (vals, vecs) = m.eigendecompose().unwrap();
-            let ord = m.rows;
+            let ord = m.rows();
 
             for i in 0..ord {
                 let vec = vecs.slice(0..ord, i..i + 1).unwrap();

@@ -1,9 +1,9 @@
 #[cfg(test)]
 mod matrix_slice_mut_tests {
-    use crate::definitions::shape::Shape;
-    use crate::definitions::matrix::Matrix;
-    use crate::definitions::traits::{IntoMatrix, TryIntoMatrix};
-    use crate::shape;
+    use tensor_math::definitions::shape::Shape;
+    use tensor_math::definitions::matrix::Matrix;
+    use tensor_math::definitions::traits::{IntoMatrix, TryIntoMatrix};
+    use tensor_math::shape;
 
     #[test]
     fn slice_mut_dimensions() {
@@ -19,8 +19,8 @@ mod matrix_slice_mut_tests {
     fn empty_slice_mut() {
         let mut m1 = Matrix::<usize>::new(0, 0, vec![]).unwrap();
         let slice = m1.slice_mut(0..0, 0..0).unwrap();
-        assert_eq!(slice.end, (0, 0));
-        assert_eq!(slice.start, (0, 0));
+        assert_eq!(slice.end(), (0, 0));
+        assert_eq!(slice.start(), (0, 0));
     }
 
     #[test]

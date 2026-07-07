@@ -1,10 +1,10 @@
 #[cfg(test)]
 mod contract_mul_tests {
-    use crate::definitions::errors::TensorErrors;
-    use crate::definitions::matrix::Matrix;
-    use crate::definitions::shape::Shape;
-    use crate::definitions::tensor::Tensor;
-    use crate::shape;
+    use tensor_math::definitions::errors::TensorErrors;
+    use tensor_math::definitions::matrix::Matrix;
+    use tensor_math::definitions::shape::Shape;
+    use tensor_math::definitions::tensor::Tensor;
+    use tensor_math::shape;
     use float_cmp::approx_eq;
 
     #[test]
@@ -49,8 +49,8 @@ mod contract_mul_tests {
         let t3 = Tensor::<i32>::new(&shape![0, 2], vec![]).unwrap();
         let t4 = Tensor::<i32>::new(&shape![2, 2], vec![1, 2, 3, 4]).unwrap();
         let res2 = t3.contract_mul(&t4).unwrap();
-        assert_eq!(res2.shape.0, vec![0, 2]);
-        assert_eq!(res2.elements.len(), 0);
+        assert_eq!(res2.shape(), &shape![0, 2]);
+        assert_eq!(res2.len(), 0);
     }
 
     #[test]
@@ -65,8 +65,8 @@ mod contract_mul_tests {
         let t3 = Tensor::<i32>::new(&shape![0, 2], vec![]).unwrap();
         let t4 = Tensor::<i32>::new(&shape![2, 2], vec![1, 2, 3, 4]).unwrap();
         let res2 = t3.contract_mul_mt(&t4).unwrap();
-        assert_eq!(res2.shape.0, vec![0, 2]);
-        assert_eq!(res2.elements.len(), 0);
+        assert_eq!(res2.shape(), &shape![0, 2]);
+        assert_eq!(res2.len(), 0);
     }
 
     #[test]
@@ -81,9 +81,9 @@ mod contract_mul_tests {
         let m3 = Matrix::<i32>::new(0, 2, vec![]).unwrap();
         let m4 = Matrix::<i32>::new(2, 2, vec![1, 2, 3, 4]).unwrap();
         let res2 = m3.mat_mul(&m4).unwrap();
-        assert_eq!(res2.rows, 0);
-        assert_eq!(res2.cols, 2);
-        assert_eq!(res2.tensor.elements.len(), 0);
+        assert_eq!(res2.rows(), 0);
+        assert_eq!(res2.cols(), 2);
+        assert_eq!(res2.len(), 0);
     }
 
     #[test]
@@ -98,9 +98,9 @@ mod contract_mul_tests {
         let m3 = Matrix::<i32>::new(0, 2, vec![]).unwrap();
         let m4 = Matrix::<i32>::new(2, 2, vec![1, 2, 3, 4]).unwrap();
         let res2 = m3.mat_mul_mt(&m4).unwrap();
-        assert_eq!(res2.rows, 0);
-        assert_eq!(res2.cols, 2);
-        assert_eq!(res2.tensor.elements.len(), 0);
+        assert_eq!(res2.rows(), 0);
+        assert_eq!(res2.cols(), 2);
+        assert_eq!(res2.len(), 0);
     }
 
     #[test]

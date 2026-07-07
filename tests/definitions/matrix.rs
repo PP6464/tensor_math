@@ -1,11 +1,11 @@
 #[cfg(test)]
 mod matrix_definition_tests {
-    use crate::definitions::errors::TensorErrors;
-    use crate::definitions::matrix::Matrix;
-    use crate::definitions::shape::Shape;
-    use crate::definitions::tensor::Tensor;
-    use crate::definitions::traits::IntoTensor;
-    use crate::shape;
+    use tensor_math::definitions::errors::TensorErrors;
+    use tensor_math::definitions::matrix::Matrix;
+    use tensor_math::definitions::shape::Shape;
+    use tensor_math::definitions::tensor::Tensor;
+    use tensor_math::definitions::traits::IntoTensor;
+    use tensor_math::shape;
 
     #[test]
     fn invalid_shape_and_elements() {
@@ -96,8 +96,8 @@ mod matrix_definition_tests {
     #[test]
     fn can_create_empty_matrix() {
         let m1 = Matrix::<i32>::new(0, 0, vec![]).unwrap();
-        assert_eq!(0, m1.rows);
-        assert_eq!(0, m1.cols);
+        assert_eq!(0, m1.rows());
+        assert_eq!(0, m1.cols());
     }
 
     #[test]

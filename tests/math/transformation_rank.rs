@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod transformation_rank_tests {
-    use crate::definitions::matrix::Matrix;
-    use crate::utilities::matrix::identity;
+    use tensor_math::definitions::matrix::Matrix;
+    use tensor_math::utilities::matrix::identity;
     use num::complex::Complex64;
 
     #[test]

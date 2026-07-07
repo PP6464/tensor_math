@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod matrix_utils_tests {
-    use crate::definitions::errors::TensorErrors;
-    use crate::definitions::matrix::Matrix;
-    use crate::utilities::matrix::{
+    use tensor_math::definitions::errors::TensorErrors;
+    use tensor_math::definitions::matrix::Matrix;
+    use tensor_math::utilities::matrix::{
         identity, pool_avg_mat, pool_max_mat, pool_min_mat, pool_sum_mat,
     };
     use num::complex::Complex64;
@@ -99,9 +99,9 @@ mod matrix_utils_tests {
         let empty_vec: Vec<i32> = vec![];
         let m: Matrix<i32> = empty_vec.into_iter().collect();
 
-        assert_eq!(m.rows, 1);
-        assert_eq!(m.cols, 0);
-        assert!(m.elements.is_empty());
+        assert_eq!(m.rows(), 1);
+        assert_eq!(m.cols(), 0);
+        assert!(m.is_empty());
     }
 
     #[test]
@@ -394,12 +394,12 @@ mod matrix_utils_tests {
     fn slice_with_empty_indices() {
         let m1 = Matrix::<f64>::new(4, 4, (0..16).map(f64::from).collect()).unwrap();
         let slice = m1.slice(1..1, 1..3).unwrap();
-        assert_eq!(slice.rows, 0);
-        assert_eq!(slice.cols, 2);
+        assert_eq!(slice.rows(), 0);
+        assert_eq!(slice.cols(), 2);
 
         let slice = m1.slice(1..3, 1..1).unwrap();
-        assert_eq!(slice.rows, 2);
-        assert_eq!(slice.cols, 0);
+        assert_eq!(slice.rows(), 2);
+        assert_eq!(slice.cols(), 0);
     }
 
     #[test]

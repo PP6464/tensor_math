@@ -1,11 +1,11 @@
 #[cfg(test)]
 mod tensor_utils_tests {
-    use crate::definitions::errors::TensorErrors;
-    use crate::definitions::shape::Shape;
-    use crate::definitions::tensor::Tensor;
-    use crate::definitions::transpose::Transpose;
-    use crate::utilities::tensor::{pool_avg, pool_max, pool_min, pool_sum};
-    use crate::{shape, transpose};
+    use tensor_math::definitions::errors::TensorErrors;
+    use tensor_math::definitions::shape::Shape;
+    use tensor_math::definitions::tensor::Tensor;
+    use tensor_math::definitions::transpose::Transpose;
+    use tensor_math::utilities::tensor::{pool_avg, pool_max, pool_min, pool_sum};
+    use tensor_math::{shape, transpose};
     use rayon::prelude::*;
     use std::collections::HashSet;
     use std::f64::consts::PI;

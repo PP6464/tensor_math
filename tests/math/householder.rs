@@ -1,10 +1,10 @@
 #[cfg(test)]
 mod householder_tests {
-    use crate::definitions::matrix::Matrix;
-    use crate::definitions::shape::Shape;
-    use crate::definitions::tensor::Tensor;
-    use crate::shape;
-    use crate::utilities::matrix::eye;
+    use tensor_math::definitions::matrix::Matrix;
+    use tensor_math::definitions::shape::Shape;
+    use tensor_math::definitions::tensor::Tensor;
+    use tensor_math::shape;
+    use tensor_math::utilities::matrix::eye;
     use float_cmp::{ApproxEq, F64Margin, FloatMargin};
     use num::complex::{Complex64, ComplexFloat};
     use num::FromPrimitive;
@@ -21,13 +21,13 @@ mod householder_tests {
 
         let (q1, r1) = m1.householder();
 
-        for i in 0..r1.shape[0] {
-            if i >= r1.shape[1] - 1 {
+        for i in 0..r1.shape()[0] {
+            if i >= r1.shape()[1] - 1 {
                 continue;
             }
 
             assert!(r1
-                .slice(i + 1..r1.shape[0], i..i + 1)
+                .slice(i + 1..r1.shape()[0], i..i + 1)
                 .unwrap()
                 .iter()
                 .all(|x| { x.abs() <= 1e-10 }));
@@ -35,8 +35,7 @@ mod householder_tests {
         assert!(q1
             .contract_mul(&r1)
             .unwrap()
-            .tensor
-            .approx_eq(m1.clone().tensor, F64Margin::default().epsilon(1e-10)));
+            .approx_eq(m1.clone(), F64Margin::default().epsilon(1e-10)));
 
         let m2: Matrix<Complex64> = Tensor::<Complex64>::new(
             &shape![3, 2],
@@ -54,13 +53,13 @@ mod householder_tests {
         .unwrap();
         let (q2, r2) = m2.householder();
 
-        for i in 0..r2.shape[0] {
-            if i >= r2.shape[1] - 1 {
+        for i in 0..r2.shape()[0] {
+            if i >= r2.shape()[1] - 1 {
                 continue;
             }
 
             assert!(r2
-                .slice(i + 1..r2.shape[0], i..i + 1)
+                .slice(i + 1..r2.shape()[0], i..i + 1)
                 .unwrap()
                 .iter()
                 .all(|x| x.abs() <= 1e-10));
@@ -68,8 +67,7 @@ mod householder_tests {
         assert!(q2
             .contract_mul(&r2)
             .unwrap()
-            .tensor
-            .approx_eq(m2.tensor, F64Margin::default().epsilon(1e-10)));
+            .approx_eq(m2, F64Margin::default().epsilon(1e-10)));
 
         let m3: Matrix<Complex64> = Tensor::<Complex64>::new(
             &shape![2, 3],
@@ -87,12 +85,12 @@ mod householder_tests {
         .unwrap();
         let (q3, r3) = m3.householder();
 
-        for i in 0..(r3.shape[0] - 1) {
-            if i >= r3.shape[1] - 1 {
+        for i in 0..(r3.shape()[0] - 1) {
+            if i >= r3.shape()[1] - 1 {
                 continue;
             }
             assert!(r3
-                .slice(i + 1..r3.shape[0], i..i + 1)
+                .slice(i + 1..r3.shape()[0], i..i + 1)
                 .unwrap()
                 .iter()
                 .all(|x| x.abs() <= 1e-10));
@@ -100,8 +98,7 @@ mod householder_tests {
         assert!(q3
             .contract_mul(&r3)
             .unwrap()
-            .tensor
-            .approx_eq(m3.tensor, F64Margin::default().epsilon(1e-10)));
+            .approx_eq(m3, F64Margin::default().epsilon(1e-10)));
     }
 
     #[test]

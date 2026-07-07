@@ -1,9 +1,9 @@
 #[cfg(test)]
 mod tensor_slice_mut_tests {
-    use crate::definitions::shape::Shape;
-    use crate::definitions::tensor::Tensor;
-    use crate::definitions::traits::{IntoTensor, TryIntoTensor};
-    use crate::shape;
+    use tensor_math::definitions::shape::Shape;
+    use tensor_math::definitions::tensor::Tensor;
+    use tensor_math::definitions::traits::{IntoTensor, TryIntoTensor};
+    use tensor_math::shape;
 
     #[test]
     fn slice_rank_and_shape() {
@@ -80,15 +80,15 @@ mod tensor_slice_mut_tests {
         let mut tensor = Tensor::<i32>::new(&shape![0, 3], vec![]).unwrap();
         let slice = tensor.slice_mut(&[0..0, 1..2]).unwrap();
 
-        assert_eq!(slice.start, vec![0, 1]);
-        assert_eq!(slice.end, vec![0, 2]);
-        assert_eq!(slice.into_tensor().shape().0, vec![0, 1]);
+        assert_eq!(slice.start(), vec![0, 1]);
+        assert_eq!(slice.end(), vec![0, 2]);
+        assert_eq!(slice.into_tensor().shape(), &shape![0, 1]);
 
         let mut tensor2 = Tensor::<i32>::new(&shape![3, 0], vec![]).unwrap();
         let slice2 = tensor2.slice_mut(&[1..2, 0..0]).unwrap();
 
-        assert_eq!(slice2.start, vec![1, 0]);
-        assert_eq!(slice2.end, vec![2, 0]);
-        assert_eq!(slice2.into_tensor().shape().0, vec![1, 0]);
+        assert_eq!(slice2.start(), vec![1, 0]);
+        assert_eq!(slice2.end(), vec![2, 0]);
+        assert_eq!(slice2.into_tensor().shape(), &shape![1, 0]);
     }
 }

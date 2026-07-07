@@ -1,9 +1,10 @@
 #[cfg(test)]
 mod kronecker_tests {
-    use crate::definitions::matrix::Matrix;
-    use crate::definitions::shape::Shape;
-    use crate::definitions::tensor::Tensor;
-    use crate::shape;
+    use tensor_math::definitions::matrix::Matrix;
+    use tensor_math::definitions::shape::Shape;
+    use tensor_math::definitions::tensor::Tensor;
+    use tensor_math::definitions::traits::IntoTensor;
+    use tensor_math::shape;
 
     #[test]
     fn kronecker_product() {
@@ -40,7 +41,7 @@ mod kronecker_tests {
         let m1 = Matrix::<i32>::new(30, 30, (0..900).collect()).unwrap();
         let m2 = Matrix::<i32>::new(30, 20, (0..600).collect()).unwrap();
 
-        let ans = m1.tensor.kronecker(&m2.tensor).try_into().unwrap();
+        let ans = m1.clone().into_tensor().kronecker(&m2.clone().into_tensor()).try_into().unwrap();
         let res = m1.kronecker(&m2);
 
         assert_eq!(res, ans);
@@ -78,14 +79,14 @@ mod kronecker_tests {
 
         // [0, 2] x [2, 2] -> [0, 4]
         let res1 = empty_t.kronecker(&full_t);
-        assert_eq!(res1.shape, shape![0, 4]);
-        assert_eq!(res1.elements.len(), 0);
+        assert_eq!(res1.shape(), &shape![0, 4]);
+        assert_eq!(res1.len(), 0);
         assert_eq!(empty_t.kronecker_mt(&full_t), res1);
 
         // [2, 2] x [0, 2] -> [0, 4]
         let res2 = full_t.kronecker(&empty_t);
-        assert_eq!(res2.shape, shape![0, 4]);
-        assert_eq!(res2.elements.len(), 0);
+        assert_eq!(res2.shape(), &shape![0, 4]);
+        assert_eq!(res2.len(), 0);
         assert_eq!(full_t.kronecker_mt(&empty_t), res2);
 
         let empty_m = Matrix::<i32>::new(0, 5, vec![]).unwrap();
@@ -93,16 +94,16 @@ mod kronecker_tests {
 
         // (0x5) x (2x2) -> (0x10)
         let res_m1 = empty_m.kronecker(&full_m);
-        assert_eq!(res_m1.rows, 0);
-        assert_eq!(res_m1.cols, 10);
-        assert_eq!(res_m1.tensor.elements.len(), 0);
+        assert_eq!(res_m1.rows(), 0);
+        assert_eq!(res_m1.cols(), 10);
+        assert_eq!(res_m1.len(), 0);
         assert_eq!(empty_m.kronecker_mt(&full_m), res_m1);
 
         // (2x2) x (0x5) -> (0x10)
         let res_m2 = full_m.kronecker(&empty_m);
-        assert_eq!(res_m2.rows, 0);
-        assert_eq!(res_m2.cols, 10);
-        assert_eq!(res_m2.tensor.elements.len(), 0);
+        assert_eq!(res_m2.rows(), 0);
+        assert_eq!(res_m2.cols(), 10);
+        assert_eq!(res_m2.len(), 0);
         assert_eq!(full_m.kronecker_mt(&empty_m), res_m2);
     }
 }
