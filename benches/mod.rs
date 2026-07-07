@@ -6,10 +6,15 @@
 use criterion::criterion_main;
 
 mod utilities;
+mod math;
 
 use utilities::{
     clip_benches, concat_benches, constructors_benches, flip_benches, iter_benches,
     map_benches, pool_benches, reshape_flatten_benches, slice_benches, transpose_benches,
+};
+
+use math::{
+    eigen_benches,
 };
 
 criterion_main!(
@@ -23,4 +28,5 @@ criterion_main!(
     reshape_flatten_benches,
     iter_benches,
     constructors_benches,
+    eigen_benches,
 );
