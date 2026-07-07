@@ -2,3 +2,4 @@
 .idea
 flamegraph.svg
 *.data
+*.data.old
