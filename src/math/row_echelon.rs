@@ -1,6 +1,7 @@
 use crate::definitions::matrix::Matrix;
 use float_cmp::approx_eq;
 use num::complex::{Complex64, ComplexFloat};
+use rayon::prelude::*;
 
 impl Matrix<f64> {
     /// Gives whether the matrix is in row echelon form or not
@@ -186,18 +187,31 @@ impl Matrix<f64> {
                 // Now we can resume with normal Gauss-Jordan elimination
                 continue;
             } else {
-                // Eliminate all rows below
-                for i in pivot.0 + 1..res.rows {
-                    let val_for_row = res[(i, pivot.1)];
-                    let new_row = res.slice(i..i + 1, pivot.1..res.cols).unwrap()
-                        - res.slice(pivot.0..pivot.0 + 1, pivot.1..res.cols).unwrap()
-                            * (val_for_row)
-                            / pivot_val;
-                    res.slice_mut(i..i + 1, pivot.1..res.cols)
-                        .unwrap()
-                        .set_all(&new_row)
-                        .unwrap();
-                }
+                // Eliminate all rows below in parallel. Each row is updated
+                // independently using the pivot row as a read-only multiplier,
+                // so disjoint-row `par_chunks_mut` is race-free.
+                let cols = res.cols;
+                let pivot_col = pivot.1;
+
+                // Snapshot the pivot row's right-hand portion. This is a
+                // read-only copy shared across the parallel iteration.
+                let pivot_row_start = pivot.0 * cols + pivot_col;
+                let pivot_row: Vec<f64> = res.elements.as_slice()
+                    [pivot_row_start..pivot_row_start + (cols - pivot_col)]
+                    .to_vec();
+
+                res.elements
+                    .as_mut_slice()
+                    .par_chunks_mut(cols)
+                    .enumerate()
+                    .skip(pivot.0 + 1)
+                    .for_each(|(_, row_chunk)| {
+                        let val_for_row = row_chunk[pivot_col];
+                        let factor = val_for_row / pivot_val;
+                        for j in pivot_col..cols {
+                            row_chunk[j] -= pivot_row[j - pivot_col] * factor;
+                        }
+                    });
 
                 // We slide the pivot one down and to the right in the normal case
                 pivot = (pivot.0 + 1, pivot.1 + 1);
@@ -299,20 +313,35 @@ impl Matrix<f64> {
                     .unwrap();
             }
 
-            // Eliminate all other rows
-            for i in 0..res.rows {
-                if i == pivot.0 {
-                    continue;
-                }
+            // Eliminate all other rows in parallel. Each row is independent —
+            // the pivot row is read-only and the others only touch themselves —
+            // so disjoint-row `par_chunks_mut` is race-free.
+            let cols = res.cols;
+            let pivot_col = pivot.1;
+            let pivot_row_idx = pivot.0;
 
-                let val_for_row = res[(i, pivot.1)];
-                let new_row = res.slice(i..i + 1, pivot.1..res.cols).unwrap()
-                    - res.slice(pivot.0..pivot.0 + 1, pivot.1..res.cols).unwrap() * val_for_row;
-                res.slice_mut(i..i + 1, pivot.1..res.cols)
-                    .unwrap()
-                    .set_all(&new_row)
-                    .unwrap();
-            }
+            // Snapshot the (possibly just-normalised) pivot row's right-hand
+            // portion so the parallel iteration can read it without conflicting
+            // with the in-place row updates.
+            let pivot_row_start = pivot_row_idx * cols + pivot_col;
+            let pivot_row: Vec<f64> = res.elements.as_slice()
+                [pivot_row_start..pivot_row_start + (cols - pivot_col)]
+                .to_vec();
+
+            res.elements
+                .as_mut_slice()
+                .par_chunks_mut(cols)
+                .enumerate()
+                .for_each(|(i, row_chunk)| {
+                    if i == pivot_row_idx {
+                        return;
+                    }
+
+                    let val_for_row = row_chunk[pivot_col];
+                    for j in pivot_col..cols {
+                        row_chunk[j] -= pivot_row[j - pivot_col] * val_for_row;
+                    }
+                });
 
             // We slide the pivot one down and to the right as we are in the normal case
             pivot = (pivot.0 + 1, pivot.1 + 1);
@@ -511,18 +540,31 @@ impl Matrix<Complex64> {
                 // Now we can resume with normal Gauss-Jordan elimination
                 continue;
             } else {
-                // Eliminate all rows below
-                for i in pivot.0 + 1..res.rows {
-                    let val_for_row = res[(i, pivot.1)];
-                    let new_row = res.slice(i..i + 1, pivot.1..res.cols).unwrap()
-                        - res.slice(pivot.0..pivot.0 + 1, pivot.1..res.cols).unwrap()
-                            * (val_for_row)
-                            / pivot_val;
-                    res.slice_mut(i..i + 1, pivot.1..res.cols)
-                        .unwrap()
-                        .set_all(&new_row)
-                        .unwrap();
-                }
+                // Eliminate all rows below in parallel. Each row is updated
+                // independently using the pivot row as a read-only multiplier,
+                // so disjoint-row `par_chunks_mut` is race-free.
+                let cols = res.cols;
+                let pivot_col = pivot.1;
+
+                // Snapshot the pivot row's right-hand portion. This is a
+                // read-only copy shared across the parallel iteration.
+                let pivot_row_start = pivot.0 * cols + pivot_col;
+                let pivot_row: Vec<Complex64> = res.elements.as_slice()
+                    [pivot_row_start..pivot_row_start + (cols - pivot_col)]
+                    .to_vec();
+
+                res.elements
+                    .as_mut_slice()
+                    .par_chunks_mut(cols)
+                    .enumerate()
+                    .skip(pivot.0 + 1)
+                    .for_each(|(_, row_chunk)| {
+                        let val_for_row = row_chunk[pivot_col];
+                        let factor = val_for_row / pivot_val;
+                        for j in pivot_col..cols {
+                            row_chunk[j] -= pivot_row[j - pivot_col] * factor;
+                        }
+                    });
 
                 // We slide the pivot one down and to the right in the normal case
                 pivot = (pivot.0 + 1, pivot.1 + 1);
@@ -624,20 +666,35 @@ impl Matrix<Complex64> {
                     .unwrap();
             }
 
-            // Eliminate all other rows
-            for i in 0..res.rows {
-                if i == pivot.0 {
-                    continue;
-                }
+            // Eliminate all other rows in parallel. Each row is independent —
+            // the pivot row is read-only and the others only touch themselves —
+            // so disjoint-row `par_chunks_mut` is race-free.
+            let cols = res.cols;
+            let pivot_col = pivot.1;
+            let pivot_row_idx = pivot.0;
 
-                let val_for_row = res[(i, pivot.1)];
-                let new_row = res.slice(i..i + 1, pivot.1..res.cols).unwrap()
-                    - res.slice(pivot.0..pivot.0 + 1, pivot.1..res.cols).unwrap() * val_for_row;
-                res.slice_mut(i..i + 1, pivot.1..res.cols)
-                    .unwrap()
-                    .set_all(&new_row)
-                    .unwrap();
-            }
+            // Snapshot the (possibly just-normalised) pivot row's right-hand
+            // portion so the parallel iteration can read it without conflicting
+            // with the in-place row updates.
+            let pivot_row_start = pivot_row_idx * cols + pivot_col;
+            let pivot_row: Vec<Complex64> = res.elements.as_slice()
+                [pivot_row_start..pivot_row_start + (cols - pivot_col)]
+                .to_vec();
+
+            res.elements
+                .as_mut_slice()
+                .par_chunks_mut(cols)
+                .enumerate()
+                .for_each(|(i, row_chunk)| {
+                    if i == pivot_row_idx {
+                        return;
+                    }
+
+                    let val_for_row = row_chunk[pivot_col];
+                    for j in pivot_col..cols {
+                        row_chunk[j] -= pivot_row[j - pivot_col] * val_for_row;
+                    }
+                });
 
             // We slide the pivot one down and to the right as we are in the normal case
             pivot = (pivot.0 + 1, pivot.1 + 1);
