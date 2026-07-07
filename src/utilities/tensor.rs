@@ -561,14 +561,14 @@ impl<T: Clone + Send + Sync> Tensor<T> {
                 let other_offset = i * other_chunk_size;
 
                 chunk[..self_chunk_size]
-                    .par_iter_mut()
+                    .iter_mut()
                     .enumerate()
                     .for_each(|(i, v)| {
                         v.write(self.elements[self_offset + i].clone());
                     });
 
                 chunk[self_chunk_size..]
-                    .par_iter_mut()
+                    .iter_mut()
                     .enumerate()
                     .for_each(|(i, v)| {
                         v.write(other.elements[other_offset + i].clone());
