@@ -28,6 +28,16 @@ impl<T> TensorSliceMut<'_, T> {
                 .collect(),
         )
     }
+    
+    /// Returns the start position of the tensor slice.
+    pub fn start(&self) -> &[usize] {
+        &self.start
+    }
+    
+    /// Returns the end position of the tensor slice.
+    pub fn end(&self) -> &[usize] {
+        &self.end
+    }
 }
 
 impl<'a, T: Clone> TensorSliceMut<'a, T> {

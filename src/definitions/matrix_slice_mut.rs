@@ -24,6 +24,16 @@ impl<T> MatrixSliceMut<'_, T> {
         self.end.0 - self.start.0
     }
     
+    /// Returns the start position of the matrix slice.
+    pub fn start(&self) -> (usize, usize) {
+        self.start
+    }
+    
+    /// Returns the end position of the matrix slice.
+    pub fn end(&self) -> (usize, usize) {
+        self.end
+    }
+    
     /// Returns the shape of the matrix slice.
     pub fn shape(&self) -> Shape {
         shape![self.rows(), self.cols()]
