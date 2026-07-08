@@ -1,24 +1,13 @@
 //! Benchmarks for the `slice` family on [`Tensor`] and [`Matrix`].
-//!
-//! Slicing copies the requested sub-rectangle into a fresh tensor/matrix
-//! (immutable `slice`) or hands out a mutable view (`slice_mut`). The
-//! interesting comparison is between full-size and partial slices, and
-//! between copying and mutating in place.
 
+use std::hint::black_box;
 use std::ops::Range;
 
 use criterion::{criterion_group, BenchmarkId, Criterion, Throughput};
-
-use super::bench_utils::{drain_f64, drain_mat_f64, matrix, tensor_from_shape};
-
-// ---------------------------------------------------------------------------
-// Tensor::slice
-// ---------------------------------------------------------------------------
-//
-// We slice a 2-D tensor along both axes. Sizes span small/medium/large and
-// the slice ratio is held at roughly 1/8th per axis to give a meaningful
-// region without making the result smaller than the work of setting up the
-// benchmark.
+use tensor_math::definitions::matrix::Matrix;
+use tensor_math::definitions::tensor::Tensor;
+use tensor_math::definitions::shape::Shape;
+use tensor_math::shape;
 
 fn bench_slice_tensor(c: &mut Criterion) {
     let mut group = c.benchmark_group("slice/tensor_2d");
@@ -28,7 +17,7 @@ fn bench_slice_tensor(c: &mut Criterion) {
         (1024, 1024),
         (2048, 2048),
     ] {
-        let a = tensor_from_shape(&[rows, cols], 1.0);
+        let a = Tensor::from_value(&shape![rows, cols], 1.0);
         let r0 = rows / 4..(3 * rows) / 4;
         let c0 = cols / 4..(3 * cols) / 4;
         let elems = ((3 * rows / 4 - rows / 4) * (3 * cols / 4 - cols / 4)) as u64;
@@ -39,16 +28,12 @@ fn bench_slice_tensor(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("st", &label), &label, |bench, _| {
             bench.iter(|| {
                 let r = a.slice(&[r0.clone(), c0.clone()]).expect("slice must succeed");
-                std::hint::black_box(drain_f64(&r));
+                black_box(r);
             });
         });
     }
     group.finish();
 }
-
-// ---------------------------------------------------------------------------
-// Tensor::slice_mut (touch every element of the view so it cannot be elided)
-// ---------------------------------------------------------------------------
 
 fn bench_slice_mut_tensor(c: &mut Criterion) {
     let mut group = c.benchmark_group("slice_mut/tensor_2d");
@@ -65,7 +50,7 @@ fn bench_slice_mut_tensor(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("st", &label), &label, |bench, _| {
             bench.iter(|| {
-                let mut a = tensor_from_shape(&[rows, cols], 1.0);
+                let mut a = Tensor::from_value(&shape![rows, cols], 1.0);
                 let view = a
                     .slice_mut(&[
                         rows / 4..(3 * rows) / 4,
@@ -82,16 +67,12 @@ fn bench_slice_mut_tensor(c: &mut Criterion) {
                         }
                     }
                 }
-                std::hint::black_box(acc);
+                black_box(acc);
             });
         });
     }
     group.finish();
 }
-
-// ---------------------------------------------------------------------------
-// Matrix::slice
-// ---------------------------------------------------------------------------
 
 fn bench_slice_matrix(c: &mut Criterion) {
     let mut group = c.benchmark_group("slice/matrix");
@@ -101,7 +82,7 @@ fn bench_slice_matrix(c: &mut Criterion) {
         (1024, 1024),
         (2048, 2048),
     ] {
-        let a = matrix(rows, cols, 1.0);
+        let a = Matrix::from_value(rows, cols, 1.0);
         let r0: Range<usize> = rows / 4..(3 * rows) / 4;
         let c0: Range<usize> = cols / 4..(3 * cols) / 4;
         let elems = ((3 * rows / 4 - rows / 4) * (3 * cols / 4 - cols / 4)) as u64;
@@ -112,16 +93,12 @@ fn bench_slice_matrix(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("st", &label), &label, |bench, _| {
             bench.iter(|| {
                 let r = a.slice(r0.clone(), c0.clone()).expect("slice must succeed");
-                std::hint::black_box(drain_mat_f64(&r));
+                black_box(r);
             });
         });
     }
     group.finish();
 }
-
-// ---------------------------------------------------------------------------
-// Matrix::slice_mut
-// ---------------------------------------------------------------------------
 
 fn bench_slice_mut_matrix(c: &mut Criterion) {
     let mut group = c.benchmark_group("slice_mut/matrix");
@@ -138,7 +115,7 @@ fn bench_slice_mut_matrix(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("st", &label), &label, |bench, _| {
             bench.iter(|| {
-                let mut a = matrix(rows, cols, 1.0);
+                let mut a = Matrix::from_value(rows, cols, 1.0);
                 let view = a
                     .slice_mut(rows / 4..(3 * rows) / 4, cols / 4..(3 * cols) / 4)
                     .expect("slice_mut must succeed");
@@ -150,7 +127,7 @@ fn bench_slice_mut_matrix(c: &mut Criterion) {
                         }
                     }
                 }
-                std::hint::black_box(acc);
+                black_box(acc);
             });
         });
     }
@@ -166,4 +143,3 @@ criterion_group!(
         bench_slice_matrix,
         bench_slice_mut_matrix,
 );
-// `criterion_group!` above declares `pub fn slice_benches()`.

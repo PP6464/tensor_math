@@ -1,22 +1,37 @@
 //! Benchmarks for the `enumerated_iter` family on [`Tensor`] and [`Matrix`].
-//!
-//! Each variant walks the full element list and is used pervasively by other
-//! `utilities` operations. The interesting comparison is between the serial
-//! iterators (`enumerated_iter`, `enumerated_iter_mut`) and their rayon
-//! equivalents (`enumerated_par_iter`, `enumerated_par_iter_mut`); the
-//! `mut` variants write to the result so we get to measure the parallel
-//! write path as well.
-//!
-//! To prevent the optimiser from eliding the work, every iteration drains
-//! the visited elements into a `u64` checksum fed to `black_box`.
 
+use std::hint::black_box;
 use criterion::{criterion_group, BenchmarkId, Criterion, Throughput};
+use tensor_math::definitions::matrix::Matrix;
+use tensor_math::definitions::tensor::Tensor;
+use tensor_math::definitions::shape::Shape;
+use tensor_math::shape;
 
-use super::bench_utils::{matrix, tensor_from_shape, drain_iter, drain_iter_mut};
+/// Drain a sequential `enumerated_iter` into a checksum.
+#[inline]
+pub fn drain_iter<I>(it: I) -> u64
+where
+    I: Iterator<Item = (Vec<usize>, f64)>,
+{
+    let mut acc: u64 = 0;
+    for (_, v) in it {
+        acc = acc.wrapping_add(v.to_bits());
+    }
+    acc
+}
 
-// ---------------------------------------------------------------------------
-// Tensor::enumerated_iter / iter_mut / par_iter / par_iter_mut
-// ---------------------------------------------------------------------------
+/// Drain a sequential `enumerated_iter_mut` into a checksum.
+#[inline]
+pub fn drain_iter_mut<'a, I>(it: I) -> u64
+where
+    I: Iterator<Item = (Vec<usize>, &'a mut f64)>,
+{
+    let mut acc: u64 = 0;
+    for (_, v) in it {
+        acc = acc.wrapping_add((*v).to_bits());
+    }
+    acc
+}
 
 fn bench_iter_tensor(c: &mut Criterion) {
     use rayon::iter::ParallelIterator;
@@ -29,7 +44,7 @@ fn bench_iter_tensor(c: &mut Criterion) {
         (1024, 1024),
         (2048, 4096),
     ] {
-        let a = tensor_from_shape(&[rows, cols], 1.0);
+        let a = Tensor::from_value(&shape![rows, cols], 1.0);
         let elems = (rows * cols) as u64;
         group.throughput(Throughput::Elements(elems));
 
@@ -38,7 +53,7 @@ fn bench_iter_tensor(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("st/iter", &label), &label, |bench, _| {
             bench.iter(|| {
                 let r = drain_iter(a.enumerated_iter());
-                std::hint::black_box(r);
+                black_box(r);
             });
         });
         group.bench_with_input(
@@ -48,7 +63,7 @@ fn bench_iter_tensor(c: &mut Criterion) {
                 let mut a = a.clone();
                 bench.iter(|| {
                     let r = drain_iter_mut(a.enumerated_iter_mut());
-                    std::hint::black_box(r);
+                    black_box(r);
                 });
             },
         );
@@ -62,9 +77,9 @@ fn bench_iter_tensor(c: &mut Criterion) {
                     // `reduce` instead of borrowing.
                     let r = a
                         .enumerated_par_iter()
-                        .map(|(_, v)| v.to_bits() as u64)
+                        .map(|(_, v)| v.to_bits())
                         .reduce(|| 0u64, |a, b| a.wrapping_add(b));
-                    std::hint::black_box(r);
+                    black_box(r);
                 });
             },
         );
@@ -76,19 +91,15 @@ fn bench_iter_tensor(c: &mut Criterion) {
                 bench.iter(|| {
                     let r = a
                         .enumerated_par_iter_mut()
-                        .map(|(_, v)| (*v).to_bits() as u64)
+                        .map(|(_, v)| (*v).to_bits())
                         .reduce(|| 0u64, |a, b| a.wrapping_add(b));
-                    std::hint::black_box(r);
+                    black_box(r);
                 });
             },
         );
     }
     group.finish();
 }
-
-// ---------------------------------------------------------------------------
-// Matrix::enumerated_iter / iter_mut / par_iter / par_iter_mut
-// ---------------------------------------------------------------------------
 
 fn bench_iter_matrix(c: &mut Criterion) {
     use rayon::iter::ParallelIterator;
@@ -101,7 +112,7 @@ fn bench_iter_matrix(c: &mut Criterion) {
         (1024, 1024),
         (2048, 4096),
     ] {
-        let a = matrix(rows, cols, 1.0);
+        let a = Matrix::from_value(rows, cols, 1.0);
         group.throughput(Throughput::Elements((rows * cols) as u64));
 
         let label = format!("{rows}x{cols}");
@@ -109,7 +120,7 @@ fn bench_iter_matrix(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("st/iter", &label), &label, |bench, _| {
             bench.iter(|| {
                 let r = drain_iter(a.enumerated_iter().map(|((r, c), v)| (vec![r, c], v)));
-                std::hint::black_box(r);
+                black_box(r);
             });
         });
         group.bench_with_input(
@@ -119,7 +130,7 @@ fn bench_iter_matrix(c: &mut Criterion) {
                 let mut a = a.clone();
                 bench.iter(|| {
                     let r = drain_iter_mut(a.enumerated_iter_mut().map(|((r, c), v)| (vec![r, c], v)));
-                    std::hint::black_box(r);
+                    black_box(r);
                 });
             },
         );
@@ -130,9 +141,9 @@ fn bench_iter_matrix(c: &mut Criterion) {
                 bench.iter(|| {
                     let r = a
                         .enumerated_par_iter()
-                        .map(|(_, v)| v.to_bits() as u64)
+                        .map(|(_, v)| v.to_bits())
                         .reduce(|| 0u64, |a, b| a.wrapping_add(b));
-                    std::hint::black_box(r);
+                    black_box(r);
                 });
             },
         );
@@ -144,9 +155,9 @@ fn bench_iter_matrix(c: &mut Criterion) {
                 bench.iter(|| {
                     let r = a
                         .enumerated_par_iter_mut()
-                        .map(|(_, v)| (*v).to_bits() as u64)
+                        .map(|(_, v)| (*v).to_bits())
                         .reduce(|| 0u64, |a, b| a.wrapping_add(b));
-                    std::hint::black_box(r);
+                    black_box(r);
                 });
             },
         );
@@ -159,4 +170,3 @@ criterion_group!(
     config = Criterion::default().sample_size(10);
     targets = bench_iter_tensor, bench_iter_matrix,
 );
-// `criterion_group!` above declares `pub fn iter_benches()`.

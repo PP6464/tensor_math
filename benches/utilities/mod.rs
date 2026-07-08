@@ -1,6 +1,5 @@
 //! Benchmarks for items declared in `src/utilities/`.
 
-mod bench_utils;
 mod clip;
 mod concat;
 mod constructors;

@@ -16,6 +16,7 @@ use utilities::{
 use math::{
     eigen_benches,
 };
+use crate::math::row_echelon_benches;
 
 criterion_main!(
     concat_benches,
@@ -29,4 +30,5 @@ criterion_main!(
     iter_benches,
     constructors_benches,
     eigen_benches,
+    row_echelon_benches,
 );

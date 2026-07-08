@@ -1,3 +1,5 @@
+//! Benchmarks for `Matrix<Complex64>::eigendecompose`.
+
 use std::hint::black_box;
 use criterion::{criterion_group, BenchmarkId, Criterion};
 use tensor_math::definitions::matrix::Matrix;

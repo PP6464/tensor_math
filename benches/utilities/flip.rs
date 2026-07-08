@@ -1,19 +1,12 @@
 //! Benchmarks for the `flip` family on [`Tensor`] and [`Matrix`].
-//!
-//! The single-argument `flip` / `flip_mt` variants are convenience wrappers
-//! around `flip_axes` / `flip_axes_mt` (or `flip_rows` / `flip_cols` for
-//! `Matrix`); the benchmarks exercise both forms. Sizes span small/medium/
-//! large so the rayon crossover is visible in the output.
-
-use std::collections::HashSet;
 
 use criterion::{criterion_group, BenchmarkId, Criterion, Throughput};
-
-use super::bench_utils::{drain_f64, drain_mat_f64, matrix, tensor_from_shape};
-
-// ---------------------------------------------------------------------------
-// Tensor::flip / flip_mt (flip every axis)
-// ---------------------------------------------------------------------------
+use std::collections::HashSet;
+use std::hint::black_box;
+use tensor_math::definitions::matrix::Matrix;
+use tensor_math::definitions::tensor::Tensor;
+use tensor_math::definitions::shape::Shape;
+use tensor_math::shape;
 
 fn bench_flip_tensor(c: &mut Criterion) {
     let mut group = c.benchmark_group("flip/tensor_2d_all");
@@ -24,7 +17,7 @@ fn bench_flip_tensor(c: &mut Criterion) {
         (1024, 1024),
         (2048, 4096),
     ] {
-        let a = tensor_from_shape(&[rows, cols], 1.0);
+        let a = Tensor::from_value(&shape![rows, cols], 1.0);
         let elems = (rows * cols) as u64;
         group.throughput(Throughput::Elements(elems));
 
@@ -33,13 +26,13 @@ fn bench_flip_tensor(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("st", &label), &label, |bench, _| {
             bench.iter(|| {
                 let r = a.flip();
-                std::hint::black_box(drain_f64(&r));
+                black_box(r);
             });
         });
         group.bench_with_input(BenchmarkId::new("mt", &label), &label, |bench, _| {
             bench.iter(|| {
                 let r = a.flip_mt();
-                std::hint::black_box(drain_f64(&r));
+                black_box(r);
             });
         });
     }
@@ -60,7 +53,7 @@ fn bench_flip_axes_tensor(c: &mut Criterion) {
         (32, 256, 256),
         (64, 256, 256),
     ] {
-        let a = tensor_from_shape(&[d0, d1, d2], 1.0);
+        let a = Tensor::from_value(&shape![d0, d1, d2], 1.0);
         let elems = (d0 * d1 * d2) as u64;
         group.throughput(Throughput::Elements(elems));
 
@@ -69,13 +62,13 @@ fn bench_flip_axes_tensor(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("st", &label), &label, |bench, _| {
             bench.iter(|| {
                 let r = a.flip_axes(&axes).expect("flip_axes must succeed");
-                std::hint::black_box(drain_f64(&r));
+                black_box(r);
             });
         });
         group.bench_with_input(BenchmarkId::new("mt", &label), &label, |bench, _| {
             bench.iter(|| {
                 let r = a.flip_axes_mt(&axes).expect("flip_axes_mt must succeed");
-                std::hint::black_box(drain_f64(&r));
+                black_box(r);
             });
         });
     }
@@ -95,7 +88,7 @@ fn bench_flip_rows_matrix(c: &mut Criterion) {
         (1024, 1024),
         (2048, 4096),
     ] {
-        let a = matrix(rows, cols, 1.0);
+        let a = Matrix::from_value(rows, cols, 1.0);
         group.throughput(Throughput::Elements((rows * cols) as u64));
 
         let label = format!("{rows}x{cols}");
@@ -103,13 +96,13 @@ fn bench_flip_rows_matrix(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("st", &label), &label, |bench, _| {
             bench.iter(|| {
                 let r = a.flip_rows();
-                std::hint::black_box(drain_mat_f64(&r));
+                black_box(r);
             });
         });
         group.bench_with_input(BenchmarkId::new("mt", &label), &label, |bench, _| {
             bench.iter(|| {
                 let r = a.flip_rows_mt();
-                std::hint::black_box(drain_mat_f64(&r));
+                black_box(r);
             });
         });
     }
@@ -129,7 +122,7 @@ fn bench_flip_cols_matrix(c: &mut Criterion) {
         (1024, 1024),
         (2048, 4096),
     ] {
-        let a = matrix(rows, cols, 1.0);
+        let a = Matrix::from_value(rows, cols, 1.0);
         group.throughput(Throughput::Elements((rows * cols) as u64));
 
         let label = format!("{rows}x{cols}");
@@ -137,13 +130,13 @@ fn bench_flip_cols_matrix(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("st", &label), &label, |bench, _| {
             bench.iter(|| {
                 let r = a.flip_cols();
-                std::hint::black_box(drain_mat_f64(&r));
+                black_box(r);
             });
         });
         group.bench_with_input(BenchmarkId::new("mt", &label), &label, |bench, _| {
             bench.iter(|| {
                 let r = a.flip_cols_mt();
-                std::hint::black_box(drain_mat_f64(&r));
+                black_box(r);
             });
         });
     }
@@ -163,7 +156,7 @@ fn bench_flip_matrix(c: &mut Criterion) {
         (1024, 1024),
         (2048, 4096),
     ] {
-        let a = matrix(rows, cols, 1.0);
+        let a = Matrix::from_value(rows, cols, 1.0);
         group.throughput(Throughput::Elements((rows * cols) as u64));
 
         let label = format!("{rows}x{cols}");
@@ -171,13 +164,13 @@ fn bench_flip_matrix(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("st", &label), &label, |bench, _| {
             bench.iter(|| {
                 let r = a.flip();
-                std::hint::black_box(drain_mat_f64(&r));
+                black_box(r);
             });
         });
         group.bench_with_input(BenchmarkId::new("mt", &label), &label, |bench, _| {
             bench.iter(|| {
                 let r = a.flip_mt();
-                std::hint::black_box(drain_mat_f64(&r));
+                black_box(r);
             });
         });
     }
@@ -194,4 +187,3 @@ criterion_group!(
         bench_flip_cols_matrix,
         bench_flip_matrix,
 );
-// `criterion_group!` above declares `pub fn flip_benches()`.
