@@ -14,9 +14,9 @@ use utilities::{
 };
 
 use math::{
-    eigen_benches,
+    eigen_benches, fft_benches,
 };
-use crate::math::row_echelon_benches;
+use crate::math::{dot_benches, row_echelon_benches};
 
 criterion_main!(
     concat_benches,
@@ -31,4 +31,6 @@ criterion_main!(
     constructors_benches,
     eigen_benches,
     row_echelon_benches,
+    dot_benches,
+    fft_benches,
 );
