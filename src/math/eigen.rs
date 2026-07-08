@@ -64,3 +64,13 @@ impl Matrix<Complex64> {
         Ok((eigenvalues, q))
     }
 }
+
+impl Matrix<f64> {
+    /// Returns the eigendecomposition for a matrix in the form `(values, vectors)`
+    /// where `values` is a vector of eigenvalues and `vectors` is a matrix where
+    /// the columns are the eigenvectors the matrix. The entries of both will be `Complex64`.
+    /// This fails if the matrix is not square.
+    pub fn eigendecompose(&self) -> Result<(Vec<Complex64>, Matrix<Complex64>), TensorErrors> {
+        self.par_map_refs(|x| Complex64 { re: x.clone(), im: 0.0 }).eigendecompose()
+    }
+}

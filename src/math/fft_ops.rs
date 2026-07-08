@@ -394,3 +394,253 @@ impl Matrix<Complex64> {
         self.fft_conv(&other.flip_mt())
     }
 }
+
+impl Tensor<f64> {
+    /// Computes an FFT along a single axis.
+    pub fn fft_single_axis(&self, axis: usize) -> Result<Tensor<Complex64>, TensorErrors> {
+        self.par_map_refs(|x| Complex64 {
+            re: x.clone(),
+            im: 0.0,
+        })
+        .fft_single_axis(axis)
+    }
+
+    /// Computes an FFT along a list of axes
+    pub fn fft_axes(&self, axes: &HashSet<usize>) -> Result<Tensor<Complex64>, TensorErrors> {
+        self.par_map_refs(|x| Complex64 {
+            re: x.clone(),
+            im: 0.0,
+        })
+        .fft_axes(axes)
+    }
+
+    /// Computes an FFT along all the axes.
+    pub fn fft(&self) -> Result<Tensor<Complex64>, TensorErrors> {
+        self.par_map_refs(|x| Complex64 {
+            re: x.clone(),
+            im: 0.0,
+        })
+        .fft()
+    }
+
+    /// Computes an inverse FFT along a single axis.
+    pub fn ifft_single_axis(&self, axis: usize) -> Result<Tensor<Complex64>, TensorErrors> {
+        self.par_map_refs(|x| Complex64 {
+            re: x.clone(),
+            im: 0.0,
+        })
+        .ifft_single_axis(axis)
+    }
+
+    /// Computes an inverse FFT along a list of axes
+    pub fn ifft_axes(&self, axes: &HashSet<usize>) -> Result<Tensor<Complex64>, TensorErrors> {
+        self.par_map_refs(|x| Complex64 {
+            re: x.clone(),
+            im: 0.0,
+        })
+        .ifft_axes(axes)
+    }
+
+    /// Computes an inverse FFT along all the axes.
+    pub fn ifft(&self) -> Result<Tensor<Complex64>, TensorErrors> {
+        self.par_map_refs(|x| Complex64 {
+            re: x.clone(),
+            im: 0.0,
+        })
+        .ifft()
+    }
+
+    /// Computes the correlation of this and another tensor along a specified list of axes.
+    pub fn fft_corr_axes(
+        &self,
+        other: &Tensor<f64>,
+        axes: &HashSet<usize>,
+    ) -> Result<Tensor<Complex64>, TensorErrors> {
+        let self_c = self.par_map_refs(|x| Complex64 {
+            re: x.clone(),
+            im: 0.0,
+        });
+        let other_c = other.par_map_refs(|x| Complex64 {
+            re: x.clone(),
+            im: 0.0,
+        });
+        self_c.fft_corr_axes(&other_c, axes)
+    }
+
+    /// Computes the convolution of this and another tensor along a specified list of axes.
+    pub fn fft_conv_axes(
+        &self,
+        other: &Tensor<f64>,
+        axes: &HashSet<usize>,
+    ) -> Result<Tensor<Complex64>, TensorErrors> {
+        let self_c = self.par_map_refs(|x| Complex64 {
+            re: x.clone(),
+            im: 0.0,
+        });
+        let other_c = other.par_map_refs(|x| Complex64 {
+            re: x.clone(),
+            im: 0.0,
+        });
+        self_c.fft_conv_axes(&other_c, axes)
+    }
+
+    /// Computes the correlation of this and another tensor.
+    pub fn fft_corr(&self, other: &Tensor<f64>) -> Result<Tensor<Complex64>, TensorErrors> {
+        let self_c = self.par_map_refs(|x| Complex64 {
+            re: x.clone(),
+            im: 0.0,
+        });
+        let other_c = other.par_map_refs(|x| Complex64 {
+            re: x.clone(),
+            im: 0.0,
+        });
+        self_c.fft_corr(&other_c)
+    }
+
+    /// Computes the convolution of this and another tensor.
+    pub fn fft_conv(&self, other: &Tensor<f64>) -> Result<Tensor<Complex64>, TensorErrors> {
+        let self_c = self.par_map_refs(|x| Complex64 {
+            re: x.clone(),
+            im: 0.0,
+        });
+        let other_c = other.par_map_refs(|x| Complex64 {
+            re: x.clone(),
+            im: 0.0,
+        });
+        self_c.fft_conv(&other_c)
+    }
+}
+
+impl Matrix<f64> {
+    /// Computes the FFT along the rows
+    pub fn fft_rows(&self) -> Matrix<Complex64> {
+        self.par_map_refs(|x| Complex64 {
+            re: x.clone(),
+            im: 0.0,
+        })
+        .fft_rows()
+    }
+
+    /// Computes the FFT along the columns
+    pub fn fft_cols(&self) -> Matrix<Complex64> {
+        self.par_map_refs(|x| Complex64 {
+            re: x.clone(),
+            im: 0.0,
+        })
+        .fft_cols()
+    }
+
+    /// Computes an FFT along the rows and the columns
+    pub fn fft(&self) -> Matrix<Complex64> {
+        self.par_map_refs(|x| Complex64 {
+            re: x.clone(),
+            im: 0.0,
+        })
+        .fft()
+    }
+
+    /// Computes an IFFT along the rows
+    pub fn ifft_rows(&self) -> Matrix<Complex64> {
+        self.par_map_refs(|x| Complex64 {
+            re: x.clone(),
+            im: 0.0,
+        })
+        .ifft_rows()
+    }
+
+    /// Computes an IFFT along the columns
+    pub fn ifft_cols(&self) -> Matrix<Complex64> {
+        self.par_map_refs(|x| Complex64 {
+            re: x.clone(),
+            im: 0.0,
+        })
+        .ifft_cols()
+    }
+
+    /// Computes an IFFT along the rows and the columns
+    pub fn ifft(self) -> Matrix<Complex64> {
+        self.par_map_refs(|x| Complex64 {
+            re: x.clone(),
+            im: 0.0,
+        })
+        .ifft()
+    }
+
+    /// Computes convolution along the columns
+    pub fn fft_conv_cols(&self, other: &Matrix<f64>) -> Result<Matrix<Complex64>, TensorErrors> {
+        let self_c = self.par_map_refs(|x| Complex64 {
+            re: x.clone(),
+            im: 0.0,
+        });
+        let other_c = other.par_map_refs(|x| Complex64 {
+            re: x.clone(),
+            im: 0.0,
+        });
+        self_c.fft_conv_cols(&other_c)
+    }
+
+    /// Computes correlation along the columns
+    pub fn fft_corr_cols(&self, other: &Matrix<f64>) -> Result<Matrix<Complex64>, TensorErrors> {
+        let self_c = self.par_map_refs(|x| Complex64 {
+            re: x.clone(),
+            im: 0.0,
+        });
+        let other_c = other.par_map_refs(|x| Complex64 {
+            re: x.clone(),
+            im: 0.0,
+        });
+        self_c.fft_corr_cols(&other_c)
+    }
+
+    /// Computes convolution along the rows
+    pub fn fft_conv_rows(&self, other: &Matrix<f64>) -> Result<Matrix<Complex64>, TensorErrors> {
+        let self_c = self.par_map_refs(|x| Complex64 {
+            re: x.clone(),
+            im: 0.0,
+        });
+        let other_c = other.par_map_refs(|x| Complex64 {
+            re: x.clone(),
+            im: 0.0,
+        });
+        self_c.fft_conv_rows(&other_c)
+    }
+
+    /// Computes correlation along the rows
+    pub fn fft_corr_rows(&self, other: &Matrix<f64>) -> Result<Matrix<Complex64>, TensorErrors> {
+        let self_c = self.par_map_refs(|x| Complex64 {
+            re: x.clone(),
+            im: 0.0,
+        });
+        let other_c = other.par_map_refs(|x| Complex64 {
+            re: x.clone(),
+            im: 0.0,
+        });
+        self_c.fft_corr_rows(&other_c)
+    }
+
+    /// Computes convolution of two matrices
+    pub fn fft_conv(&self, other: &Matrix<f64>) -> Matrix<Complex64> {
+        let self_c = self.par_map_refs(|x| Complex64 {
+            re: x.clone(),
+            im: 0.0,
+        });
+        let other_c = other.par_map_refs(|x| Complex64 {
+            re: x.clone(),
+            im: 0.0,
+        });
+        self_c.fft_conv(&other_c)
+    }
+
+    /// Computes correlation of two matrices
+    pub fn fft_corr(&self, other: &Matrix<f64>) -> Matrix<Complex64> {
+        let self_c = self.par_map_refs(|x| Complex64 {
+            re: x.clone(),
+            im: 0.0,
+        });
+        let other_c = other.par_map_refs(|x| Complex64 {
+            re: x.clone(),
+            im: 0.0,
+        });
+        self_c.fft_corr(&other_c)
+    }
+}
