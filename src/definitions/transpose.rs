@@ -142,6 +142,7 @@ impl Transpose {
 #[macro_export]
 /// Constructs a transpose using the specified permutation.
 /// Assumes the permutation is valid so will panic if it is not.
+/// You will need to import the Transpose struct, at `tensor_math::definitions::transpose::Transpose;`
 macro_rules! transpose {
     ($($x:expr),*$(,)?) => {
         Transpose::new(&vec![$($x),*]).unwrap()

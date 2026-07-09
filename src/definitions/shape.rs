@@ -128,6 +128,7 @@ impl Display for Shape {
 
 #[macro_export]
 /// Creates a shape from varargs of type usize.
+/// You will need to import the Shape struct, at `tensor_math::definitions::shape::Shape;`
 macro_rules! shape {
     ($($shape_dimensions:expr),*$(,)?) => {
         Shape::new(vec![$($shape_dimensions),*])
