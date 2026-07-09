@@ -14,9 +14,11 @@ use utilities::{
 };
 
 use math::{
-    eigen_benches, fft_benches,
+    contract_mul_benches, corr_conv_benches, eigen_benches, fft_benches, fft_internal_benches,
+    f64_c64_ops_benches, dot_benches, householder_benches, row_echelon_benches,
+    hessenberg_benches, det_inv_benches, transformation_rank_benches,
 };
-use crate::math::{dot_benches, row_echelon_benches};
+use crate::math::sum_benches;
 
 criterion_main!(
     concat_benches,
@@ -33,4 +35,13 @@ criterion_main!(
     row_echelon_benches,
     dot_benches,
     fft_benches,
+    fft_internal_benches,
+    contract_mul_benches,
+    corr_conv_benches,
+    householder_benches,
+    hessenberg_benches,
+    det_inv_benches,
+    transformation_rank_benches,
+    sum_benches,
+    f64_c64_ops_benches,
 );

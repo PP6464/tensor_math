@@ -78,7 +78,7 @@ fn bench_matrix_dot(c: &mut Criterion) {
         (2000, 1000),
         (1000, 2000),
         (10000, 20000),
-        (10000, 20000),
+        (20000, 10000),
     ] {
         let label = format!("{row}x{col}");
         let a = Matrix::<f64>::rand(*row, *col);
@@ -104,7 +104,7 @@ fn bench_matrix_dot_mt(c: &mut Criterion) {
         (2000, 1000),
         (1000, 2000),
         (10000, 20000),
-        (10000, 20000),
+        (20000, 10000),
     ] {
         let label = format!("{row}x{col}");
         let a = Matrix::<f64>::rand(*row, *col);
