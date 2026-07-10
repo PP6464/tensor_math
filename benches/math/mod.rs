@@ -12,7 +12,6 @@ mod hessenberg;
 mod det_inv;
 mod transformation_rank;
 mod sum;
-mod f64_c64_ops;
 
 pub use eigen::eigen_benches;
 pub use row_echelon::row_echelon_benches;
@@ -26,4 +25,3 @@ pub use hessenberg::hessenberg_benches;
 pub use det_inv::det_inv_benches;
 pub use transformation_rank::transformation_rank_benches;
 pub use sum::sum_benches;
-pub use f64_c64_ops::f64_c64_ops_benches;
