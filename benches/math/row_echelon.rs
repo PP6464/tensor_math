@@ -45,6 +45,7 @@ fn bench_f64_row_echelon(c: &mut Criterion) {
             });
         });
     }
+    group.finish();
 }
 
 fn bench_f64_reduced_row_echelon(c: &mut Criterion) {
@@ -86,6 +87,7 @@ fn bench_f64_reduced_row_echelon(c: &mut Criterion) {
             });
         });
     }
+    group.finish();
 }
 
 fn bench_c64_row_echelon(c: &mut Criterion) {
@@ -129,6 +131,7 @@ fn bench_c64_row_echelon(c: &mut Criterion) {
             });
         });
     }
+    group.finish();
 }
 
 fn bench_c64_reduced_row_echelon(c: &mut Criterion) {
@@ -172,6 +175,7 @@ fn bench_c64_reduced_row_echelon(c: &mut Criterion) {
             });
         });
     }
+    group.finish();
 }
 
 criterion_group!(
