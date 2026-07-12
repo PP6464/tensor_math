@@ -20,16 +20,31 @@ impl Matrix<Complex64> {
 
         let (mut h, mut q) = self.upper_hessenberg()?;
         let ord = self.rows;
-        let mut diff = Complex64::ONE;
-        let mut prev_ref = h[(ord - 1, ord - 1)];
-        let mut iters = 0;
+        let mut m = ord;
+        let mut iters_since_deflation = 0;
 
-        while diff.abs() > 1e-15 && iters < 1000 {
-            iters += 1;
+        let mut eigenvalues = Vec::with_capacity(self.rows);
+        let buf = eigenvalues.spare_capacity_mut();
+
+        while m > 1 {
+            // Check if we can deflate
+            if h[(m - 1, m - 2)].abs() < 1e-15 {
+                buf[m - 1].write(h[(m - 1, m - 1)]);
+                m -= 1;
+                iters_since_deflation = 0;
+                continue;
+            }
+
+            // Fail if we have not converged
+            if iters_since_deflation >= 30 {
+                return Err(TensorErrors::EigenDecompositionDidNotConverge);
+            }
+
+            iters_since_deflation += 1;
 
             // Calculate the Wilkinson shift
-            let bottom_right_mat = h.slice(ord - 2..ord, ord - 2..ord)?;
-            let bottom_right = h[(ord - 1, ord - 1)];
+            let bottom_right_mat = h.slice(m - 2..m, m - 2..m)?;
+            let bottom_right = h[(m - 1, m - 1)];
 
             let roots = solve_quadratic(&[
                 bottom_right_mat.det()?,
@@ -46,19 +61,23 @@ impl Matrix<Complex64> {
                 ws = roots[1]
             }
 
-            let shifted = h.clone() - identity(ord) * ws;
+            let shifted = h.slice(0..m, 0..m)? - identity(m) * ws;
             let (qs, rs) = shifted.householder();
 
-            h = rs.contract_mul_mt(&qs)? + identity(ord) * ws;
-            q = q.contract_mul_mt(&qs)?;
-
-            diff = h[(ord - 1, ord - 1)] - prev_ref;
-            prev_ref = h[(ord - 1, ord - 1)];
+            h
+                .slice_mut(0..m, 0..m)?
+                .set_all(&(rs.contract_mul_mt(&qs)? + identity(ord) * ws))?;
+            let slice_copy = q.slice(0..ord, 0..m)?;
+            q
+                .slice_mut(0..ord, 0..m)?
+                .set_all(&slice_copy.mat_mul_mt(&qs)?)?;
         }
 
-        let mut eigenvalues = Vec::with_capacity(ord);
-        for i in 0..ord {
-            eigenvalues.push(h[(i, i)]);
+        // At this point we must have converged on all eigenvalues
+        buf[0].write(h[(0, 0)]);
+
+        unsafe {
+            eigenvalues.set_len(ord);
         }
 
         Ok((eigenvalues, q))

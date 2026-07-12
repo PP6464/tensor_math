@@ -61,4 +61,6 @@ pub enum TensorErrors {
     RankZero { op: &'static str },
     #[error("Tensor is empty which is not allowed for the operation {op}")]
     TensorEmpty { op: &'static str },
+    #[error("Eigendecomposition did not converge")]
+    EigenDecompositionDidNotConverge,
 }
