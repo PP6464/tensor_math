@@ -332,11 +332,36 @@ mod hessenberg_tests {
                 .unwrap(),
             epsilon = 1e-10
         ));
-        // The k=0 reflector did real work (non-identity Q).
         assert!(!approx_eq!(
             Matrix<f64>,
             q1.clone(),
-            eye(4),
+            eye(5),
+            epsilon = 1e-10
+        ));
+
+        let (h1, q1) = m1.transpose_mt().lower_hessenberg().unwrap();
+        for i in 0..h1.rows() {
+            for j in 0..h1.cols() {
+                if j > i + 1 {
+                    assert!(approx_eq!(f64, h1[&[i, j]], 0.0, epsilon = 1e-10));
+                }
+            }
+        }
+        assert!(approx_eq!(
+            Matrix<f64>,
+            h1,
+            q1.clone()
+                .transpose()
+                .contract_mul_mt(&m1.transpose_mt())
+                .unwrap()
+                .contract_mul_mt(&q1)
+                .unwrap(),
+            epsilon = 1e-10
+        ));
+        assert!(!approx_eq!(
+            Matrix<f64>,
+            q1.clone(),
+            eye(5),
             epsilon = 1e-10
         ));
 
@@ -353,13 +378,6 @@ mod hessenberg_tests {
         )
         .unwrap();
         let (h2, q2) = m2.upper_hessenberg().unwrap();
-
-        assert!(approx_eq!(
-            f64,
-            h2[&[3, 1]].abs(),
-            0.0,
-            epsilon = 1e-10
-        ));
         for i in 0..h2.rows() {
             for j in 0..h2.cols() {
                 if i > j + 1 {
@@ -381,7 +399,33 @@ mod hessenberg_tests {
         assert!(!approx_eq!(
             Matrix<Complex64>,
             q2.clone(),
-            eye(4),
+            eye(5),
+            epsilon = 1e-10
+        ));
+
+        let (h2, q2) = m2.conj_transpose_mt().upper_hessenberg().unwrap();
+        for i in 0..h2.rows() {
+            for j in 0..h2.cols() {
+                if i > j + 1 {
+                    assert!(approx_eq!(f64, h2[&[i, j]].abs(), 0.0, epsilon = 1e-10));
+                }
+            }
+        }
+        assert!(approx_eq!(
+            Matrix<Complex64>,
+            h2,
+            q2.clone()
+                .conj_transpose()
+                .contract_mul_mt(&m2.conj_transpose_mt())
+                .unwrap()
+                .contract_mul_mt(&q2)
+                .unwrap(),
+            epsilon = 1e-10
+        ));
+        assert!(!approx_eq!(
+            Matrix<Complex64>,
+            q2.clone(),
+            eye(5),
             epsilon = 1e-10
         ));
     }
