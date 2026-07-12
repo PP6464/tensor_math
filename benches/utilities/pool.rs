@@ -2,7 +2,7 @@
 //! the [`pool_sum`], [`pool_max`], [`pool_min`], [`pool_avg`] (and
 //! `_mat` equivalents) free helper functions.
 
-use criterion::{criterion_group, BenchmarkId, Criterion, Throughput};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::hint::black_box;
 use tensor_math::definitions::matrix::Matrix;
 use tensor_math::definitions::shape::Shape;
@@ -81,7 +81,7 @@ fn bench_pool_indexed_tensor(c: &mut Criterion) {
             });
         });
         group.bench_with_input(BenchmarkId::new("mt", &label), &label, |bench, _| {
-            let pool_fn = |idx: Vec<usize>, t: tensor_math::definitions::tensor::Tensor<f64>| {
+            let pool_fn = |idx: Vec<usize>, t: Tensor<f64>| {
                 pool_sum::<f64>(t) + idx[0] as f64
             };
             bench.iter(|| {
@@ -255,3 +255,5 @@ criterion_group!(
         bench_pool_helpers_tensor,
         bench_pool_helpers_matrix,
 );
+
+criterion_main!(pool_benches);

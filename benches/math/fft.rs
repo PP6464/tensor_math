@@ -3,7 +3,7 @@
 use std::collections::HashSet;
 use std::hint::black_box;
 
-use criterion::{criterion_group, BenchmarkId, Criterion, Throughput};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use num::complex::Complex64;
 use tensor_math::definitions::matrix::Matrix;
 use tensor_math::definitions::shape::Shape;
@@ -1119,3 +1119,5 @@ criterion_group!(
         bench_matrix_c64_fft_conv,
         bench_matrix_c64_fft_corr,
 );
+
+criterion_main!(fft_benches);

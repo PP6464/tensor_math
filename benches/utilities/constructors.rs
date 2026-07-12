@@ -1,6 +1,6 @@
 //! Benchmarks for the various zero/one/random tensor & matrix constructors.
 
-use criterion::{criterion_group, BenchmarkId, Criterion, Throughput};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::hint::black_box;
 use tensor_math::definitions::matrix::Matrix;
 use tensor_math::definitions::shape::Shape;
@@ -111,3 +111,5 @@ criterion_group!(
         bench_constructors_matrix,
         bench_identity_matrix,
 );
+
+criterion_main!(constructors_benches);

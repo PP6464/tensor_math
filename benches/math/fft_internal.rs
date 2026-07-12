@@ -2,9 +2,9 @@
 
 use std::hint::black_box;
 
-use criterion::{criterion_group, BenchmarkId, Criterion, Throughput};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use num::complex::Complex64;
-use rand::{distr::StandardUniform, RngExt};
+use rand::RngExt;
 
 use tensor_math::utilities::internal_functions::{
     bluestein_fft_vec, fft_vec, ifft_vec, radix_2_fft_vec,
@@ -193,11 +193,6 @@ fn bench_fft_round_trip_bluestein(c: &mut Criterion) {
     group.finish();
 }
 
-// Touch `StandardUniform` so the `rand` import is considered used even if
-// every bench above ends up only consuming `RngExt` via `rand_vec`.
-#[allow(dead_code)]
-fn _rng_marker(_: StandardUniform) {}
-
 criterion_group!(
     name = fft_internal_benches;
     config = Criterion::default().sample_size(10);
@@ -211,3 +206,5 @@ criterion_group!(
         bench_fft_round_trip_pow2,
         bench_fft_round_trip_bluestein,
 );
+
+criterion_main!(fft_internal_benches);

@@ -1,6 +1,6 @@
 //! Benchmarks for the `flip` family on [`Tensor`] and [`Matrix`].
 
-use criterion::{criterion_group, BenchmarkId, Criterion, Throughput};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::collections::HashSet;
 use std::hint::black_box;
 use tensor_math::definitions::matrix::Matrix;
@@ -187,3 +187,5 @@ criterion_group!(
         bench_flip_cols_matrix,
         bench_flip_matrix,
 );
+
+criterion_main!(flip_benches);

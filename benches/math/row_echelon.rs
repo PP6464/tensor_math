@@ -2,7 +2,7 @@
 //! and `Matrix<Complex64>::row_echelon` / `reduced_row_echelon`.
 
 use std::hint::black_box;
-use criterion::{criterion_group, BenchmarkId, Criterion, Throughput};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use num::complex::Complex64;
 use tensor_math::definitions::matrix::Matrix;
 
@@ -187,3 +187,5 @@ criterion_group!(
         bench_f64_reduced_row_echelon,
         bench_c64_reduced_row_echelon,
 );
+
+criterion_main!(row_echelon_benches);

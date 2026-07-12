@@ -1,6 +1,6 @@
 //! Benchmarks for the `map` family on [`Tensor`] and [`Matrix`].
 
-use criterion::{criterion_group, BenchmarkId, Criterion, Throughput};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::hint::black_box;
 use tensor_math::definitions::matrix::Matrix;
 use tensor_math::definitions::tensor::Tensor;
@@ -107,3 +107,5 @@ criterion_group!(
     config = Criterion::default().sample_size(10);
     targets = bench_map_tensor, bench_map_matrix,
 );
+
+criterion_main!(map_benches);

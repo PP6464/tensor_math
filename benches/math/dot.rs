@@ -1,6 +1,6 @@
 //! Benchmarks for the `dot` single-threaded and multi-threaded implementations
 
-use criterion::{criterion_group, BenchmarkId, Criterion, Throughput};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::hint::black_box;
 use tensor_math::definitions::matrix::Matrix;
 use tensor_math::definitions::shape::Shape;
@@ -130,3 +130,5 @@ criterion_group!(
         bench_tensor_dot_mt,
         bench_matrix_dot_mt,
 );
+
+criterion_main!(dot_benches);

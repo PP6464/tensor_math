@@ -23,7 +23,112 @@ path = "tests/mod.rs"
 required-features = ["internal"]
 
 [[bench]]
-name = "tensor_benches"
-path = "benches/mod.rs"
+name = "contract_mul"
+path = "benches/math/contract_mul.rs"
+harness = false
+
+[[bench]]
+name = "corr_conv"
+path = "benches/math/corr_conv.rs"
+harness = false
+
+[[bench]]
+name = "det_inv"
+path = "benches/math/det_inv.rs"
+harness = false
+
+[[bench]]
+name = "dot"
+path = "benches/math/dot.rs"
+harness = false
+
+[[bench]]
+name = "eigen"
+path = "benches/math/eigen.rs"
+harness = false
+
+[[bench]]
+name = "fft"
+path = "benches/math/fft.rs"
+harness = false
+
+[[bench]]
+name = "fft_internal"
+path = "benches/math/fft_internal.rs"
 harness = false
 required-features = ["internal"]
+
+[[bench]]
+name = "hessenberg"
+path = "benches/math/hessenberg.rs"
+harness = false
+
+[[bench]]
+name = "householder"
+path = "benches/math/householder.rs"
+harness = false
+
+[[bench]]
+name = "row_echelon"
+path = "benches/math/row_echelon.rs"
+harness = false
+
+[[bench]]
+name = "sum"
+path = "benches/math/sum.rs"
+harness = false
+
+[[bench]]
+name = "transformation_rank"
+path = "benches/math/transformation_rank.rs"
+harness = false
+
+[[bench]]
+name = "clip"
+path = "benches/utilities/clip.rs"
+harness = false
+
+[[bench]]
+name = "concat"
+path = "benches/utilities/concat.rs"
+harness = false
+
+[[bench]]
+name = "constructors"
+path = "benches/utilities/constructors.rs"
+harness = false
+
+[[bench]]
+name = "flip"
+path = "benches/utilities/flip.rs"
+harness = false
+
+[[bench]]
+name = "iter"
+path = "benches/utilities/iter.rs"
+harness = false
+
+[[bench]]
+name = "map"
+path = "benches/utilities/map.rs"
+harness = false
+
+[[bench]]
+name = "pool"
+path = "benches/utilities/pool.rs"
+harness = false
+
+[[bench]]
+name = "reshape_flatten"
+path = "benches/utilities/reshape_flatten.rs"
+harness = false
+
+[[bench]]
+name = "slice"
+path = "benches/utilities/slice.rs"
+harness = false
+
+[[bench]]
+name = "transpose"
+path = "benches/utilities/transpose.rs"
+harness = false

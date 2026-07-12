@@ -3,7 +3,7 @@
 use std::hint::black_box;
 use std::ops::Range;
 
-use criterion::{criterion_group, BenchmarkId, Criterion, Throughput};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use tensor_math::definitions::matrix::Matrix;
 use tensor_math::definitions::tensor::Tensor;
 use tensor_math::definitions::shape::Shape;
@@ -143,3 +143,5 @@ criterion_group!(
         bench_slice_matrix,
         bench_slice_mut_matrix,
 );
+
+criterion_main!(slice_benches);

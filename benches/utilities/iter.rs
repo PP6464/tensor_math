@@ -1,7 +1,7 @@
 //! Benchmarks for the `enumerated_iter` family on [`Tensor`] and [`Matrix`].
 
 use std::hint::black_box;
-use criterion::{criterion_group, BenchmarkId, Criterion, Throughput};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use tensor_math::definitions::matrix::Matrix;
 use tensor_math::definitions::tensor::Tensor;
 use tensor_math::definitions::shape::Shape;
@@ -170,3 +170,5 @@ criterion_group!(
     config = Criterion::default().sample_size(10);
     targets = bench_iter_tensor, bench_iter_matrix,
 );
+
+criterion_main!(iter_benches);

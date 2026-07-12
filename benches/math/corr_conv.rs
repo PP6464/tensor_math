@@ -7,7 +7,7 @@
 use std::collections::HashSet;
 use std::hint::black_box;
 
-use criterion::{criterion_group, BenchmarkId, Criterion, Throughput};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use num::complex::Complex64;
 
 use tensor_math::definitions::matrix::Matrix;
@@ -848,3 +848,5 @@ criterion_group!(
         bench_c64_tensor_corr_axes,
         bench_c64_tensor_corr_axes_mt,
 );
+
+criterion_main!(corr_conv_benches);

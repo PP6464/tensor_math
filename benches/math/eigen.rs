@@ -1,7 +1,7 @@
 //! Benchmarks for `Matrix<Complex64>::eigendecompose`.
 
 use std::hint::black_box;
-use criterion::{criterion_group, BenchmarkId, Criterion, Throughput};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use tensor_math::definitions::matrix::Matrix;
 
 fn bench_eigen(c: &mut Criterion) {
@@ -25,3 +25,5 @@ criterion_group!(
     config = Criterion::default().sample_size(10);
     targets = bench_eigen,
 );
+
+criterion_main!(eigen_benches);

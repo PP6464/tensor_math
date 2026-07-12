@@ -2,7 +2,7 @@
 //! of [`Tensor`] and [`Matrix`].
 
 use std::hint::black_box;
-use criterion::{criterion_group, BenchmarkId, Criterion, Throughput};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use tensor_math::definitions::tensor::Tensor;
 use tensor_math::definitions::matrix::Matrix;
 use tensor_math::definitions::shape::Shape;
@@ -172,3 +172,5 @@ criterion_group!(
         bench_concat_cols,
         bench_concat_rows,
 );
+
+criterion_main!(concat_benches);

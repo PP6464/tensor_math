@@ -1,7 +1,7 @@
 //! Benchmarks for the single-threaded vs. multi-threaded `transpose`
 //! implementations of [`Tensor`] and [`Matrix`].
 
-use criterion::{criterion_group, BenchmarkId, Criterion, Throughput};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::hint::black_box;
 use tensor_math::definitions::tensor::Tensor;
 use tensor_math::definitions::shape::Shape;
@@ -137,3 +137,5 @@ criterion_group!(
         bench_transpose_3d,
         bench_transpose_matrix,
 );
+
+criterion_main!(transpose_benches);
