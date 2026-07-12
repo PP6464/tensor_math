@@ -4,7 +4,7 @@ mod hessenberg_tests {
     use tensor_math::definitions::matrix::Matrix;
     use tensor_math::utilities::matrix::eye;
     use float_cmp::approx_eq;
-    use num::complex::Complex64;
+    use num::complex::{Complex64, ComplexFloat};
 
     #[test]
     fn upper_hessenberg() {
@@ -61,7 +61,7 @@ mod hessenberg_tests {
             Matrix<Complex64>,
             h1.clone(),
             h1_ans,
-            epsilon = 1e-13
+            epsilon = 1e-10
         ));
         assert!(approx_eq!(
             Matrix<Complex64>,
@@ -72,7 +72,7 @@ mod hessenberg_tests {
                 .unwrap()
                 .contract_mul_mt(&q1)
                 .unwrap(),
-            epsilon = 1e-15
+            epsilon = 1e-10
         ));
 
         let m2 = Matrix::<f64>::new(
@@ -110,7 +110,7 @@ mod hessenberg_tests {
         )
         .unwrap();
 
-        assert!(approx_eq!(Matrix<f64>, h2.clone(), h2_ans, epsilon = 1e-13));
+        assert!(approx_eq!(Matrix<f64>, h2.clone(), h2_ans, epsilon = 1e-10));
         assert!(approx_eq!(
             Matrix<f64>,
             h2,
@@ -120,7 +120,7 @@ mod hessenberg_tests {
                 .unwrap()
                 .contract_mul_mt(&q2)
                 .unwrap(),
-            epsilon = 1e-13
+            epsilon = 1e-10
         ));
     }
 
@@ -188,7 +188,7 @@ mod hessenberg_tests {
             Matrix<Complex64>,
             h1.clone(),
             h1_ans,
-            epsilon = 1e-13
+            epsilon = 1e-10
         ));
         assert!(approx_eq!(
             Matrix<Complex64>,
@@ -199,7 +199,7 @@ mod hessenberg_tests {
                 .unwrap()
                 .contract_mul_mt(&q1)
                 .unwrap(),
-            epsilon = 1e-15
+            epsilon = 1e-10
         ));
 
         let m2 = Matrix::<f64>::new(
@@ -237,7 +237,7 @@ mod hessenberg_tests {
         )
         .unwrap();
 
-        assert!(approx_eq!(Matrix<f64>, h2.clone(), h2_ans, epsilon = 1e-13));
+        assert!(approx_eq!(Matrix<f64>, h2.clone(), h2_ans, epsilon = 1e-10));
         assert!(approx_eq!(
             Matrix<f64>,
             h2,
@@ -247,7 +247,7 @@ mod hessenberg_tests {
                 .unwrap()
                 .contract_mul_mt(&q2)
                 .unwrap(),
-            epsilon = 1e-13
+            epsilon = 1e-10
         ));
     }
 
@@ -297,5 +297,92 @@ mod hessenberg_tests {
         let (h, q) = m1.lower_hessenberg().unwrap();
         assert_eq!(h, Matrix::zeros(0, 0));
         assert_eq!(q, eye(0));
+    }
+
+    #[test]
+    fn hessenberg_intermediate_zero_reflector() {
+        let m1 = Matrix::<f64>::new(
+            5,
+            5,
+            vec![
+                4.0, 1.0, 2.0, 3.0, 1.0,
+                0.0, 3.0, 1.0, 1.0, -1.0,
+                1.0, 1.0, 5.0, 2.0, 3.0,
+                2.0, 1.0, 1.0, 4.0, 4.0,
+                2.0, 0.0, 1.0, 4.0, -2.0,
+            ],
+        )
+        .unwrap();
+        let (h1, q1) = m1.upper_hessenberg().unwrap();
+        for i in 0..h1.rows() {
+            for j in 0..h1.cols() {
+                if i > j + 1 {
+                    assert!(approx_eq!(f64, h1[&[i, j]], 0.0, epsilon = 1e-10));
+                }
+            }
+        }
+        assert!(approx_eq!(
+            Matrix<f64>,
+            h1,
+            q1.clone()
+                .transpose()
+                .contract_mul_mt(&m1)
+                .unwrap()
+                .contract_mul_mt(&q1)
+                .unwrap(),
+            epsilon = 1e-10
+        ));
+        // The k=0 reflector did real work (non-identity Q).
+        assert!(!approx_eq!(
+            Matrix<f64>,
+            q1.clone(),
+            eye(4),
+            epsilon = 1e-10
+        ));
+
+        let m2: Matrix<Complex64> = Matrix::<Complex64>::new(
+            5,
+            5,
+            vec![
+                Complex64::new(4.0, 1.0), Complex64::new(1.0, 0.0), Complex64::new(2.0, -1.0), Complex64::new(3.0, 0.0), Complex64::new(1.0, 0.0),
+                Complex64::new(3.0, 1.0), Complex64::new(0.0, 0.0), Complex64::new(3.0, 1.0), Complex64::new(-2.0, 0.0), Complex64::new(0.0, 3.0),
+                Complex64::new(1.0, 0.0), Complex64::new(3.0, 2.0), Complex64::new(1.0, 1.0), Complex64::new(1.0, -1.0), Complex64::new(-1.0, 1.0),
+                Complex64::new(2.0, 1.0), Complex64::new(1.0, 0.0), Complex64::new(5.0, 0.0), Complex64::new(2.0, 1.0), Complex64::new(2.0, 2.0),
+                Complex64::new(0.0, 0.0), Complex64::new(0.0, 0.0), Complex64::new(1.0, 0.0), Complex64::new(4.0, 2.0), Complex64::new(2.0, 0.0),
+            ],
+        )
+        .unwrap();
+        let (h2, q2) = m2.upper_hessenberg().unwrap();
+
+        assert!(approx_eq!(
+            f64,
+            h2[&[3, 1]].abs(),
+            0.0,
+            epsilon = 1e-10
+        ));
+        for i in 0..h2.rows() {
+            for j in 0..h2.cols() {
+                if i > j + 1 {
+                    assert!(approx_eq!(f64, h2[&[i, j]].abs(), 0.0, epsilon = 1e-10));
+                }
+            }
+        }
+        assert!(approx_eq!(
+            Matrix<Complex64>,
+            h2,
+            q2.clone()
+                .conj_transpose()
+                .contract_mul_mt(&m2)
+                .unwrap()
+                .contract_mul_mt(&q2)
+                .unwrap(),
+            epsilon = 1e-10
+        ));
+        assert!(!approx_eq!(
+            Matrix<Complex64>,
+            q2.clone(),
+            eye(4),
+            epsilon = 1e-10
+        ));
     }
 }

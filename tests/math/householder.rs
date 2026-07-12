@@ -1,23 +1,16 @@
 #[cfg(test)]
 mod householder_tests {
+    use float_cmp::{ApproxEq, F64Margin, FloatMargin};
+    use num::complex::{Complex64, ComplexFloat};
     use tensor_math::definitions::matrix::Matrix;
     use tensor_math::definitions::shape::Shape;
     use tensor_math::definitions::tensor::Tensor;
     use tensor_math::shape;
     use tensor_math::utilities::matrix::eye;
-    use float_cmp::{ApproxEq, F64Margin, FloatMargin};
-    use num::complex::{Complex64, ComplexFloat};
-    use num::FromPrimitive;
 
     #[test]
     fn test_householder() {
-        let m1: Matrix<f64> = Tensor::<i32>::new(&shape![9], vec![4, 1, 1, 1, 3, 0, 1, 0, 2])
-            .unwrap()
-            .iter()
-            .map(|x| f64::from_i32(*x).unwrap())
-            .collect::<Matrix<f64>>()
-            .reshape(3, 3)
-            .unwrap();
+        let m1 = Matrix::new(3, 3, vec![4.0, 1.0, 1.0, 1.0, 3.0, 0.0, 1.0, 0.0, 2.0]).unwrap();
 
         let (q1, r1) = m1.householder();
 
@@ -108,6 +101,64 @@ mod householder_tests {
 
         assert_eq!(m1.householder(), (eye(3), m1));
         assert_eq!(m2.householder(), (eye(3), m2));
+    }
+
+    #[test]
+    fn householder_intermediate_zero_reflector() {
+        let m1 = Matrix::new(
+            4,
+            3,
+            vec![
+                1.0, 2.0, 3.0,
+                1.0, 0.0, 0.0,
+                0.0, 0.0, 0.0,
+                1.0, 0.0, 1.0,
+            ],
+        )
+        .unwrap();
+        let (q1, r1) = m1.householder();
+
+        for i in 0..r1.rows() {
+            if i >= r1.cols() - 1 {
+                continue;
+            }
+            assert!(r1
+                .slice(i + 1..r1.rows(), i..i + 1)
+                .unwrap()
+                .iter()
+                .all(|x| { x.abs() <= 1e-10 }));
+        }
+        assert!(q1
+            .contract_mul(&r1)
+            .unwrap()
+            .approx_eq(m1, F64Margin::default().epsilon(1e-10)));
+
+        let m2= Matrix::<Complex64>::new(
+            4, 3,
+            vec![
+                Complex64 { re: 1.0, im: 0.0 }, Complex64 { re: 0.5, im: 1.0 }, Complex64 { re: 0.0, im: 0.0 },
+                Complex64 { re: 2.0, im: 1.0 }, Complex64 { re: 0.0, im: 0.0 }, Complex64 { re: 0.0, im: 0.0 },
+                Complex64 { re: 3.0, im: -2.0 }, Complex64 { re: 0.0, im: 0.0 }, Complex64 { re: 0.0, im: 0.0 },
+                Complex64 { re: 3.0, im: -2.0 }, Complex64 { re: 0.0, im: 0.0 }, Complex64 { re: 2.0, im: -10.0 },
+            ],
+        )
+        .unwrap();
+        let (q2, r2) = m2.householder();
+
+        for i in 0..r2.shape()[0] {
+            if i >= r2.shape()[1] - 1 {
+                continue;
+            }
+            assert!(r2
+                .slice(i + 1..r2.shape()[0], i..i + 1)
+                .unwrap()
+                .iter()
+                .all(|x| x.abs() <= 1e-10));
+        }
+        assert!(q2
+            .contract_mul(&r2)
+            .unwrap()
+            .approx_eq(m2, F64Margin::default().epsilon(1e-10)));
     }
 
     #[test]
