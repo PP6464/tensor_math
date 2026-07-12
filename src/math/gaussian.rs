@@ -160,10 +160,10 @@ pub fn gaussian_pdf_cov_mat(
         return Err(TensorErrors::RanksDoNotMatch(ord, shape.rank()));
     }
 
-    let (vals, _) = sigma
+    let vals = sigma
         .clone()
         .map(|x| Complex64::new(x, 0.0))
-        .eigendecompose()?;
+        .eigenvalues()?;
 
     if !vals
         .iter()
