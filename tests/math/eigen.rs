@@ -5,7 +5,7 @@ mod eigen_tests {
     use tensor_math::utilities::matrix::eye;
     use float_cmp::approx_eq;
     use num::complex::{Complex64, ComplexFloat};
-
+    
     #[test]
     fn zero_by_zero_case() {
         let m = Matrix::<Complex64>::new(0, 0, vec![]).unwrap();
@@ -13,15 +13,24 @@ mod eigen_tests {
         assert!(vals.is_empty());
         assert_eq!(vecs.rows(), 0);
         assert_eq!(vecs.cols(), 0);
+
+        let vals_only = m.eigenvalues().unwrap();
+        assert_eq!(vals, vals_only);
     }
 
     #[test]
     fn one_by_one_case() {
         let m1 = Matrix::<f64>::new(1, 1, vec![1.0]).unwrap();
+        let mc = m1.map(Complex64::from);
 
-        let (vals, vecs) = m1.map(Complex64::from).eigendecompose().unwrap();
+        let (vals, vecs) = mc.eigendecompose().unwrap();
         assert_eq!(vals, vec![Complex64::ONE]);
         assert_eq!(vecs, eye(1));
+
+        let vals_only = mc.eigenvalues().unwrap();
+        assert_eq!(vals.len(), vals_only.len());
+        assert!(approx_eq!(f64, vals[0].re, vals_only[0].re, epsilon = 1e-15));
+        assert!(approx_eq!(f64, vals[0].im, vals_only[0].im, epsilon = 1e-15));
     }
 
     #[test]
@@ -58,6 +67,13 @@ mod eigen_tests {
 
         for m in ms {
             let (vals, vecs) = m.eigendecompose().unwrap();
+            let vals_only = m.eigenvalues().unwrap();
+            assert_eq!(vals.len(), vals_only.len());
+            for (&v1, &v2) in vals.iter().zip(vals_only.iter()) {
+                assert!(approx_eq!(f64, v1.re, v2.re, epsilon = 1e-15));
+                assert!(approx_eq!(f64, v1.im, v2.im, epsilon = 1e-15));
+            }
+
             let ord = m.rows();
 
             for i in 0..ord {
@@ -76,10 +92,12 @@ mod eigen_tests {
 
     #[test]
     fn invalid_eigendecomposition_non_square() {
-        let err = Matrix::<Complex64>::new(2, 1, vec![Complex64::ONE, Complex64::ZERO])
-            .unwrap()
-            .eigendecompose()
-            .unwrap_err();
+        let m = Matrix::<Complex64>::new(2, 1, vec![Complex64::ONE, Complex64::ZERO]).unwrap();
+
+        let err = m.eigendecompose().unwrap_err();
         assert_eq!(err, TensorErrors::NonSquareMatrix);
+
+        let err_only = m.eigenvalues().unwrap_err();
+        assert_eq!(err_only, TensorErrors::NonSquareMatrix);
     }
 }
