@@ -94,7 +94,7 @@ impl Matrix<Complex64> {
             return Ok(self.elements.clone());
         }
 
-        let (mut h, _) = self.upper_hessenberg()?;
+        let (mut h, _) = self.upper_hessenberg_h()?;
         let ord = self.rows;
         let mut m = ord;
         let mut iters_since_deflation = 0;
