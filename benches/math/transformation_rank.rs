@@ -22,7 +22,7 @@ fn bench_f64_transformation_rank(c: &mut Criterion) {
         group.throughput(Throughput::Elements((rows * cols) as u64));
 
         let label = format!(
-            "{:?}/{rows}x{cols}",
+            "{}/{rows}x{cols}",
             if rows > cols {
                 "tall"
             } else if rows == cols {
@@ -61,7 +61,7 @@ fn bench_c64_transformation_rank(c: &mut Criterion) {
         group.throughput(Throughput::Elements((rows * cols) as u64));
 
         let label = format!(
-            "{:?}/{rows}x{cols}",
+            "{}/{rows}x{cols}",
             if rows > cols {
                 "tall"
             } else if rows == cols {
