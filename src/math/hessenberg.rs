@@ -137,13 +137,25 @@ impl Matrix<f64> {
         Ok((h, HessenbergReflectors { vectors, rows: ord }))
     }
 
-    /// Computes the lower Hessenberg form for square matrices
-    /// Returns (H, Q) where H is the Hessenberg form and Q is the accrued reflectors.
+    /// Computes the lower Hessenberg form for square matrices.
+    /// Returns (H, Q) where H is the Hessenberg form and Q is a unitary matrix such that
+    /// `Q.mat_mul(H).mat_mul(Q.conj_transpose()) == self`.
     /// This fails if the matrix is not square.
     pub fn lower_hessenberg(&self) -> Result<(Matrix<f64>, Matrix<f64>), TensorErrors> {
         // Note that Q_l = Q_u and H_l = (H_u) ^ T
-        let (h_u, q_u) = self.transpose_mt().upper_hessenberg()?;
-        Ok((h_u.transpose_mt(), q_u))
+        let (h_u, q) = self.transpose_mt().upper_hessenberg()?;
+        Ok((h_u.transpose_mt(), q))
+    }
+
+    /// Computes the lower Hessenberg form for square matrices.
+    /// Returns (H, reflectors) where H is the Hessenberg form and reflectors is something
+    /// that can be accumulated to construct Q (with the provided method), where Q is a unitary
+    /// matrix such that `Q.mat_mul(H).mat_mul(Q.conj_transpose()) == self`.
+    /// This fails if the matrix is not square.
+    pub fn lower_hessenberg_h(&self) -> Result<(Matrix<f64>, HessenbergReflectors<f64>), TensorErrors> {
+        // Note that Q_l = Q_u so reflectors are the same and H_l = (H_u) ^ T
+        let (h_u, reflectors) = self.transpose_mt().upper_hessenberg_h()?;
+        Ok((h_u.transpose_mt(), reflectors))
     }
 }
 
@@ -244,11 +256,23 @@ impl Matrix<Complex64> {
     }
 
     /// Computes the lower Hessenberg form for square matrices.
-    /// Returns (H, Q) where H is the Hessenberg form and Q is the accrued reflectors.
+    /// Returns (H, Q) where H is the Hessenberg form and Q is a unitary matrix such that
+    /// `Q.mat_mul(H).mat_mul(Q.conj_transpose()) == self`.
     /// This fails if the matrix is not square.
     pub fn lower_hessenberg(&self) -> Result<(Matrix<Complex64>, Matrix<Complex64>), TensorErrors> {
         // Note that Q_l = Q_u and H_l = (H_u) ^ *
-        let (h_u, q_u) = self.conj_transpose_mt().upper_hessenberg()?;
-        Ok((h_u.conj_transpose_mt(), q_u))
+        let (h_u, q) = self.conj_transpose_mt().upper_hessenberg()?;
+        Ok((h_u.conj_transpose_mt(), q))
+    }
+
+    /// Computes the lower Hessenberg form for square matrices.
+    /// Returns (H, reflectors) where H is the Hessenberg form and reflectors is something
+    /// that can be accumulated to construct Q (with the provided method), where Q is a unitary
+    /// matrix such that `Q.mat_mul(H).mat_mul(Q.conj_transpose()) == self`.
+    /// This fails if the matrix is not square.
+    pub fn lower_hessenberg_h(&self) -> Result<(Matrix<Complex64>, HessenbergReflectors<Complex64>), TensorErrors> {
+        // Note that Q_l = Q_u so reflectors are the same and H_l = (H_u) ^ *
+        let (h_u, reflectors) = self.conj_transpose_mt().upper_hessenberg_h()?;
+        Ok((h_u.conj_transpose_mt(), reflectors))
     }
 }
