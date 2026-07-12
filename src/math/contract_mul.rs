@@ -6,7 +6,7 @@ use crate::definitions::traits::IntoTensor;
 use crate::shape;
 use crate::utilities::internal_functions::dot_vectors;
 use num::Zero;
-use rayon::iter::IndexedParallelIterator;
+use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator};
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
 use std::ops::{Add, Mul};
@@ -148,11 +148,13 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Send + Sync> Tensor<T
                 .rev()
                 .cloned(),
         );
-        let res_shape = resultant_shape_vec.into();
+        let res_shape : Shape = resultant_shape_vec.into();
 
-        let mut res = Tensor::from_value(&res_shape, T::zero());
+        let mut res_elems = Vec::with_capacity(res_shape.element_count());
+        let buf = res_elems.spare_capacity_mut();
 
-        res.enumerated_par_iter_mut().for_each(|(pos, val)| {
+        buf.par_iter_mut().enumerate().for_each(|(i, val)| {
+            let pos = res_shape.tensor_index(i).unwrap();
             let (self_part, other_part) = pos.split_at(self.rank() - 1);
 
             let mut self_indices = self_part.iter().map(|&x| x..x + 1).collect::<Vec<_>>();
@@ -172,65 +174,14 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Send + Sync> Tensor<T
                 .reshape(&shape![other.shape.0.first().unwrap().clone()])
                 .unwrap();
 
-            *val = self_elems.dot_mt(&other_elems).unwrap();
+            val.write(self_elems.dot(&other_elems).unwrap());
         });
 
-        Ok(res)
+        unsafe {
+            res_elems.set_len(res_shape.element_count());
+        }
 
-        // let res_mutexes = Arc::new(
-        //     RwLock::new(
-        //         Tensor::new(
-        //             &res_shape,
-        //             (0..res_shape.element_count())
-        //                 .map(|_| Mutex::new(T::zero()))
-        //                 .collect(),
-        //         )?,
-        //     ),
-        // );
-        //
-        // let self_arc = Arc::new(self);
-        // let res_shape_arc = Arc::new(res_shape);
-        // let elems_per_thread = 1;  // The number of elements each thread is responsible for
-        //
-        // scope(|s| {
-        //     for i in 0..res_shape_arc.clone().element_count() / elems_per_thread {
-        //         let res_shape_arc_clone = res_shape_arc.clone();
-        //         let res_arc_clone = res_mutexes.clone();
-        //
-        //         let self_arc_clone = self_arc.clone();
-        //
-        //         let start = i * elems_per_thread;
-        //         let end = min((i + 1) * elems_per_thread, res_shape_arc.element_count());
-        //
-        //         s.spawn(move || {
-        //             let res_read = res_arc_clone.read().unwrap();
-        //
-        //             for j in start..end {
-        //                 let t_index = res_shape_arc_clone.tensor_index(j).unwrap();
-        //
-        //                 let (self_part, other_part) = t_index.split_at(self_arc_clone.rank() - 1);
-        //
-        //                 let mut self_indices = self_part.iter().map(|&x| x..x+1).collect::<Vec<_>>();
-        //                 self_indices.push(0..self_arc_clone.shape.0.last().unwrap().clone());
-        //
-        //                 let mut other_indices = other_part.iter().map(|&x| x..x+1).collect::<Vec<_>>();
-        //                 other_indices.insert(0, 0..other.shape.0.first().unwrap().clone());
-        //
-        //                 let self_elems = self_arc_clone.slice(&self_indices).unwrap().reshape(&shape![self_arc_clone.shape.0.last().unwrap().clone()]).unwrap();
-        //                 let other_elems = other.slice(&other_indices).unwrap().reshape(&shape![other.shape.0.first().unwrap().clone()]).unwrap();
-        //
-        //                 let elem_res = self_elems.dot(&other_elems).unwrap();
-        //
-        //                 let mut write_lock = res_read[&t_index].lock().unwrap();
-        //
-        //                 *write_lock = elem_res;
-        //             }
-        //         });
-        //     }
-        // });
-        //
-        // let res_read = res_mutexes.read().unwrap();
-        // res_read.iter().map(|x| x.lock().unwrap().clone()).collect::<Tensor<T>>().reshape(&res_shape_arc.clone())
+        res_elems.into_tensor().reshape(&res_shape)
     }
 
     /// Computes the dot product of two tensors, i.e. the element-wise product, then the sum of the result.
