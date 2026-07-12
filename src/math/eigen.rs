@@ -66,7 +66,7 @@ impl Matrix<Complex64> {
 
             h
                 .slice_mut(0..m, 0..m)?
-                .set_all(&(rs.contract_mul_mt(&qs)? + identity(ord) * ws))?;
+                .set_all(&(rs.contract_mul_mt(&qs)? + identity(m) * ws))?;
             let slice_copy = q.slice(0..ord, 0..m)?;
             q
                 .slice_mut(0..ord, 0..m)?
@@ -82,7 +82,7 @@ impl Matrix<Complex64> {
 
         Ok((eigenvalues, q))
     }
-    
+
     /// Returns the eigenvalues for a matrix.
     /// This fails if the matrix is not square or if the process could not converge on eigenvalues.
     pub fn eigenvalues(&self) -> Result<Vec<Complex64>, TensorErrors> {
@@ -142,7 +142,7 @@ impl Matrix<Complex64> {
 
             h
                 .slice_mut(0..m, 0..m)?
-                .set_all(&(rs.contract_mul_mt(&qs)? + identity(ord) * ws))?;
+                .set_all(&(rs.contract_mul_mt(&qs)? + identity(m) * ws))?;
         }
 
         // At this point we must have converged on all eigenvalues
