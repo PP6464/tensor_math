@@ -30,11 +30,6 @@ impl<T> Matrix<T> {
         })
     }
 
-    /// Returns whether the matrix is square or not.
-    pub fn is_square(&self) -> bool {
-        self.rows == self.cols
-    }
-
     /// Returns the shape of the matrix.
     pub fn shape(&self) -> Shape {
         shape![self.rows, self.cols]
@@ -194,6 +189,10 @@ impl<T> MatrixLike<T> for Matrix<T> {
 
     fn cols(&self) -> usize {
         self.cols()
+    }
+
+    fn is_square(&self) -> bool {
+        self.cols == self.rows
     }
 
     fn get(&self, indices: (usize, usize)) -> Option<&T> {

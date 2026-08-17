@@ -142,6 +142,9 @@ pub trait MatrixLike<T>:
     /// Returns the number of columns of the matrix-like value.
     fn cols(&self) -> usize;
 
+    /// Returns whether the matrix is square or not.
+    fn is_square(&self) -> bool;
+
     /// Returns a reference to the element at the given indices if it is in bounds,
     /// otherwise returns None.
     fn get(&self, indices: (usize, usize)) -> Option<&T>;
