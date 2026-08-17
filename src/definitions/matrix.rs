@@ -1,10 +1,12 @@
+use crate::definitions::chunk::{Chunk, ChunkMut};
 use crate::definitions::errors::TensorErrors;
 use crate::definitions::shape::Shape;
 use crate::definitions::tensor::Tensor;
-use crate::definitions::traits::IntoTensor;
+use crate::definitions::traits::{IntoTensor, MatrixLike, MatrixLikeMut};
 use crate::shape;
-use rayon::iter::ParallelIterator;
 use rayon::iter::{FromParallelIterator, IntoParallelIterator};
+use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator};
+use rayon::slice::{ParallelSlice, ParallelSliceMut};
 use std::ops::{Deref, DerefMut, Index, IndexMut};
 use std::slice::Iter;
 use std::vec::IntoIter;
@@ -51,6 +53,12 @@ impl<T> Matrix<T> {
     /// Gets the element at an index if it is in bounds, otherwise returns None.
     pub fn get(&self, indices: (usize, usize)) -> Option<&T> {
         self.tensor.get(&[indices.0, indices.1])
+    }
+
+    /// Gets a mutable reference to the element at an index if it is in bounds,
+    /// otherwise returns None.
+    pub fn get_mut(&mut self, indices: (usize, usize)) -> Option<&mut T> {
+        self.tensor.get_mut(&[indices.0, indices.1])
     }
 }
 
@@ -172,5 +180,85 @@ impl<'a, T: Clone> From<Iter<'a, T>> for Matrix<T> {
             cols: elements.len(),
             tensor: Tensor::new(&shape![1, elements.len()], elements).unwrap(),
         }
+    }
+}
+
+impl<T> MatrixLike<T> for Matrix<T> {
+    fn shape(&self) -> Shape {
+        self.shape()
+    }
+
+    fn rows(&self) -> usize {
+        self.rows()
+    }
+
+    fn cols(&self) -> usize {
+        self.cols()
+    }
+
+    fn get(&self, indices: (usize, usize)) -> Option<&T> {
+        self.get(indices)
+    }
+
+    fn iter<'a>(&'a self) -> impl Iterator<Item = &'a T>
+    where
+        T: 'a,
+    {
+        self.elements.iter()
+    }
+
+    fn par_iter<'a>(&'a self) -> impl IndexedParallelIterator<Item=&'a T>
+    where
+        T: 'a + Send + Sync
+    {
+        self.elements().par_iter()
+    }
+
+    fn chunks<'a>(&'a self, n: usize) -> impl Iterator<Item=Chunk<'a, T>>
+    where
+        T: 'a
+    {
+        self.elements.chunks(n).map(Chunk::Contiguous)
+    }
+
+    fn par_chunks<'a>(&'a self, n: usize) -> impl IndexedParallelIterator<Item=Chunk<'a, T>>
+    where
+        T: Send + Sync + 'a
+    {
+        self.elements.par_chunks(n).map(Chunk::Contiguous)
+    }
+}
+
+impl<T> MatrixLikeMut<T> for Matrix<T> {
+    fn get_mut(&mut self, indices: (usize, usize)) -> Option<&mut T> {
+        self.get_mut(indices)
+    }
+
+    fn iter_mut<'a>(&'a mut self) -> impl Iterator<Item = &mut T>
+    where
+        T: 'a,
+    {
+        self.elements_mut().iter_mut()
+    }
+
+    fn par_iter_mut<'a>(&'a mut self) -> impl IndexedParallelIterator<Item=&'a mut T>
+    where
+        T: 'a + Send + Sync
+    {
+        self.elements_mut().par_iter_mut()
+    }
+
+    fn chunks_mut<'a>(&'a mut self, n: usize) -> impl Iterator<Item=ChunkMut<'a, T>>
+    where
+        T: 'a
+    {
+        self.elements.chunks_mut(n).map(ChunkMut::Contiguous)
+    }
+
+    fn par_chunks_mut<'a>(&'a mut self, n: usize) -> impl IndexedParallelIterator<Item=ChunkMut<'a, T>>
+    where
+        T: Send + Sync + 'a
+    {
+        self.elements.par_chunks_mut(n).map(ChunkMut::Contiguous)
     }
 }

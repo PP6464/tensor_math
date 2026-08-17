@@ -1,6 +1,7 @@
 mod matrix;
-mod matrix_slice_mut;
+mod matrix_slice;
 mod shape;
 mod tensor;
-mod tensor_slice_mut;
+mod tensor_slice;
+mod traits;
 mod transpose;

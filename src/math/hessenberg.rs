@@ -21,7 +21,7 @@ impl HessenbergReflectors<f64> {
             let q_slice_copy = q.slice(0..self.rows, (k + 1)..self.rows).unwrap();
             let mut q_slice_mut = q.slice_mut(0..self.rows, (k + 1)..self.rows).unwrap();
             let q_u = q_slice_copy.mat_mul_mt(u).unwrap();
-            let q_slice_res = q_slice_copy - q_u.mat_mul(&u_t).unwrap() * 2.0;
+            let q_slice_res = q_slice_copy - q_u.mat_mul_mt(&u_t).unwrap() * 2.0;
             q_slice_mut.set_all(&q_slice_res).unwrap();
         }
         q
@@ -112,7 +112,7 @@ impl Matrix<f64> {
             // Calculate b
             let b = u_t.mat_mul_mt(&h.slice(reflector_start..ord, 0..ord)?)?;
             // Calculate s
-            let s = u.dot(&a.slice(reflector_start..ord, 0..1)?)?;
+            let s = u.dot_mt(&a.slice(reflector_start..ord, 0..1)?)?;
             // Calculate c
             let slice_copy = a.slice(reflector_start..ord, 0..1)?;
             let mut c = a;
@@ -230,7 +230,7 @@ impl Matrix<Complex64> {
             // Calculate b
             let b = u_star.mat_mul_mt(&h.slice(reflector_start..ord, 0..ord)?)?;
             // Calculate s
-            let s = u.clone().conj().dot(&a.slice(reflector_start..ord, 0..1)?)?;
+            let s = u.clone().conj().dot_mt(&a.slice(reflector_start..ord, 0..1)?)?;
             // Calculate c
             let slice_copy = a.slice(reflector_start..ord, 0..1)?;
             let mut c = a;

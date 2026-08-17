@@ -1,6 +1,6 @@
 use crate::definitions::errors::TensorErrors;
 use crate::definitions::matrix::Matrix;
-use crate::definitions::matrix_slice_mut::MatrixSliceMut;
+use crate::definitions::matrix_slice::{MatrixSlice, MatrixSliceMut};
 use crate::definitions::shape::Shape;
 use crate::definitions::tensor::Tensor;
 use crate::definitions::traits::IntoMatrix;
@@ -133,13 +133,11 @@ impl<T: Clone> Matrix<T> {
         &self,
         rows_range: Range<usize>,
         cols_range: Range<usize>,
-    ) -> Result<Matrix<T>, TensorErrors> {
-        Ok(Matrix {
-            tensor: self
-                .tensor
-                .slice(&[rows_range.clone(), cols_range.clone()])?,
-            rows: rows_range.len(),
-            cols: cols_range.len(),
+    ) -> Result<MatrixSlice<T>, TensorErrors> {
+        Ok(MatrixSlice {
+            orig: self,
+            start: (rows_range.start, cols_range.start),
+            end: (rows_range.end, cols_range.end),
         })
     }
 
@@ -266,7 +264,7 @@ impl<T: Clone> Matrix<T> {
             );
 
             let indices = (start_pos.0..end_pos.0, start_pos.1..end_pos.1);
-            let value = pool_fn(self.slice(indices.0, indices.1)?);
+            let value = pool_fn(self.slice(indices.0, indices.1)?.into_matrix());
 
             *val = value;
         }
@@ -308,7 +306,7 @@ impl<T: Clone> Matrix<T> {
             );
 
             let indices = (start_pos.0..end_pos.0, start_pos.1..end_pos.1);
-            let value = pool_fn(start_pos, self.slice(indices.0, indices.1)?);
+            let value = pool_fn(start_pos, self.slice(indices.0, indices.1)?.into_matrix());
 
             *val = value;
         }
@@ -437,8 +435,10 @@ impl<T: Clone + Send + Sync> Matrix<T> {
             );
 
             *elem = pool_fn(
-                self.slice(self_pos.0..self_end_pos.0, self_pos.1..self_end_pos.1)
-                    .unwrap(),
+                self
+                    .slice(self_pos.0..self_end_pos.0, self_pos.1..self_end_pos.1)
+                    .unwrap()
+                    .into_matrix(),
             );
         });
 
@@ -482,8 +482,10 @@ impl<T: Clone + Send + Sync> Matrix<T> {
 
             *elem = pool_fn(
                 index,
-                self.slice(self_pos.0..self_end_pos.0, self_pos.1..self_end_pos.1)
-                    .unwrap(),
+                self
+                    .slice(self_pos.0..self_end_pos.0, self_pos.1..self_end_pos.1)
+                    .unwrap()
+                    .into_matrix(),
             );
         });
 

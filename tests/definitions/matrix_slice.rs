@@ -1,0 +1,138 @@
+#[cfg(test)]
+mod matrix_slice_mut_tests {
+    use tensor_math::definitions::shape::Shape;
+    use tensor_math::definitions::matrix::Matrix;
+    use tensor_math::definitions::traits::{IntoMatrix, TryIntoMatrix};
+    use tensor_math::shape;
+
+    #[test]
+    fn slice_mut_dimensions() {
+        let mut m1 = Matrix::new(5, 5, (0..25).collect()).unwrap();
+        let slice = m1.slice_mut(1..4, 2..5).unwrap();
+
+        assert_eq!(slice.rows(), 3);
+        assert_eq!(slice.cols(), 3);
+        assert_eq!(slice.shape(), shape![3, 3]);
+    }
+
+    #[test]
+    fn empty_slice_mut() {
+        let mut m1 = Matrix::<usize>::new(0, 0, vec![]).unwrap();
+        let slice = m1.slice_mut(0..0, 0..0).unwrap();
+        assert_eq!(slice.end(), (0, 0));
+        assert_eq!(slice.start(), (0, 0));
+        assert_eq!(slice.rows(), 0);
+        assert_eq!(slice.cols(), 0);
+    }
+
+    #[test]
+    fn index_mut_slice() {
+        let mut m1 = Matrix::new(3, 3, (0..9).collect()).unwrap();
+
+        let mut slice = m1.slice_mut(1..3, 1..3).unwrap();
+
+        assert_eq!(slice[&[0, 0]], 4);
+        assert_eq!(slice[(0, 1)], 5);
+
+        slice[(1, 0)] = -1;
+        slice[(1, 1)] = -2;
+
+        let ans = Matrix::new(3, 3, vec![0, 1, 2, 3, 4, 5, 6, -1, -2]).unwrap();
+
+        assert_eq!(m1, ans);
+    }
+
+    #[test]
+    fn convert_into_mat() {
+        let mut m1 = Matrix::new(3, 3, (0..9).collect()).unwrap();
+
+        let mut slice = m1.slice_mut(1..3, 1..3).unwrap();
+        slice[(0, 1)] = 10;
+
+        let ans = Matrix::new(2, 2, vec![4, 10, 7, 8]).unwrap();
+
+        assert_eq!(slice.into_matrix(), ans);
+
+        let slice = m1.slice_mut(1..3, 1..3).unwrap();
+
+        assert_eq!(slice.try_into_matrix().unwrap(), ans);
+    }
+
+    #[test]
+    fn get_in_slice() {
+        let mut m1 = Matrix::new(3, 3, (0..9).collect()).unwrap();
+
+        let slice = m1.slice_mut(1..3, 1..3).unwrap();
+
+        assert_eq!(slice.get((0, 0)), Some(&4));
+        assert_eq!(slice.get((2, 2)), None);
+    }
+
+    #[test]
+    fn rows_and_cols() {
+        let mut m1 = Matrix::new(5, 8, (0..40).collect()).unwrap();
+        let slice = m1.slice_mut(1..4, 2..7).unwrap();
+
+        assert_eq!(slice.rows(), 3);
+        assert_eq!(slice.cols(), 5);
+        assert_eq!(slice.shape(), shape![3, 5]);
+    }
+
+    #[test]
+    fn for_each_mut_basic() {
+        let mut m1 = Matrix::new(3, 3, (0..9).collect()).unwrap();
+
+        let mut slice = m1.slice_mut(1..3, 1..3).unwrap();
+        slice.for_each_mut(|x| *x += 10);
+
+        let ans = Matrix::new(3, 3, vec![0, 1, 2, 3, 14, 15, 6, 17, 18]).unwrap();
+
+        assert_eq!(m1, ans);
+    }
+
+    #[test]
+    fn for_each_mut_empty() {
+        let mut m1 = Matrix::<usize>::new(0, 0, vec![]).unwrap();
+        let mut slice = m1.slice_mut(0..0, 0..0).unwrap();
+        let mut count = 0;
+        slice.for_each_mut(|_| count += 1);
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn for_each_mut_rectangular() {
+        let mut m1 = Matrix::new(4, 4, (0..16).collect()).unwrap();
+
+        let mut slice = m1.slice_mut(1..3, 0..4).unwrap();
+        slice.for_each_mut(|x| *x = 0);
+
+        let ans = Matrix::new(4, 4, vec![0, 1, 2, 3, 0, 0, 0, 0, 0, 0, 0, 0, 12, 13, 14, 15]).unwrap();
+
+        assert_eq!(m1, ans);
+    }
+
+    #[test]
+    fn enumerated_for_each_mut_basic() {
+        let mut m1 = Matrix::new(3, 3, (0..9).collect()).unwrap();
+
+        let mut slice = m1.slice_mut(1..3, 1..3).unwrap();
+        slice.enumerated_for_each_mut(|idx, x| {
+            // idx should be relative to the slice: [0..2, 0..2]
+            *x = ((idx.0 + 1) * 10 + (idx.1 + 1)) as i32;
+        });
+
+        let ans = Matrix::new(3, 3, vec![0, 1, 2, 3, 11, 12, 6, 21, 22]).unwrap();
+
+        assert_eq!(m1, ans);
+    }
+
+    #[test]
+    fn enumerated_for_each_mut_empty() {
+        let mut m1 = Matrix::<usize>::new(0, 0, vec![]).unwrap();
+        let mut slice = m1.slice_mut(0..0, 0..0).unwrap();
+
+        let mut count = 0;
+        slice.enumerated_for_each_mut(|_, _| count += 1);
+        assert_eq!(count, 0);
+    }
+}

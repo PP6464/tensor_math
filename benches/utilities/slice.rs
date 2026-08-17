@@ -74,6 +74,41 @@ fn bench_slice_mut_tensor(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_set_all_mut_tensor(c: &mut Criterion) {
+    let mut group = c.benchmark_group("set_all_mut/tensor_2d");
+    for &(rows, cols) in &[
+        (128usize, 128usize),
+        (512, 512),
+        (1024, 1024),
+        (2048, 2048),
+    ] {
+        let slice_rows = (3 * rows / 4) - (rows / 4);
+        let slice_cols = (3 * cols / 4) - (cols / 4);
+        let elems = (slice_rows * slice_cols) as u64;
+        group.throughput(Throughput::Elements(elems));
+
+        let label = format!("{rows}x{cols}");
+
+        // The source `values` tensor must be the same shape as the slice.
+        let values = Tensor::from_value(&shape![slice_rows, slice_cols], 1.0);
+
+        group.bench_with_input(BenchmarkId::new("st", &label), &label, |bench, _| {
+            bench.iter(|| {
+                let mut a = Tensor::from_value(&shape![rows, cols], 0.0);
+                let mut view = a
+                    .slice_mut(&[
+                        rows / 4..(3 * rows) / 4,
+                        cols / 4..(3 * cols) / 4,
+                    ])
+                    .expect("slice_mut must succeed");
+                view.set_all(&values).expect("set_all must succeed");
+                black_box(a);
+            });
+        });
+    }
+    group.finish();
+}
+
 fn bench_slice_matrix(c: &mut Criterion) {
     let mut group = c.benchmark_group("slice/matrix");
     for &(rows, cols) in &[
@@ -134,14 +169,48 @@ fn bench_slice_mut_matrix(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_set_all_mut_matrix(c: &mut Criterion) {
+    let mut group = c.benchmark_group("set_all_mut/matrix");
+    for &(rows, cols) in &[
+        (128usize, 128usize),
+        (512, 512),
+        (1024, 1024),
+        (2048, 2048),
+    ] {
+        let slice_rows = (3 * rows / 4) - (rows / 4);
+        let slice_cols = (3 * cols / 4) - (cols / 4);
+        let elems = (slice_rows * slice_cols) as u64;
+        group.throughput(Throughput::Elements(elems));
+
+        let label = format!("{rows}x{cols}");
+
+        // The source `values` matrix must be the same shape as the slice.
+        let values = Matrix::from_value(slice_rows, slice_cols, 1.0);
+
+        group.bench_with_input(BenchmarkId::new("st", &label), &label, |bench, _| {
+            bench.iter(|| {
+                let mut a = Matrix::from_value(rows, cols, 0.0);
+                let mut view = a
+                    .slice_mut(rows / 4..(3 * rows) / 4, cols / 4..(3 * cols) / 4)
+                    .expect("slice_mut must succeed");
+                view.set_all(&values).expect("set_all must succeed");
+                black_box(a);
+            });
+        });
+    }
+    group.finish();
+}
+
 criterion_group!(
     name = slice_benches;
     config = Criterion::default().sample_size(10);
     targets =
         bench_slice_tensor,
         bench_slice_mut_tensor,
+        bench_set_all_mut_tensor,
         bench_slice_matrix,
         bench_slice_mut_matrix,
+        bench_set_all_mut_matrix,
 );
 
 criterion_main!(slice_benches);

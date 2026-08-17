@@ -2,13 +2,16 @@ use crate::definitions::errors::TensorErrors;
 use crate::definitions::matrix::Matrix;
 use crate::definitions::shape::Shape;
 use crate::definitions::strides::Strides;
+use crate::definitions::traits::{TensorLike, TensorLikeMut};
 use crate::shape;
 use crate::utilities::internal_functions::dot_vectors;
-use rayon::iter::ParallelIterator;
 use rayon::iter::{FromParallelIterator, IntoParallelIterator};
+use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator};
 use std::ops::{Deref, DerefMut, Index, IndexMut};
 use std::slice::Iter;
 use std::vec::IntoIter;
+use rayon::prelude::{ParallelSlice, ParallelSliceMut};
+use crate::definitions::chunk::{Chunk, ChunkMut};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Tensor<T> {
@@ -44,6 +47,17 @@ impl<T> Tensor<T> {
             .get(dot_vectors(&indices.to_vec(), &self.strides.0))
     }
 
+    /// Gets a mutable reference to the element at the specified index if it is in bounds,
+    /// otherwise returns None.
+    pub fn get_mut(&mut self, indices: &[usize]) -> Option<&mut T> {
+        if indices.len() != self.rank() {
+            return None;
+        }
+
+        self.elements
+            .get_mut(dot_vectors(&indices.to_vec(), &self.strides.0))
+    }
+
     /// Returns the shape of the tensor.
     pub fn shape(&self) -> &Shape {
         &self.shape
@@ -55,9 +69,12 @@ impl<T> Tensor<T> {
     }
 
     /// Returns the elements of the tensor.
-    pub fn elements(&self) -> &Vec<T> {
+    pub fn elements(&self) -> &[T] {
         &self.elements
     }
+    
+    /// Returns a mutable reference to the elements of the tensor.
+    pub fn elements_mut(&mut self) -> &mut [T] { &mut self.elements }
 }
 
 impl<T> Index<&[usize]> for Tensor<T> {
@@ -78,7 +95,7 @@ impl<T> Index<&[usize]> for Tensor<T> {
             );
         }
 
-        let addr = dot_vectors(&self.strides.clone().into(), &index.to_vec());
+        let addr = dot_vectors(&self.strides.clone().0, &index);
         &self.elements[addr]
     }
 }
@@ -99,7 +116,7 @@ impl<T> IndexMut<&[usize]> for Tensor<T> {
             );
         }
 
-        let addr = dot_vectors(&self.strides.clone().into(), &index.to_vec());
+        let addr = dot_vectors(&self.strides.clone().0, &index.to_vec());
         &mut self.elements[addr]
     }
 }
@@ -156,5 +173,89 @@ impl<T> Deref for Tensor<T> {
 impl<T> DerefMut for Tensor<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.elements.as_mut_slice()
+    }
+}
+
+impl<T> TensorLike<T> for Tensor<T> {
+    fn shape(&self) -> Shape {
+        self.shape.clone()
+    }
+
+    fn rank(&self) -> usize {
+        self.rank()
+    }
+
+    fn elements(&self) -> &[T] {
+        self.elements()
+    }
+
+    fn get(&self, indices: &[usize]) -> Option<&T> {
+        self.get(indices)
+    }
+
+    fn iter<'a>(&'a self) -> impl Iterator<Item = &'a T>
+    where
+        T: 'a,
+    {
+        self.elements.iter()
+    }
+
+    fn par_iter<'a>(&'a self) -> impl IndexedParallelIterator<Item = &'a T>
+    where
+        T: 'a + Send + Sync,
+    {
+        self.elements.par_iter()
+    }
+
+    fn chunks<'a>(&'a self, n: usize) -> impl Iterator<Item=Chunk<'a, T>>
+    where
+        T: 'a
+    {
+        self.elements.chunks(n).map(Chunk::Contiguous)
+    }
+
+    fn par_chunks<'a>(&'a self, n: usize) -> impl IndexedParallelIterator<Item=Chunk<'a, T>>
+    where
+        T: Send + Sync + 'a
+    {
+        self.elements.par_chunks(n).map(Chunk::Contiguous)
+    }
+}
+
+impl<T> TensorLikeMut<T> for Tensor<T> {
+    fn elements_mut(&mut self) -> &mut [T] {
+        self.elements_mut()
+    }
+
+    fn get_mut(&mut self, indices: &[usize]) -> Option<&mut T> {
+        self.get_mut(indices)
+    }
+
+    fn iter_mut<'a>(&'a mut self) -> impl Iterator<Item = &'a mut T>
+    where
+        T: 'a,
+    {
+        self.elements_mut().iter_mut()
+    }
+
+    fn par_iter_mut<'a>(&'a mut self) -> impl IndexedParallelIterator<Item = &'a mut T>
+    where
+        T: 'a + Send + Sync,
+    {
+        self.elements.par_iter_mut()
+    }
+
+    fn chunks_mut<'a>(&'a mut self, n: usize) -> impl Iterator<Item=ChunkMut<'a, T>>
+    where
+        T: 'a
+    {
+        self.elements.chunks_mut(n).map(ChunkMut::Contiguous)
+    }
+
+    fn par_chunks_mut<'a>(&'a mut self, n: usize) -> impl IndexedParallelIterator<Item=ChunkMut<'a, T>>
+    where
+        T: Send + Sync + 'a
+    {
+        self.elements.par_chunks_mut(n).map(ChunkMut::Contiguous)
     }
 }

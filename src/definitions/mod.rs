@@ -1,6 +1,6 @@
 pub mod errors;
 pub mod matrix;
-pub mod matrix_slice_mut;
+pub mod matrix_slice;
 pub mod shape;
 
 #[cfg(not(feature = "internal"))]
@@ -10,6 +10,7 @@ pub(crate) mod strides;
 pub mod strides;
 
 pub mod tensor;
-pub mod tensor_slice_mut;
+pub mod tensor_slice;
 pub mod traits;
 pub mod transpose;
+mod chunk;

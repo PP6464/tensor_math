@@ -2,7 +2,7 @@ use crate::definitions::errors::TensorErrors;
 use crate::definitions::shape::Shape;
 use crate::definitions::strides::Strides;
 use crate::definitions::tensor::Tensor;
-use crate::definitions::tensor_slice_mut::TensorSliceMut;
+use crate::definitions::tensor_slice::{TensorSlice, TensorSliceMut};
 use crate::definitions::traits::IntoTensor;
 use crate::definitions::transpose::Transpose;
 use crate::shape;
@@ -169,7 +169,7 @@ impl<T: Clone> Tensor<T> {
     /// Returns a cloned immutable slice to a specified region in the tensor.
     /// This fails if `range.start > range.end` for any index range,
     /// or if the region includes an out-of-bounds index.
-    pub fn slice(&self, indices: &[Range<usize>]) -> Result<Tensor<T>, TensorErrors> {
+    pub fn slice(&self, indices: &[Range<usize>]) -> Result<TensorSlice<T>, TensorErrors> {
         // We have to check this up front because otherwise we would have subtraction with underflow
         for range in indices.iter() {
             if range.start > range.end {
@@ -180,48 +180,16 @@ impl<T: Clone> Tensor<T> {
             }
         }
 
-        let start = indices
+        let (start, end) = indices
             .iter()
-            .map(|range| range.start)
-            .collect::<Vec<usize>>();
-
-        let res_shape = indices.iter().map(|r| r.end - r.start).collect();
-
-        if indices.len() != self.rank() {
-            return Err(TensorErrors::SliceIncompatibleShape {
-                slice_shape: res_shape,
-                tensor_shape: self.shape.clone(),
-            });
-        }
-
-        for (i, range) in indices.iter().enumerate() {
-            if range.end > self.shape[i] {
-                return Err(TensorErrors::SliceIndicesOutOfBounds {
-                    start: range.start,
-                    end: range.end,
-                    axis: i,
-                    length: self.shape[i],
-                });
-            }
-        }
-
-        let mut res = if self.elements.is_empty() {
-            Tensor::<T>::new(&res_shape, vec![])?
-        } else {
-            Tensor::<T>::from_value(&res_shape, self.first().unwrap().clone())
-        };
-
-        for (pos, val) in res.enumerated_iter_mut() {
-            let orig_index = pos
-                .iter()
-                .zip(start.iter())
-                .map(|(x, y)| x + y)
-                .collect::<Vec<usize>>();
-
-            *val = self[&orig_index.as_slice()].clone();
-        }
-
-        Ok(res)
+            .map(|range| (range.start, range.end))
+            .unzip();
+        
+        Ok(TensorSlice {
+            start,
+            orig: self,
+            end,
+        })
     }
 
     /// Returns a mutable slice of a specified region in the tensor.
@@ -320,7 +288,7 @@ impl<T: Clone> Tensor<T> {
 
         let new_shape = transpose.new_shape(self.shape())?;
         let new_strides = Strides::from_shape(&new_shape);
-        let mut new_elements = self.elements().clone();
+        let mut new_elements = self.elements().to_vec();
 
         for (old_index, elem) in self.enumerated_iter() {
             let new_index = transpose.new_index(&old_index)?;
@@ -409,7 +377,7 @@ impl<T: Clone> Tensor<T> {
                 .map(|(x, y)| *y..*x)
                 .collect::<Vec<_>>();
 
-            *val = pool_fn(self.slice(&indices)?);
+            *val = pool_fn(self.slice(&indices)?.into_tensor());
         }
 
         Ok(result)
@@ -492,7 +460,7 @@ impl<T: Clone> Tensor<T> {
                 .map(|(x, y)| *y..*x)
                 .collect::<Vec<_>>();
 
-            *val = pool_fn(start_pos, self.slice(&indices)?);
+            *val = pool_fn(start_pos, self.slice(&indices)?.into_tensor());
         }
 
         Ok(result)
@@ -730,7 +698,7 @@ impl<T: Clone + Send + Sync> Tensor<T> {
                 .map(|(x, y)| *x..*y)
                 .collect::<Vec<_>>();
 
-            *elem = pool_fn(index, self.slice(&indices).unwrap());
+            *elem = pool_fn(index, self.slice(&indices).unwrap().into_tensor());
         });
 
         Ok(result)
@@ -807,7 +775,7 @@ impl<T: Clone + Send + Sync> Tensor<T> {
                 .map(|(x, y)| *x..*y)
                 .collect::<Vec<_>>();
 
-            *elem = pool_fn(self.slice(&indices).unwrap());
+            *elem = pool_fn(self.slice(&indices).unwrap().into_tensor());
         });
 
         Ok(result)

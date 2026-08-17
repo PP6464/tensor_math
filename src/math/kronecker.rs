@@ -95,7 +95,7 @@ impl<T: Clone + Mul<Output = T> + Send + Sync> Tensor<T> {
         let self_elems_arc = Arc::new(&self.elements);
 
         new_elements
-            .par_chunks_exact_mut(other.shape.element_count())
+            .par_chunks_mut(other.shape.element_count())
             .enumerate()
             .for_each(|(index, chunk)| {
                 let res = other.par_map_refs(|e| self_elems_arc[index].clone() * e.clone());
@@ -122,7 +122,7 @@ impl<T: Clone + Mul<Output = T> + Send + Sync> Matrix<T> {
         let self_elems_arc = Arc::new(&self.elements);
 
         new_elements
-            .par_chunks_exact_mut(other.shape.element_count())
+            .par_chunks_mut(other.shape.element_count())
             .enumerate()
             .for_each(|(index, chunk)| {
                 let res = other.par_map_refs(|e| self_elems_arc[index].clone() * e.clone());

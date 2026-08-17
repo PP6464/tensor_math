@@ -1,4 +1,3 @@
-// examples/profile_concat_mt.rs
 use std::hint::black_box;
 use tensor_math::definitions::shape::Shape;
 use tensor_math::definitions::tensor::Tensor;

@@ -1,5 +1,6 @@
 /target
 .idea
 flamegraph.svg
+profile.json*
 *.data
 *.data.old

@@ -39,9 +39,9 @@ fn bench_f64_matrix_contract_mul(c: &mut Criterion) {
 
     for &(rows, inner, cols) in &[
         (32, 32, 32),
+        (64, 64, 64),
         (128, 128, 128),
-        (512, 512, 512),
-        (1024, 1024, 1024),
+        (256, 256, 256),
     ] {
         let a = Matrix::<f64>::rand(rows, inner);
         let b = Matrix::<f64>::rand(inner, cols);
@@ -66,9 +66,9 @@ fn bench_f64_matrix_contract_mul_mt(c: &mut Criterion) {
 
     for &(rows, inner, cols) in &[
         (32, 32, 32),
+        (64, 64, 64),
         (128, 128, 128),
-        (512, 512, 512),
-        (1024, 1024, 1024),
+        (256, 256, 256),
     ] {
         let a = Matrix::<f64>::rand(rows, inner);
         let b = Matrix::<f64>::rand(inner, cols);
@@ -94,9 +94,9 @@ fn bench_f64_matrix_mat_mul(c: &mut Criterion) {
 
     for &(rows, inner, cols) in &[
         (32, 32, 32),
+        (64, 64, 64),
         (128, 128, 128),
-        (512, 512, 512),
-        (1024, 1024, 1024),
+        (256, 256, 256),
     ] {
         let a = Matrix::<f64>::rand(rows, inner);
         let b = Matrix::<f64>::rand(inner, cols);
@@ -120,9 +120,9 @@ fn bench_f64_matrix_mat_mul_mt(c: &mut Criterion) {
 
     for &(rows, inner, cols) in &[
         (32, 32, 32),
+        (64, 64, 64),
         (128, 128, 128),
-        (512, 512, 512),
-        (1024, 1024, 1024),
+        (256, 256, 256),
     ] {
         let a = Matrix::<f64>::rand(rows, inner);
         let b = Matrix::<f64>::rand(inner, cols);
@@ -146,9 +146,9 @@ fn bench_c64_matrix_contract_mul(c: &mut Criterion) {
 
     for &(rows, inner, cols) in &[
         (32, 32, 32),
+        (64, 64, 64),
         (128, 128, 128),
-        (512, 512, 512),
-        (1024, 1024, 1024),
+        (256, 256, 256),
     ] {
         let a = random_complex_matrix(rows, inner);
         let b = random_complex_matrix(inner, cols);
@@ -174,9 +174,9 @@ fn bench_c64_matrix_contract_mul_mt(c: &mut Criterion) {
 
     for &(rows, inner, cols) in &[
         (32, 32, 32),
+        (64, 64, 64),
         (128, 128, 128),
-        (512, 512, 512),
-        (1024, 1024, 1024),
+        (256, 256, 256),
     ] {
         let a = random_complex_matrix(rows, inner);
         let b = random_complex_matrix(inner, cols);
@@ -202,9 +202,9 @@ fn bench_c64_matrix_mat_mul(c: &mut Criterion) {
 
     for &(rows, inner, cols) in &[
         (32, 32, 32),
+        (64, 64, 64),
         (128, 128, 128),
-        (512, 512, 512),
-        (1024, 1024, 1024),
+        (256, 256, 256),
     ] {
         let a = random_complex_matrix(rows, inner);
         let b = random_complex_matrix(inner, cols);
@@ -228,9 +228,9 @@ fn bench_c64_matrix_mat_mul_mt(c: &mut Criterion) {
 
     for &(rows, inner, cols) in &[
         (32, 32, 32),
+        (64, 64, 64),
         (128, 128, 128),
-        (512, 512, 512),
-        (1024, 1024, 1024),
+        (256, 256, 256),
     ] {
         let a = random_complex_matrix(rows, inner);
         let b = random_complex_matrix(inner, cols);
@@ -254,9 +254,9 @@ fn bench_f64_tensor_contract_mul(c: &mut Criterion) {
 
     for shape in &[
         shape![32, 32, 32],
+        shape![64, 64, 64],
         shape![128, 128, 128],
-        shape![512, 512, 512],
-        shape![1024, 1024, 1024],
+        shape![256, 256, 256],
     ] {
         let inner = shape[shape.rank() - 1];
         let a = Tensor::<f64>::rand(shape);
@@ -265,7 +265,7 @@ fn bench_f64_tensor_contract_mul(c: &mut Criterion) {
         let out_elems = a.shape().element_count() / inner * 32 * 32;
         group.throughput(Throughput::Elements((2 * out_elems * inner) as u64));
 
-        let label = format!("{}-x{}x32", label_shape(&a.shape()), inner);
+        let label = format!("{}-x{}x32x32", label_shape(a.shape()), inner);
 
         group.bench_with_input(BenchmarkId::new("f64/tensor", &label), &label, |bench, _| {
             bench.iter(|| {
@@ -283,9 +283,9 @@ fn bench_f64_tensor_contract_mul_mt(c: &mut Criterion) {
 
     for shape in &[
         shape![32, 32, 32],
+        shape![64, 64, 64],
         shape![128, 128, 128],
-        shape![512, 512, 512],
-        shape![1024, 1024, 1024],
+        shape![256, 256, 256],
     ] {
         let inner = shape[shape.rank() - 1];
         let a = Tensor::<f64>::rand(shape);
@@ -293,7 +293,7 @@ fn bench_f64_tensor_contract_mul_mt(c: &mut Criterion) {
         let out_elems = a.shape().element_count() / inner * 32 * 32;
         group.throughput(Throughput::Elements((2 * out_elems * inner) as u64));
 
-        let label = format!("{}-x{}x32", label_shape(&a.shape()), inner);
+        let label = format!("{}-x{}x32x32", label_shape(&a.shape()), inner);
 
         group.bench_with_input(BenchmarkId::new("f64/tensor", &label), &label, |bench, _| {
             bench.iter(|| {
@@ -313,9 +313,9 @@ fn bench_c64_tensor_contract_mul(c: &mut Criterion) {
 
     for shape in &[
         shape![32, 32, 32],
+        shape![64, 64, 64],
         shape![128, 128, 128],
-        shape![512, 512, 512],
-        shape![1024, 1024, 1024],
+        shape![256, 256, 256],
     ] {
         let inner = shape[shape.rank() - 1];
         let a = random_complex_tensor(shape);
@@ -323,7 +323,7 @@ fn bench_c64_tensor_contract_mul(c: &mut Criterion) {
         let out_elems = a.shape().element_count() / inner * 32 * 32;
         group.throughput(Throughput::Elements((2 * out_elems * inner) as u64));
 
-        let label = format!("{}-x{}x32", label_shape(&a.shape()), inner);
+        let label = format!("{}-x{}x32x32", label_shape(&a.shape()), inner);
 
         group.bench_with_input(BenchmarkId::new("c64/tensor", &label), &label, |bench, _| {
             bench.iter(|| {
@@ -341,9 +341,9 @@ fn bench_c64_tensor_contract_mul_mt(c: &mut Criterion) {
 
     for shape in &[
         shape![32, 32, 32],
+        shape![64, 64, 64],
         shape![128, 128, 128],
-        shape![512, 512, 512],
-        shape![1024, 1024, 1024],
+        shape![256, 256, 256],
     ] {
         let inner = shape[shape.rank() - 1];
         let a = random_complex_tensor(shape);
@@ -351,7 +351,7 @@ fn bench_c64_tensor_contract_mul_mt(c: &mut Criterion) {
         let out_elems = a.shape().element_count() / inner * 32 * 32;
         group.throughput(Throughput::Elements((2 * out_elems * inner) as u64));
 
-        let label = format!("{}-x{}x32", label_shape(&a.shape()), inner);
+        let label = format!("{}-x{}x32x32", label_shape(&a.shape()), inner);
 
         group.bench_with_input(BenchmarkId::new("c64/tensor", &label), &label, |bench, _| {
             bench.iter(|| {

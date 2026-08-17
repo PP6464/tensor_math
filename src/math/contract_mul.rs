@@ -3,12 +3,12 @@ use crate::definitions::matrix::Matrix;
 use crate::definitions::shape::Shape;
 use crate::definitions::tensor::Tensor;
 use crate::definitions::traits::IntoTensor;
-use crate::shape;
+use crate::definitions::transpose::Transpose;
 use crate::utilities::internal_functions::dot_vectors;
 use num::Zero;
-use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator};
-use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
+use rayon::iter::IndexedParallelIterator;
+use rayon::prelude::ParallelSlice;
 use std::ops::{Add, Mul};
 
 impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Tensor<T> {
@@ -50,6 +50,11 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Tensor<T> {
                 .cloned(),
         );
         let resultant_shape: Shape = resultant_shape_vec.into();
+
+        if self.is_empty() || other.is_empty() {
+            return Ok(Tensor::zeros(&resultant_shape));
+        }
+
         let mut resultant_elements: Vec<T> = Vec::with_capacity(resultant_shape.element_count());
 
         for i in 0..resultant_shape.element_count() {
@@ -82,7 +87,7 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Tensor<T> {
             return Err(TensorErrors::ShapesIncompatible);
         }
 
-        Ok((self * other).sum())
+        Ok(dot_vectors(self.elements(), &other.elements()))
     }
 }
 
@@ -106,7 +111,7 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Matrix<T> {
             return Err(TensorErrors::ShapesIncompatible);
         }
 
-        Ok((self * other).sum())
+        Ok(dot_vectors(self.elements(), &other.elements()))
     }
 }
 
@@ -143,45 +148,56 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Send + Sync> Tensor<T
                 .shape
                 .0
                 .iter()
-                .rev()
-                .take(other.rank() - 1)
-                .rev()
+                .skip(1)
                 .cloned(),
         );
         let res_shape : Shape = resultant_shape_vec.into();
 
-        let mut res_elems = Vec::with_capacity(res_shape.element_count());
-        let buf = res_elems.spare_capacity_mut();
-
-        buf.par_iter_mut().enumerate().for_each(|(i, val)| {
-            let pos = res_shape.tensor_index(i).unwrap();
-            let (self_part, other_part) = pos.split_at(self.rank() - 1);
-
-            let mut self_indices = self_part.iter().map(|&x| x..x + 1).collect::<Vec<_>>();
-            self_indices.push(0..self.shape.0.last().unwrap().clone());
-
-            let mut other_indices = other_part.iter().map(|&x| x..x + 1).collect::<Vec<_>>();
-            other_indices.insert(0, 0..other.shape.0.first().unwrap().clone());
-
-            let self_elems = self
-                .slice(&self_indices)
-                .unwrap()
-                .reshape(&shape![self.shape.0.last().unwrap().clone()])
-                .unwrap();
-            let other_elems = other
-                .slice(&other_indices)
-                .unwrap()
-                .reshape(&shape![other.shape.0.first().unwrap().clone()])
-                .unwrap();
-
-            val.write(self_elems.dot(&other_elems).unwrap());
-        });
-
-        unsafe {
-            res_elems.set_len(res_shape.element_count());
+        if self.is_empty() || other.is_empty() {
+            return Ok(Tensor::zeros(&res_shape));
         }
 
-        res_elems.into_tensor().reshape(&res_shape)
+        let other_transpose = other
+            .transpose_mt(&Transpose::identity(other.rank()).swap_axes(0, other.rank() - 1)?)?;
+
+        self
+            .par_chunks(self.shape()[self.rank() - 1])
+            .flat_map(|s| other_transpose.par_chunks(other.shape()[0]).map(|o| dot_vectors(s, o)))
+            .collect::<Tensor<_>>()
+            .reshape(&res_shape)
+
+        // let mut res_elems = Vec::with_capacity(res_shape.element_count());
+        // let buf = res_elems.spare_capacity_mut();
+        //
+        // buf.par_iter_mut().enumerate().for_each(|(i, val)| {
+        //     let pos = res_shape.tensor_index(i).unwrap();
+        //     let (self_part, other_part) = pos.split_at(self.rank() - 1);
+        //
+        //     let mut self_indices = self_part.iter().map(|&x| x..x + 1).collect::<Vec<_>>();
+        //     self_indices.push(0..self.shape.0.last().unwrap().clone());
+        //
+        //     let mut other_indices = other_part.iter().map(|&x| x..x + 1).collect::<Vec<_>>();
+        //     other_indices.insert(0, 0..other.shape.0.first().unwrap().clone());
+        //
+        //     let self_elems = self
+        //         .slice(&self_indices)
+        //         .unwrap()
+        //         .reshape(&shape![self.shape.0.last().unwrap().clone()])
+        //         .unwrap();
+        //     let other_elems = other
+        //         .slice(&other_indices)
+        //         .unwrap()
+        //         .reshape(&shape![other.shape.0.first().unwrap().clone()])
+        //         .unwrap();
+        //
+        //     val.write(self_elems.dot(&other_elems).unwrap());
+        // });
+        //
+        // unsafe {
+        //     res_elems.set_len(res_shape.element_count());
+        // }
+        //
+        // res_elems.into_tensor().reshape(&res_shape)
     }
 
     /// Computes the dot product of two tensors, i.e. the element-wise product, then the sum of the result.
@@ -192,9 +208,9 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Send + Sync> Tensor<T
         }
 
         Ok(self
-            .par_iter()
-            .zip(other.par_iter())
-            .map(|(x, y)| x.clone() * y.clone())
+            .par_chunks(4096)
+            .zip(other.par_chunks(4096))
+            .map(|(x, y)| dot_vectors(x, y))
             .reduce(T::zero, T::add))
     }
 }
@@ -210,5 +226,19 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Send + Sync + Zero> Matrix<T
     /// This fails if the matrices are not multiplicatively compatible
     pub fn mat_mul_mt(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
         self.contract_mul_mt(other)
+    }
+
+    /// Computes the dot product of two matrices, i.e. the element-wise product, then the sum of the result.
+    /// This fails if the matrices do not have the same shape.
+    pub fn dot_mt(&self, other: &Matrix<T>) -> Result<T, TensorErrors> {
+        if self.shape != other.shape {
+            return Err(TensorErrors::ShapesIncompatible);
+        }
+
+        Ok(self
+            .par_chunks(4096)
+            .zip(other.par_chunks(4096))
+            .map(|(x, y)| dot_vectors(x, y))
+            .reduce(T::zero, T::add))
     }
 }

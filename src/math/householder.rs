@@ -21,7 +21,7 @@ impl HouseholderReflectors<f64> {
             let q_slice_copy = q.slice(0..self.rows, k..self.rows).unwrap();
             let mut q_slice_mut = q.slice_mut(0..self.rows, k..self.rows).unwrap();
             let q_u = q_slice_copy.mat_mul_mt(u).unwrap();
-            let q_slice_res = q_slice_copy - q_u.mat_mul(&u_t).unwrap() * 2.0;
+            let q_slice_res = q_slice_copy - q_u.mat_mul_mt(&u_t).unwrap() * 2.0;
             q_slice_mut.set_all(&q_slice_res).unwrap();
         }
         q

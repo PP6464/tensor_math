@@ -9,14 +9,27 @@ use std::ops::{Add, Mul};
 
 /// This computes the dot product of two vectors of any type `T` that implements `Add` and `Mul`
 pub fn dot_vectors<T: Add<Output = T> + Mul<Output = T> + Zero + Clone>(
-    vec1: &Vec<T>,
-    vec2: &Vec<T>,
+    vec1: &[T],
+    vec2: &[T],
 ) -> T {
-    vec1.iter()
-        .cloned()
-        .zip(vec2.iter().cloned())
-        .map(|(x, y)| x * y)
-        .fold(T::zero(), T::add)
+    // Use accumulators so that the compiler can optimise this when possible
+    let mut acc = [T::zero(), T::zero(), T::zero(), T::zero()];
+
+    let chunks = vec1.len() / 4;
+
+    for i in 0..chunks {
+        let base = i * 4;
+        acc[0] = acc[0].clone() + vec1[base].clone() * vec2[base].clone();
+        acc[1] = acc[1].clone() + vec1[base+1].clone() * vec2[base+1].clone();
+        acc[2] = acc[2].clone() + vec1[base+2].clone() * vec2[base+2].clone();
+        acc[3] = acc[3].clone() + vec1[base+3].clone() * vec2[base+3].clone();
+    }
+
+    let mut total = acc[0].clone() + acc[1].clone() + acc[2].clone() + acc[3].clone();
+    for i in (chunks * 4)..vec1.len() {
+        total = total + vec1[i].clone() * vec2[i].clone();
+    }
+    total
 }
 
 /// This computes the FFT of a vector of Complex64 values
@@ -59,7 +72,7 @@ pub fn radix_2_fft_vec(x: &[Complex64]) -> Vec<Complex64> {
     for iters in 1..=log2_n {
         let half_len = (1 << iters) >> 1;
 
-        res.par_chunks_exact_mut(1 << iters).for_each(|chunk| {
+        res.par_chunks_mut(1 << iters).for_each(|chunk| {
             let (firsts, seconds) = chunk.split_at_mut(half_len);
             firsts
                 .par_iter_mut()

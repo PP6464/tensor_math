@@ -27,7 +27,7 @@ impl Tensor<Complex64> {
 
         let transpose = Transpose::identity(self.rank()).swap_axes(self.rank() - 1, axis)?;
         self.transpose_mt(&transpose)?
-            .par_chunks_exact(self.shape[axis])
+            .par_chunks(self.shape[axis])
             .map(fft_vec)
             .flatten()
             .collect::<Tensor<_>>()
@@ -78,7 +78,7 @@ impl Tensor<Complex64> {
         let transpose = Transpose::identity(self.rank()).swap_axes(self.rank() - 1, axis)?;
 
         self.transpose_mt(&transpose)?
-            .par_chunks_exact(self.shape[axis])
+            .par_chunks(self.shape[axis])
             .map(ifft_vec)
             .flatten()
             .collect::<Tensor<_>>()
@@ -272,7 +272,7 @@ impl Tensor<Complex64> {
 impl Matrix<Complex64> {
     /// Computes the FFT along the rows
     pub fn fft_rows(&self) -> Matrix<Complex64> {
-        self.par_chunks_exact(self.cols)
+        self.par_chunks(self.cols)
             .map(fft_vec)
             .flatten()
             .collect::<Matrix<_>>()
@@ -283,7 +283,7 @@ impl Matrix<Complex64> {
     /// Computes the FFT along the columns
     pub fn fft_cols(&self) -> Matrix<Complex64> {
         self.transpose_mt()
-            .par_chunks_exact(self.rows)
+            .par_chunks(self.rows)
             .map(fft_vec)
             .flatten()
             .collect::<Matrix<_>>()
@@ -299,7 +299,7 @@ impl Matrix<Complex64> {
 
     /// Computes an IFFT along the rows
     pub fn ifft_rows(&self) -> Matrix<Complex64> {
-        self.par_chunks_exact(self.cols)
+        self.par_chunks(self.cols)
             .map(ifft_vec)
             .flatten()
             .collect::<Matrix<_>>()
@@ -310,7 +310,7 @@ impl Matrix<Complex64> {
     /// Computes an IFFT along the columns
     pub fn ifft_cols(&self) -> Matrix<Complex64> {
         self.transpose_mt()
-            .par_chunks_exact(self.rows)
+            .par_chunks(self.rows)
             .map(ifft_vec)
             .flatten()
             .collect::<Matrix<_>>()
