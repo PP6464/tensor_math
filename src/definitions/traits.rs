@@ -64,6 +64,9 @@ pub trait TensorLike<T>: for<'a> Index<&'a [usize], Output = T> {
     /// Returns a reference to the element at the given indices if it is in bounds,
     /// otherwise returns None.
     fn get(&self, indices: &[usize]) -> Option<&T>;
+    
+    /// Gets the value at the specified index and trusts it is in bounds
+    unsafe fn get_unchecked(&self, indices: &[usize]) -> &T;
 
     /// Returns an iterator over references to the elements of the tensor-like value.
     fn iter<'a>(&'a self) -> impl Iterator<Item = &'a T>
@@ -98,6 +101,9 @@ pub trait TensorLikeMut<T>: TensorLike<T> + for<'a> IndexMut<&'a [usize]> {
     /// Returns a mutable reference to the element at the given indices if it is in bounds,
     /// otherwise returns None.
     fn get_mut(&mut self, indices: &[usize]) -> Option<&mut T>;
+
+    /// Gets the value at the specified index and trusts it is in bounds
+    unsafe fn get_unchecked_mut(&mut self, indices: &[usize]) -> &mut T;
 
     /// Returns an iterator over mutable references to the elements of the tensor-like value.
     fn iter_mut<'a>(&'a mut self) -> impl Iterator<Item = &mut T>
@@ -140,6 +146,9 @@ pub trait MatrixLike<T>:
     /// otherwise returns None.
     fn get(&self, indices: (usize, usize)) -> Option<&T>;
 
+    /// Gets the value at the specified index and trusts it is in bounds
+    unsafe fn get_unchecked(&self, indices: (usize, usize)) -> &T;
+
     /// Returns an iterator over references to the elements of the matrix-like value.
     fn iter<'a>(&'a self) -> impl Iterator<Item = &T>
     where
@@ -172,6 +181,9 @@ pub trait MatrixLikeMut<T>:
     /// Returns a mutable reference to the element at the given indices if it is in bounds,
     /// otherwise returns None.
     fn get_mut(&mut self, indices: (usize, usize)) -> Option<&mut T>;
+
+    /// Gets the value at the specified index and trusts it is in bounds
+    unsafe fn get_unchecked_mut(&mut self, indices: (usize, usize)) -> &mut T;
 
     /// Returns an iterator over mutable references to the elements of the matrix-like value.
     fn iter_mut<'a>(&'a mut self) -> impl Iterator<Item = &mut T>

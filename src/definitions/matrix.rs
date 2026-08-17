@@ -200,6 +200,10 @@ impl<T> MatrixLike<T> for Matrix<T> {
         self.get(indices)
     }
 
+    unsafe fn get_unchecked(&self, indices: (usize, usize)) -> &T {
+        self.elements.get_unchecked(indices.0 * self.rows + indices.1)
+    }
+
     fn iter<'a>(&'a self) -> impl Iterator<Item = &'a T>
     where
         T: 'a,
@@ -232,6 +236,11 @@ impl<T> MatrixLike<T> for Matrix<T> {
 impl<T> MatrixLikeMut<T> for Matrix<T> {
     fn get_mut(&mut self, indices: (usize, usize)) -> Option<&mut T> {
         self.get_mut(indices)
+    }
+
+    unsafe fn get_unchecked_mut(&mut self, indices: (usize, usize)) -> &mut T {
+        let flat_index = indices.0 * self.rows + indices.1;
+        self.elements.get_unchecked_mut(flat_index)
     }
 
     fn iter_mut<'a>(&'a mut self) -> impl Iterator<Item = &mut T>

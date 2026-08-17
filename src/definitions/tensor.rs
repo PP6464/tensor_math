@@ -193,6 +193,10 @@ impl<T> TensorLike<T> for Tensor<T> {
         self.get(indices)
     }
 
+    unsafe fn get_unchecked(&self, indices: &[usize]) -> &T {
+        self.elements.get_unchecked(dot_vectors(&self.strides.0, indices))
+    }
+
     fn iter<'a>(&'a self) -> impl Iterator<Item = &'a T>
     where
         T: 'a,
@@ -229,6 +233,10 @@ impl<T> TensorLikeMut<T> for Tensor<T> {
 
     fn get_mut(&mut self, indices: &[usize]) -> Option<&mut T> {
         self.get_mut(indices)
+    }
+
+    unsafe fn get_unchecked_mut(&mut self, indices: &[usize]) -> &mut T {
+        self.elements.get_unchecked_mut(dot_vectors(&self.strides.0, indices))
     }
 
     fn iter_mut<'a>(&'a mut self) -> impl Iterator<Item = &'a mut T>

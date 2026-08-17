@@ -131,6 +131,16 @@ impl<'a, T: Clone> TensorLike<T> for TensorSlice<'a, T> {
         TensorSlice::get(self, indices)
     }
 
+    unsafe fn get_unchecked(&self, indices: &[usize]) -> &T {
+        self.orig.get_unchecked(
+            &indices
+                .iter()
+                .zip(self.start.iter())
+                .map(|(x, y)| x + y)
+                .collect::<Vec<_>>(),
+        )
+    }
+
     fn iter<'b>(&'b self) -> impl Iterator<Item = &'b T>
     where
         T: 'b,
@@ -360,6 +370,16 @@ impl<'a, T: Clone> TensorLike<T> for TensorSliceMut<'a, T> {
         TensorSliceMut::get(self, indices)
     }
 
+    unsafe fn get_unchecked(&self, indices: &[usize]) -> &T {
+        self.orig.get_unchecked(
+            &indices
+                .iter()
+                .zip(self.start.iter())
+                .map(|(x, y)| x + y)
+                .collect::<Vec<_>>(),
+        )
+    }
+
     fn iter<'b>(&'b self) -> impl Iterator<Item = &'b T>
     where
         T: 'b,
@@ -427,6 +447,16 @@ impl<'a, T: Clone> TensorLikeMut<T> for TensorSliceMut<'a, T> {
 
     fn get_mut(&mut self, indices: &[usize]) -> Option<&mut T> {
         self.orig.get_mut(indices)
+    }
+
+    unsafe fn get_unchecked_mut(&mut self, indices: &[usize]) -> &mut T {
+        self.orig.get_unchecked_mut(
+            &indices
+                .iter()
+                .zip(self.start.iter())
+                .map(|(x, y)| x + y)
+                .collect::<Vec<_>>(),
+        )
     }
 
     fn iter_mut<'b>(&'b mut self) -> impl Iterator<Item = &'b mut T>

@@ -130,6 +130,10 @@ impl<'a, T: Clone> MatrixLike<T> for MatrixSlice<'a, T> {
         MatrixSlice::get(self, indices)
     }
 
+    unsafe fn get_unchecked(&self, indices: (usize, usize)) -> &T {
+        self.orig.get_unchecked((indices.0 + self.start.0, indices.1 + self.start.1))
+    }
+
     fn iter<'b>(&'b self) -> impl Iterator<Item = &'b T>
     where
         T: 'b,
@@ -344,6 +348,10 @@ impl<'a, T: Clone> MatrixLike<T> for MatrixSliceMut<'a, T> {
         MatrixSliceMut::get(self, indices)
     }
 
+    unsafe fn get_unchecked(&self, indices: (usize, usize)) -> &T {
+        self.orig.get_unchecked((indices.0 + self.start.0, indices.1 + self.start.1))
+    }
+
     fn iter<'b>(&'b self) -> impl Iterator<Item = &'b T>
     where
         T: 'b,
@@ -408,6 +416,10 @@ impl<'a, T: Clone> MatrixLike<T> for MatrixSliceMut<'a, T> {
 impl<'a, T: Clone> MatrixLikeMut<T> for MatrixSliceMut<'a, T> {
     fn get_mut(&mut self, indices: (usize, usize)) -> Option<&mut T> {
         self.orig.get_mut(indices)
+    }
+
+    unsafe fn get_unchecked_mut(&mut self, indices: (usize, usize)) -> &mut T {
+        self.orig.get_unchecked_mut((indices.0 + self.start.0, indices.1 + self.start.1))
     }
 
     fn iter_mut<'b>(&'b mut self) -> impl Iterator<Item = &'b mut T>
