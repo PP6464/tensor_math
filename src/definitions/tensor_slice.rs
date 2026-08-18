@@ -509,10 +509,6 @@ impl<'a, T: Clone> TensorLikeMut<T> for TensorSliceMut<'a, T> {
         unsafe impl<'b, T> Send for TensorSliceMutIter<'b, T> {}
         unsafe impl<'b, T> Sync for TensorSliceMutIter<'b, T> {}
 
-        struct ParIter<'b, T> {
-            c: &'b T,
-        }
-
         impl<'b, T: 'b> Iterator for TensorSliceMutIter<'b, T> {
             type Item = &'b mut T;
 

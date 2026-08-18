@@ -482,10 +482,6 @@ impl<'a, T: Clone> MatrixLikeMut<T> for MatrixSliceMut<'a, T> {
         unsafe impl<'b, T> Send for MatrixSliceMutIter<'b, T> {}
         unsafe impl<'b, T> Sync for MatrixSliceMutIter<'b, T> {}
 
-        struct ParIter<'b, T> {
-            c: &'b T,
-        }
-
         impl<'b, T: 'b> Iterator for MatrixSliceMutIter<'b, T> {
             type Item = &'b mut T;
 
