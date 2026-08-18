@@ -73,6 +73,11 @@ impl Shape {
         Ok(dot_vectors(&Strides::from_shape(self).0, &index))
     }
 
+    /// This gives the address for a corresponding shape index and trusts validity
+    unsafe fn address_unchecked(&self, index: Vec<usize>) -> usize {
+        dot_vectors(&Strides::from_shape(self).0, &index)
+    }
+
     /// Computes the tensor index for a given address.
     /// This fails if the address is out of bounds.
     pub fn tensor_index(&self, address: usize) -> Result<Vec<usize>, TensorErrors> {
