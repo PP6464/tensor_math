@@ -1,7 +1,6 @@
 use crate::definitions::chunk::{Chunk, ChunkMut};
-use crate::definitions::errors::TensorErrors;
-use crate::definitions::errors::TensorErrors::SliceIncompatibleShape;
 use crate::definitions::shape::Shape;
+use crate::definitions::strides::Strides;
 use crate::definitions::tensor::Tensor;
 use crate::definitions::traits::{IntoTensor, TensorLike, TensorLikeMut};
 use rayon::iter::plumbing::{bridge, Consumer, Producer, ProducerCallback, UnindexedConsumer};
@@ -17,22 +16,6 @@ pub struct TensorSlice<'a, T> {
 }
 
 impl<T> TensorSlice<'_, T> {
-    /// Returns the rank of the tensor slice.
-    pub fn rank(&self) -> usize {
-        self.end.len()
-    }
-
-    /// Returns the shape of the tensor slice.
-    pub fn shape(&self) -> Shape {
-        Shape::new(
-            self.end
-                .iter()
-                .zip(self.start.iter())
-                .map(|(e, s)| e - s)
-                .collect(),
-        )
-    }
-
     /// Returns the start position of the tensor slice.
     pub fn start(&self) -> &[usize] {
         &self.start
@@ -47,7 +30,9 @@ impl<T> TensorSlice<'_, T> {
     pub fn for_each(&self, mut closure: impl FnMut(&T)) {
         let shape = self.shape();
         for i in 0..shape.element_count() {
-            closure(&self[&shape.tensor_index(i).unwrap()]);
+            unsafe {
+                closure(&self.get_unchecked(&shape.tensor_index_unchecked(i)));
+            }
         }
     }
 
@@ -55,32 +40,11 @@ impl<T> TensorSlice<'_, T> {
     pub fn enumerated_for_each(&self, mut closure: impl FnMut(&[usize], &T)) {
         let shape = self.shape();
         for i in 0..shape.element_count() {
-            let index = shape.tensor_index(i).unwrap();
-            closure(&index, &self[&index]);
-        }
-    }
-}
-
-impl<'a, T: Clone> TensorSlice<'a, T> {
-    /// Gets the value at the specified index if it exits, otherwise returns None
-    pub fn get(&self, indices: &[usize]) -> Option<&T> {
-        if indices.len() != self.orig.rank() {
-            return None;
-        }
-
-        let orig_index = indices
-            .iter()
-            .zip(self.start.iter())
-            .map(|(x, y)| x + y)
-            .collect::<Vec<usize>>();
-
-        for i in 0..self.orig.rank() {
-            if self.end[i] <= orig_index[i] {
-                return None;
+            unsafe {
+                let index = shape.tensor_index_unchecked(i);
+                closure(&index, self.get_unchecked(&index));
             }
         }
-
-        self.orig.get(orig_index.as_slice())
     }
 }
 
@@ -99,7 +63,7 @@ impl<T> Index<&[usize]> for TensorSlice<'_, T> {
             })
             .collect::<Vec<usize>>();
 
-        &self.orig[actual_index.as_slice()]
+        unsafe { self.orig.get_unchecked(actual_index.as_slice()) }
     }
 }
 
@@ -107,28 +71,57 @@ impl<T: Clone> IntoTensor<T> for TensorSlice<'_, T> {
     fn into_tensor(self) -> Tensor<T> {
         let mut elements = Vec::with_capacity(self.shape().element_count());
         for i in 0..self.shape().element_count() {
-            elements.push(self[&self.shape().tensor_index(i).unwrap()].clone());
+            unsafe {
+                elements.push(
+                    self.get_unchecked(&self.shape().tensor_index_unchecked(i))
+                        .clone(),
+                );
+            }
         }
 
-        Tensor::new(&self.shape(), elements).unwrap()
+        Tensor {
+            shape: self.shape(),
+            strides: Strides::from_shape(&self.shape()),
+            elements,
+        }
     }
 }
 
-impl<'a, T: Clone> TensorLike<T> for TensorSlice<'a, T> {
+impl<'a, T> TensorLike<T> for TensorSlice<'a, T> {
+    /// Returns the shape of the tensor slice.
     fn shape(&self) -> Shape {
-        TensorSlice::shape(self)
+        Shape::new(
+            self.end
+                .iter()
+                .zip(self.start.iter())
+                .map(|(e, s)| e - s)
+                .collect(),
+        )
     }
 
+    /// Returns the rank of the tensor slice.
     fn rank(&self) -> usize {
-        TensorSlice::rank(self)
-    }
-
-    fn elements(&self) -> &[T] {
-        self.orig.elements()
+        self.end.len()
     }
 
     fn get(&self, indices: &[usize]) -> Option<&T> {
-        TensorSlice::get(self, indices)
+        if indices.len() != self.orig.rank() {
+            return None;
+        }
+
+        let orig_index = indices
+            .iter()
+            .zip(self.start.iter())
+            .map(|(x, y)| x + y)
+            .collect::<Vec<usize>>();
+
+        for i in 0..self.orig.rank() {
+            if self.end[i] <= orig_index[i] {
+                return None;
+            }
+        }
+
+        unsafe { Some(self.orig.get_unchecked(orig_index.as_slice())) }
     }
 
     unsafe fn get_unchecked(&self, indices: &[usize]) -> &T {
@@ -147,6 +140,7 @@ impl<'a, T: Clone> TensorLike<T> for TensorSlice<'a, T> {
     {
         struct SliceIter<'b, T> {
             slice: &'b TensorSlice<'b, T>,
+            len: usize,
             flat_index: usize,
         }
 
@@ -154,20 +148,24 @@ impl<'a, T: Clone> TensorLike<T> for TensorSlice<'a, T> {
             type Item = &'b T;
 
             fn next(&mut self) -> Option<Self::Item> {
-                let shape = self.slice.shape();
-                let res = match shape.tensor_index(self.flat_index) {
-                    Ok(i) => Some(&self.slice[&i]),
-                    Err(_) => None,
+                if self.flat_index >= self.len {
+                    return None;
+                }
+
+                let res = unsafe {
+                    self.slice
+                        .get_unchecked(&self.slice.shape().tensor_index_unchecked(self.flat_index))
                 };
 
                 self.flat_index += 1;
 
-                res
+                Some(res)
             }
         }
 
         SliceIter {
             slice: self,
+            len: self.shape().element_count(),
             flat_index: 0,
         }
     }
@@ -177,9 +175,11 @@ impl<'a, T: Clone> TensorLike<T> for TensorSlice<'a, T> {
         T: 'b + Send + Sync,
     {
         let shape = self.shape();
-        (0..shape.element_count())
-            .into_par_iter()
-            .map(move |i| &self[&shape.tensor_index(i).unwrap()])
+        unsafe {
+            (0..shape.element_count())
+                .into_par_iter()
+                .map(move |i| self.get_unchecked(&shape.tensor_index_unchecked(i)))
+        }
     }
 
     fn chunks<'b>(&'b self, n: usize) -> impl Iterator<Item = Chunk<'b, T>>
@@ -209,22 +209,6 @@ pub struct TensorSliceMut<'a, T> {
 }
 
 impl<T> TensorSliceMut<'_, T> {
-    /// Returns the rank of the tensor slice.
-    pub fn rank(&self) -> usize {
-        self.end.len()
-    }
-
-    /// Returns the shape of the tensor slice.
-    pub fn shape(&self) -> Shape {
-        Shape::new(
-            self.end
-                .iter()
-                .zip(self.start.iter())
-                .map(|(e, s)| e - s)
-                .collect(),
-        )
-    }
-
     /// Returns the start position of the tensor slice.
     pub fn start(&self) -> &[usize] {
         &self.start
@@ -239,7 +223,9 @@ impl<T> TensorSliceMut<'_, T> {
     pub fn for_each_mut(&mut self, mut closure: impl FnMut(&mut T)) {
         let shape = self.shape();
         for i in 0..shape.element_count() {
-            closure(&mut self[&shape.tensor_index(i).unwrap()]);
+            unsafe {
+                closure(&mut self.get_unchecked_mut(&shape.tensor_index_unchecked(i)));
+            }
         }
     }
 
@@ -247,62 +233,11 @@ impl<T> TensorSliceMut<'_, T> {
     pub fn enumerated_for_each_mut(&mut self, mut closure: impl FnMut(&[usize], &mut T)) {
         let shape = self.shape();
         for i in 0..shape.element_count() {
-            let index = shape.tensor_index(i).unwrap();
-            closure(&index, &mut self[&index]);
-        }
-    }
-}
-
-impl<'a, T: Clone> TensorSliceMut<'a, T> {
-    /// Sets all the values in the mutable slice to the given values.
-    /// This fails if the shape of the values does not match the slice shape.
-    pub fn set_all(&mut self, values: &Tensor<T>) -> Result<(), TensorErrors> {
-        let slice_shape = Shape::new(
-            self.end
-                .iter()
-                .zip(self.start.iter())
-                .map(|(e, s)| e - s)
-                .collect(),
-        );
-
-        if slice_shape != values.shape {
-            return Err(SliceIncompatibleShape {
-                slice_shape: self
-                    .start
-                    .iter()
-                    .zip(self.end.iter())
-                    .map(|(&x, &y)| y - x)
-                    .collect::<Shape>(),
-                tensor_shape: values.shape.clone(),
-            });
-        }
-
-        for (index, value) in values.enumerated_iter() {
-            self[index.as_slice()] = value;
-        }
-
-        Ok(())
-    }
-
-    /// Gets the value at the specified index if it exits, otherwise returns None
-    pub fn get(&self, indices: &[usize]) -> Option<&T> {
-        if indices.len() != self.orig.rank() {
-            return None;
-        }
-
-        let orig_index = indices
-            .iter()
-            .zip(self.start.iter())
-            .map(|(x, y)| x + y)
-            .collect::<Vec<usize>>();
-
-        for i in 0..self.orig.rank() {
-            if self.end[i] <= orig_index[i] {
-                return None;
+            unsafe {
+                let index = shape.tensor_index_unchecked(i);
+                closure(&index, &mut self.get_unchecked_mut(&index));
             }
         }
-
-        self.orig.get(orig_index.as_slice())
     }
 }
 
@@ -321,7 +256,7 @@ impl<T> Index<&[usize]> for TensorSliceMut<'_, T> {
             })
             .collect::<Vec<usize>>();
 
-        &self.orig[actual_index.as_slice()]
+        unsafe { self.orig.get_unchecked(actual_index.as_slice()) }
     }
 }
 
@@ -338,7 +273,7 @@ impl<T> IndexMut<&[usize]> for TensorSliceMut<'_, T> {
             })
             .collect::<Vec<usize>>();
 
-        &mut self.orig[actual_index.as_slice()]
+        unsafe { self.orig.get_unchecked_mut(actual_index.as_slice()) }
     }
 }
 
@@ -346,28 +281,51 @@ impl<T: Clone> IntoTensor<T> for TensorSliceMut<'_, T> {
     fn into_tensor(self) -> Tensor<T> {
         let mut elements = Vec::with_capacity(self.shape().element_count());
         for i in 0..self.shape().element_count() {
-            elements.push(self[&self.shape().tensor_index(i).unwrap()].clone());
+            unsafe {
+                elements.push(
+                    self.get_unchecked(&self.shape().tensor_index_unchecked(i))
+                        .clone(),
+                );
+            }
         }
 
         Tensor::new(&self.shape(), elements).unwrap()
     }
 }
 
-impl<'a, T: Clone> TensorLike<T> for TensorSliceMut<'a, T> {
+impl<'a, T> TensorLike<T> for TensorSliceMut<'a, T> {
     fn shape(&self) -> Shape {
-        TensorSliceMut::shape(self)
+        Shape::new(
+            self.end
+                .iter()
+                .zip(self.start.iter())
+                .map(|(e, s)| e - s)
+                .collect(),
+        )
     }
 
     fn rank(&self) -> usize {
-        TensorSliceMut::rank(self)
-    }
-
-    fn elements(&self) -> &[T] {
-        self.orig.elements()
+        self.end.len()
     }
 
     fn get(&self, indices: &[usize]) -> Option<&T> {
-        TensorSliceMut::get(self, indices)
+        if indices.len() != self.orig.rank() {
+            return None;
+        }
+
+        let orig_index = indices
+            .iter()
+            .zip(self.start.iter())
+            .map(|(x, y)| x + y)
+            .collect::<Vec<usize>>();
+
+        for i in 0..self.orig.rank() {
+            if self.end[i] <= orig_index[i] {
+                return None;
+            }
+        }
+
+        unsafe { Some(self.orig.get_unchecked(orig_index.as_slice())) }
     }
 
     unsafe fn get_unchecked(&self, indices: &[usize]) -> &T {
@@ -386,6 +344,7 @@ impl<'a, T: Clone> TensorLike<T> for TensorSliceMut<'a, T> {
     {
         struct SliceIter<'b, T> {
             slice: &'b TensorSliceMut<'b, T>,
+            len: usize,
             flat_index: usize,
         }
 
@@ -393,20 +352,24 @@ impl<'a, T: Clone> TensorLike<T> for TensorSliceMut<'a, T> {
             type Item = &'b T;
 
             fn next(&mut self) -> Option<Self::Item> {
-                let shape = self.slice.shape();
-                let res = match shape.tensor_index(self.flat_index) {
-                    Ok(i) => Some(&self.slice[&i]),
-                    Err(_) => None,
+                if self.flat_index >= self.len {
+                    return None;
+                }
+
+                let res = unsafe {
+                    self.slice
+                        .get_unchecked(&self.slice.shape().tensor_index_unchecked(self.flat_index))
                 };
 
                 self.flat_index += 1;
 
-                res
+                Some(res)
             }
         }
 
         SliceIter {
             slice: self,
+            len: self.shape().element_count(),
             flat_index: 0,
         }
     }
@@ -416,9 +379,11 @@ impl<'a, T: Clone> TensorLike<T> for TensorSliceMut<'a, T> {
         T: 'b + Send + Sync,
     {
         let shape = self.shape();
-        (0..shape.element_count())
-            .into_par_iter()
-            .map(move |i| &self[&shape.tensor_index(i).unwrap()])
+        unsafe {
+            (0..shape.element_count())
+                .into_par_iter()
+                .map(move |i| self.get_unchecked(&shape.tensor_index_unchecked(i)))
+        }
     }
 
     fn chunks<'b>(&'b self, n: usize) -> impl Iterator<Item = Chunk<'b, T>>
@@ -440,13 +405,25 @@ impl<'a, T: Clone> TensorLike<T> for TensorSliceMut<'a, T> {
     }
 }
 
-impl<'a, T: Clone> TensorLikeMut<T> for TensorSliceMut<'a, T> {
-    fn elements_mut(&mut self) -> &mut [T] {
-        self.orig.elements_mut()
-    }
-
+impl<'a, T> TensorLikeMut<T> for TensorSliceMut<'a, T> {
     fn get_mut(&mut self, indices: &[usize]) -> Option<&mut T> {
-        self.orig.get_mut(indices)
+        if indices.len() != self.orig.rank() {
+            return None;
+        }
+
+        let orig_index = indices
+            .iter()
+            .zip(self.start.iter())
+            .map(|(x, y)| x + y)
+            .collect::<Vec<usize>>();
+
+        for i in 0..self.orig.rank() {
+            if self.end[i] <= orig_index[i] {
+                return None;
+            }
+        }
+
+        unsafe { Some(self.orig.get_unchecked_mut(orig_index.as_slice())) }
     }
 
     unsafe fn get_unchecked_mut(&mut self, indices: &[usize]) -> &mut T {
@@ -464,26 +441,48 @@ impl<'a, T: Clone> TensorLikeMut<T> for TensorSliceMut<'a, T> {
         T: 'b,
     {
         struct SliceIterMut<'b, T> {
-            base: *mut T,
-            flat_index: usize,
-            shape: &'b Shape,
+            base: *mut T,            // Pointer to the start of the original tensor's elements
+            flat_index: usize,       // Current flat index in the slice
+            len: usize,              // Total number of elements in the slice
+            orig_shape: Shape,       // Shape of the original tensor
+            slice_shape: Shape,      // Shape of the slice
+            slice_start: Vec<usize>, // Start of the slice in the original tensor
+            _marker: PhantomData<&'b mut T>,
         }
 
         impl<'b, T: 'b> Iterator for SliceIterMut<'b, T> {
             type Item = &'b mut T;
 
             fn next(&mut self) -> Option<Self::Item> {
-                self.shape.tensor_index(self.flat_index).ok()?;
+                if self.flat_index >= self.len {
+                    return None;
+                }
+
                 self.flat_index += 1;
-                let offset = self.flat_index - 1;
-                Some(unsafe { &mut *self.base.add(offset) })
+
+                Some(unsafe {
+                    &mut *self.base.add(
+                        self.orig_shape.address_unchecked(
+                            self.slice_shape
+                                .tensor_index_unchecked(self.flat_index - 1)
+                                .iter()
+                                .zip(self.slice_start.iter())
+                                .map(|(a, b)| a + b)
+                                .collect::<Vec<_>>(),
+                        ),
+                    )
+                })
             }
         }
 
         SliceIterMut {
             base: self.orig.elements_mut().as_mut_ptr(),
             flat_index: 0,
-            shape: &self.orig.shape,
+            len: self.shape().element_count(),
+            orig_shape: self.orig.shape(),
+            slice_shape: self.shape(),
+            slice_start: self.start.clone(),
+            _marker: Default::default(),
         }
     }
 
@@ -517,17 +516,16 @@ impl<'a, T: Clone> TensorLikeMut<T> for TensorSliceMut<'a, T> {
                     return None;
                 }
 
-                let orig_index = self
-                    .slice_shape
-                    .tensor_index(self.start)
-                    .ok()?
-                    .iter()
-                    .zip(self.slice_start.iter())
-                    .map(|(a, b)| a + b)
-                    .collect::<Vec<_>>();
                 let res = unsafe {
+                    let orig_index = self
+                        .slice_shape
+                        .tensor_index_unchecked(self.start)
+                        .iter()
+                        .zip(self.slice_start.iter())
+                        .map(|(a, b)| a + b)
+                        .collect::<Vec<_>>();
                     self.base
-                        .add(self.orig_shape.address(orig_index).ok()?)
+                        .add(self.orig_shape.address_unchecked(orig_index))
                         .as_mut()
                 };
 
@@ -548,18 +546,16 @@ impl<'a, T: Clone> TensorLikeMut<T> for TensorSliceMut<'a, T> {
 
                 self.end -= 1;
 
-                let orig_index = self
-                    .slice_shape
-                    .tensor_index(self.end)
-                    .ok()?
-                    .iter()
-                    .zip(self.slice_start.iter())
-                    .map(|(a, b)| a + b)
-                    .collect::<Vec<_>>();
-
                 unsafe {
+                    let orig_index = self
+                        .slice_shape
+                        .tensor_index_unchecked(self.end)
+                        .iter()
+                        .zip(self.slice_start.iter())
+                        .map(|(a, b)| a + b)
+                        .collect::<Vec<_>>();
                     self.base
-                        .add(self.orig_shape.address(orig_index).ok()?)
+                        .add(self.orig_shape.address_unchecked(orig_index))
                         .as_mut()
                 }
             }

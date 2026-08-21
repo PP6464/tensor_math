@@ -5,6 +5,12 @@ use crate::definitions::tensor::Tensor;
 use rayon::iter::IndexedParallelIterator;
 use std::ops::{Index, IndexMut};
 
+/*
+--------------------------------------------
+Tensor Conversion Traits
+--------------------------------------------
+*/
+
 /// This trait allows you to specify that something can be infallibly converted into a tensor.
 /// This automatically derives an implementation for `TryIntoTensor`.
 pub trait IntoTensor<T> {
@@ -26,8 +32,13 @@ impl<T, O: IntoTensor<T>> TryIntoTensor<T> for O {
     }
 }
 
+/*
+--------------------------------------------
+* Matrix Conversion Traits
+--------------------------------------------
+*/
+
 /// This trait allows you to specify that something can be infallibly converted into a matrix.
-/// This automatically derives an implementation for `TryIntoMatrix`.
 pub trait IntoMatrix<T> {
     fn into_matrix(self) -> Matrix<T>;
 }
@@ -39,13 +50,11 @@ pub trait TryIntoMatrix<T> {
     fn try_into_matrix(self) -> Result<Matrix<T>, Self::Error>;
 }
 
-impl<T, O: IntoMatrix<T>> TryIntoMatrix<T> for O {
-    type Error = ();
-
-    fn try_into_matrix(self) -> Result<Matrix<T>, Self::Error> {
-        Ok(self.into_matrix())
-    }
-}
+/*
+--------------------------------------------
+* Tensor-like traits
+--------------------------------------------
+*/
 
 /// Implemented by anything that behaves like an immutable tensor: it exposes its shape,
 /// rank, and a way to read its elements. Supports `[]` indexing via the standard
@@ -58,13 +67,10 @@ pub trait TensorLike<T>: for<'a> Index<&'a [usize], Output = T> {
     /// Returns the rank (number of dimensions) of the tensor-like value.
     fn rank(&self) -> usize;
 
-    /// Returns the elements of the tensor-like value as a slice.
-    fn elements(&self) -> &[T];
-
     /// Returns a reference to the element at the given indices if it is in bounds,
     /// otherwise returns None.
     fn get(&self, indices: &[usize]) -> Option<&T>;
-    
+
     /// Gets the value at the specified index and trusts it is in bounds
     unsafe fn get_unchecked(&self, indices: &[usize]) -> &T;
 
@@ -95,9 +101,6 @@ pub trait TensorLike<T>: for<'a> Index<&'a [usize], Output = T> {
 /// impls that concrete types provide, and provides mutable borrowing and consuming
 /// iteration over its elements.
 pub trait TensorLikeMut<T>: TensorLike<T> + for<'a> IndexMut<&'a [usize]> {
-    /// Returns the elements of the tensor-like value as a mutable slice.
-    fn elements_mut(&mut self) -> &mut [T];
-
     /// Returns a mutable reference to the element at the given indices if it is in bounds,
     /// otherwise returns None.
     fn get_mut(&mut self, indices: &[usize]) -> Option<&mut T>;
@@ -121,10 +124,19 @@ pub trait TensorLikeMut<T>: TensorLike<T> + for<'a> IndexMut<&'a [usize]> {
         T: 'a;
 
     /// Returns a parallel mutable iterator over chunks of the tensor-like value
-    fn par_chunks_mut<'a>(&'a mut self, n: usize) -> impl IndexedParallelIterator<Item = ChunkMut<'a, T>>
+    fn par_chunks_mut<'a>(
+        &'a mut self,
+        n: usize,
+    ) -> impl IndexedParallelIterator<Item = ChunkMut<'a, T>>
     where
         T: Send + Sync + 'a;
 }
+
+/*
+--------------------------------------------
+* Matrix-like traits
+--------------------------------------------
+*/
 
 /// Implemented by anything that behaves like an immutable matrix: it exposes its shape,
 /// row count, column count, and a way to read its elements. Supports `[]` indexing via
@@ -204,7 +216,10 @@ pub trait MatrixLikeMut<T>:
         T: 'a;
 
     /// Returns a parallel mutable iterator over chunks of the tensor-like value
-    fn par_chunks_mut<'a>(&'a mut self, n: usize) -> impl IndexedParallelIterator<Item = ChunkMut<'a, T>>
+    fn par_chunks_mut<'a>(
+        &'a mut self,
+        n: usize,
+    ) -> impl IndexedParallelIterator<Item = ChunkMut<'a, T>>
     where
         T: Send + Sync + 'a;
 }

@@ -34,10 +34,11 @@ pub enum TensorErrors {
         start: usize,
         end: usize,
     },
-    #[error("Slice shape {slice_shape} incompatible with tensor shape {tensor_shape}")]
-    SliceIncompatibleShape {
-        slice_shape: Shape,
-        tensor_shape: Shape,
+    #[error("Shape {shape_1} incompatible with shape {shape_2} for operation {op}")]
+    IncompatibleShape {
+        shape_1: Shape,
+        shape_2: Shape,
+        op: &'static str,
     },
     #[error("Standard deviation ({0}) is not positive")]
     NonPositiveSigma(f64),

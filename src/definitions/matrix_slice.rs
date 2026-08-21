@@ -1,16 +1,18 @@
 use crate::definitions::chunk::{Chunk, ChunkMut};
-use crate::definitions::errors::TensorErrors;
-use crate::definitions::errors::TensorErrors::SliceIncompatibleShape;
 use crate::definitions::matrix::Matrix;
 use crate::definitions::shape::Shape;
-use crate::definitions::traits::{IntoMatrix, IntoTensor, MatrixLike, MatrixLikeMut};
+use crate::definitions::traits::{IntoMatrix, MatrixLike, MatrixLikeMut};
 use crate::shape;
 use rayon::iter::plumbing::{bridge, Consumer, Producer, ProducerCallback, UnindexedConsumer};
-use rayon::iter::{
-    IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator, ParallelIterator,
-};
+use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
+
+/*
+--------------------------------------------
+* Immutable matrix slice definition
+--------------------------------------------
+*/
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct MatrixSlice<'a, T> {
@@ -20,16 +22,6 @@ pub struct MatrixSlice<'a, T> {
 }
 
 impl<T> MatrixSlice<'_, T> {
-    /// Returns the number of rows of the matrix slice.
-    pub fn rows(&self) -> usize {
-        self.end.0 - self.start.0
-    }
-
-    /// Returns the number of columns of the matrix slice.
-    pub fn cols(&self) -> usize {
-        self.end.1 - self.start.1
-    }
-
     /// Returns the start position of the matrix slice.
     pub fn start(&self) -> (usize, usize) {
         self.start
@@ -40,17 +32,14 @@ impl<T> MatrixSlice<'_, T> {
         self.end
     }
 
-    /// Returns the shape of the matrix slice.
-    pub fn shape(&self) -> Shape {
-        shape![self.rows(), self.cols()]
-    }
-
     /// Applies the given function to each element of the slice.
     pub fn for_each(&self, mut closure: impl FnMut(&T)) {
         let rows = self.rows();
         let cols = self.cols();
         for i in 0..rows * cols {
-            closure(&self[(i / cols, i % cols)]);
+            unsafe {
+                closure(self.get_unchecked((i / cols, i % cols)));
+            }
         }
     }
 
@@ -59,23 +48,22 @@ impl<T> MatrixSlice<'_, T> {
         let rows = self.rows();
         let cols = self.cols();
         for i in 0..rows * cols {
-            closure((i / cols, i % cols), &self[(i / cols, i % cols)]);
+            unsafe {
+                closure(
+                    (i / cols, i % cols),
+                    self.get_unchecked((i / cols, i % cols)),
+                );
+            }
         }
     }
 }
 
-impl<'a, T: Clone> MatrixSlice<'a, T> {
-    /// Gets the value at the specified index, returning None if the index is out of bounds.
-    pub fn get(&self, indices: (usize, usize)) -> Option<&T> {
-        let orig_index = (indices.0 + self.start.0, indices.1 + self.start.1);
+/*
+--------------------------------------------
+* Indexing for immutable matrix slices
+--------------------------------------------
+*/
 
-        if orig_index.0 >= self.end.0 || orig_index.1 >= self.end.1 {
-            return None;
-        }
-
-        self.orig.get(orig_index)
-    }
-}
 impl<T> Index<(usize, usize)> for MatrixSlice<'_, T> {
     type Output = T;
 
@@ -83,7 +71,10 @@ impl<T> Index<(usize, usize)> for MatrixSlice<'_, T> {
         assert!(index.0 + self.start.0 < self.end.0);
         assert!(index.1 + self.start.1 < self.end.1);
 
-        &self.orig[(self.start.0 + index.0, self.start.1 + index.1)]
+        unsafe {
+            self.orig
+                .get_unchecked((self.start.0 + index.0, self.start.1 + index.1))
+        }
     }
 }
 
@@ -94,9 +85,18 @@ impl<T> Index<&[usize; 2]> for MatrixSlice<'_, T> {
         assert!(self.start.0 + index[0] < self.end.0);
         assert!(self.start.1 + index[1] < self.end.1);
 
-        &self.orig[(self.start.0 + index[0], self.start.1 + index[1])]
+        unsafe {
+            self.orig
+                .get_unchecked((self.start.0 + index[0], self.start.1 + index[1]))
+        }
     }
 }
+
+/*
+--------------------------------------------
+* Conversion into Matrix
+--------------------------------------------
+*/
 
 impl<T: Clone> IntoMatrix<T> for MatrixSlice<'_, T> {
     fn into_matrix(self) -> Matrix<T> {
@@ -108,22 +108,28 @@ impl<T: Clone> IntoMatrix<T> for MatrixSlice<'_, T> {
         Matrix {
             rows: self.rows(),
             cols: self.cols(),
-            tensor: elements.into_tensor(),
+            elements,
         }
     }
 }
 
-impl<'a, T: Clone> MatrixLike<T> for MatrixSlice<'a, T> {
+/*
+--------------------------------------------
+* Matrix-like trait implementations
+--------------------------------------------
+*/
+
+impl<'a, T> MatrixLike<T> for MatrixSlice<'a, T> {
     fn shape(&self) -> Shape {
-        MatrixSlice::shape(self)
+        shape![self.rows(), self.cols()]
     }
 
     fn rows(&self) -> usize {
-        MatrixSlice::rows(self)
+        self.end.0 - self.start.0
     }
 
     fn cols(&self) -> usize {
-        MatrixSlice::cols(self)
+        self.end.1 - self.start.1
     }
 
     fn is_square(&self) -> bool {
@@ -131,7 +137,11 @@ impl<'a, T: Clone> MatrixLike<T> for MatrixSlice<'a, T> {
     }
 
     fn get(&self, indices: (usize, usize)) -> Option<&T> {
-        MatrixSlice::get(self, indices)
+        if indices.0 >= self.rows() || indices.1 >= self.cols() {
+            return None;
+        }
+
+        unsafe { Some(self.get_unchecked((indices.0, indices.1))) }
     }
 
     unsafe fn get_unchecked(&self, indices: (usize, usize)) -> &T {
@@ -145,6 +155,7 @@ impl<'a, T: Clone> MatrixLike<T> for MatrixSlice<'a, T> {
     {
         struct SliceIter<'b, T> {
             slice: &'b MatrixSlice<'b, T>,
+            shape: Shape,
             flat_index: usize,
         }
 
@@ -152,9 +163,8 @@ impl<'a, T: Clone> MatrixLike<T> for MatrixSlice<'a, T> {
             type Item = &'b T;
 
             fn next(&mut self) -> Option<Self::Item> {
-                let shape = self.slice.shape();
-                let res = match shape.tensor_index(self.flat_index) {
-                    Ok(i) => Some(&self.slice[(i[0], i[1])]),
+                let res = match self.shape.tensor_index(self.flat_index) {
+                    Ok(i) => Some(unsafe { self.slice.get_unchecked((i[0], i[1])) }),
                     Err(_) => None,
                 };
 
@@ -166,6 +176,7 @@ impl<'a, T: Clone> MatrixLike<T> for MatrixSlice<'a, T> {
 
         SliceIter {
             slice: self,
+            shape: self.shape(),
             flat_index: 0,
         }
     }
@@ -175,10 +186,9 @@ impl<'a, T: Clone> MatrixLike<T> for MatrixSlice<'a, T> {
         T: 'b + Send + Sync,
     {
         let shape = self.shape();
-        (0..shape.element_count()).into_par_iter().map(move |i| {
-            let tensor_index = shape.tensor_index(i).unwrap();
-            &self[(tensor_index[0], tensor_index[1])]
-        })
+        (0..shape.element_count())
+            .into_par_iter()
+            .map(move |i| unsafe { self.get_unchecked((i / self.cols(), i % self.cols())) })
     }
 
     fn chunks<'b>(&'b self, n: usize) -> impl Iterator<Item = Chunk<'b, T>>
@@ -200,6 +210,12 @@ impl<'a, T: Clone> MatrixLike<T> for MatrixSlice<'a, T> {
     }
 }
 
+/*
+--------------------------------------------
+* Mutable matrix slice definition
+--------------------------------------------
+*/
+
 #[derive(Debug, Eq, PartialEq)]
 pub struct MatrixSliceMut<'a, T> {
     pub(crate) orig: &'a mut Matrix<T>,
@@ -208,16 +224,6 @@ pub struct MatrixSliceMut<'a, T> {
 }
 
 impl<T> MatrixSliceMut<'_, T> {
-    /// Returns the number of rows of the matrix slice.
-    pub fn rows(&self) -> usize {
-        self.end.0 - self.start.0
-    }
-
-    /// Returns the number of columns of the matrix slice.
-    pub fn cols(&self) -> usize {
-        self.end.1 - self.start.1
-    }
-
     /// Returns the start position of the matrix slice.
     pub fn start(&self) -> (usize, usize) {
         self.start
@@ -228,17 +234,14 @@ impl<T> MatrixSliceMut<'_, T> {
         self.end
     }
 
-    /// Returns the shape of the matrix slice.
-    pub fn shape(&self) -> Shape {
-        shape![self.rows(), self.cols()]
-    }
-
     /// Applies the given function to each element of the slice.
     pub fn for_each_mut(&mut self, mut closure: impl FnMut(&mut T)) {
         let rows = self.rows();
         let cols = self.cols();
         for i in 0..rows * cols {
-            closure(&mut self[(i / cols, i % cols)]);
+            unsafe {
+                closure(self.get_unchecked_mut((i / cols, i % cols)));
+            }
         }
     }
 
@@ -247,40 +250,22 @@ impl<T> MatrixSliceMut<'_, T> {
         let rows = self.rows();
         let cols = self.cols();
         for i in 0..rows * cols {
-            closure((i / cols, i % cols), &mut self[(i / cols, i % cols)]);
+            unsafe {
+                closure(
+                    (i / cols, i % cols),
+                    self.get_unchecked_mut((i / cols, i % cols)),
+                );
+            }
         }
     }
 }
 
-impl<'a, T: Clone> MatrixSliceMut<'a, T> {
-    /// Sets all the values in the mutable slice to the values in the given input.
-    /// This fails if the input does not have the same shape as the slice.
-    pub fn set_all(&mut self, values: &Matrix<T>) -> Result<(), TensorErrors> {
-        if self.end.0 - self.start.0 != values.rows || self.end.1 - self.start.1 != values.cols {
-            return Err(SliceIncompatibleShape {
-                slice_shape: shape![self.end.0 - self.start.0, self.end.1 - self.start.1],
-                tensor_shape: values.shape.clone(),
-            });
-        }
+/*
+--------------------------------------------
+* Indexing for mutable matrix slices
+--------------------------------------------
+*/
 
-        for (index, value) in values.enumerated_iter() {
-            self[index] = value
-        }
-
-        Ok(())
-    }
-
-    /// Gets the value at the specified index, returning None if the index is out of bounds.
-    pub fn get(&self, indices: (usize, usize)) -> Option<&T> {
-        let orig_index = (indices.0 + self.start.0, indices.1 + self.start.1);
-
-        if orig_index.0 >= self.end.0 || orig_index.1 >= self.end.1 {
-            return None;
-        }
-
-        self.orig.get(orig_index)
-    }
-}
 impl<T> Index<(usize, usize)> for MatrixSliceMut<'_, T> {
     type Output = T;
 
@@ -321,39 +306,63 @@ impl<T> IndexMut<&[usize; 2]> for MatrixSliceMut<'_, T> {
     }
 }
 
+/*
+--------------------------------------------
+* Conversion into Matrix
+--------------------------------------------
+*/
+
 impl<T: Clone> IntoMatrix<T> for MatrixSliceMut<'_, T> {
     fn into_matrix(self) -> Matrix<T> {
         let mut elements = Vec::with_capacity(self.rows() * self.cols());
         for i in 0..self.rows() * self.cols() {
-            elements.push(self[(i / self.cols(), i % self.cols())].clone());
+            unsafe {
+                elements.push(
+                    self.get_unchecked((i / self.cols(), i % self.cols()))
+                        .clone(),
+                );
+            }
         }
 
         Matrix {
             rows: self.rows(),
             cols: self.cols(),
-            tensor: elements.into_tensor(),
+            elements,
         }
     }
 }
 
-impl<'a, T: Clone> MatrixLike<T> for MatrixSliceMut<'a, T> {
+/*
+--------------------------------------------
+* Matrix-like trait implementations
+--------------------------------------------
+*/
+
+impl<'a, T> MatrixLike<T> for MatrixSliceMut<'a, T> {
     fn shape(&self) -> Shape {
-        MatrixSliceMut::shape(self)
+        shape![self.rows(), self.cols()]
     }
 
     fn rows(&self) -> usize {
-        MatrixSliceMut::rows(self)
+        self.end.0 - self.start.0
     }
 
     fn cols(&self) -> usize {
-        MatrixSliceMut::cols(self)
+        self.end.1 - self.start.1
     }
 
     fn is_square(&self) -> bool {
         self.rows() == self.cols()
     }
+
     fn get(&self, indices: (usize, usize)) -> Option<&T> {
-        MatrixSliceMut::get(self, indices)
+        let orig_index = (indices.0 + self.start.0, indices.1 + self.start.1);
+
+        if orig_index.0 >= self.end.0 || orig_index.1 >= self.end.1 {
+            return None;
+        }
+
+        unsafe { Some(self.orig.get_unchecked(orig_index)) }
     }
 
     unsafe fn get_unchecked(&self, indices: (usize, usize)) -> &T {
@@ -376,7 +385,7 @@ impl<'a, T: Clone> MatrixLike<T> for MatrixSliceMut<'a, T> {
             fn next(&mut self) -> Option<Self::Item> {
                 let shape = self.slice.shape();
                 let res = match shape.tensor_index(self.flat_index) {
-                    Ok(i) => Some(&self.slice[(i[0], i[1])]),
+                    Ok(i) => Some(unsafe { self.slice.get_unchecked((i[0], i[1])) }),
                     Err(_) => None,
                 };
 
@@ -397,10 +406,9 @@ impl<'a, T: Clone> MatrixLike<T> for MatrixSliceMut<'a, T> {
         T: 'b + Send + Sync,
     {
         let shape = self.shape();
-        (0..shape.element_count()).into_par_iter().map(move |i| {
-            let tensor_index = shape.tensor_index(i).unwrap();
-            &self[(tensor_index[0], tensor_index[1])]
-        })
+        (0..shape.element_count())
+            .into_par_iter()
+            .map(move |i| unsafe { self.get_unchecked((i / self.cols(), i % self.cols())) })
     }
 
     fn chunks<'b>(&'b self, n: usize) -> impl Iterator<Item = Chunk<'b, T>>
@@ -422,9 +430,18 @@ impl<'a, T: Clone> MatrixLike<T> for MatrixSliceMut<'a, T> {
     }
 }
 
-impl<'a, T: Clone> MatrixLikeMut<T> for MatrixSliceMut<'a, T> {
+impl<'a, T> MatrixLikeMut<T> for MatrixSliceMut<'a, T> {
     fn get_mut(&mut self, indices: (usize, usize)) -> Option<&mut T> {
-        self.orig.get_mut(indices)
+        if indices.0 >= self.rows() || indices.1 >= self.cols() {
+            return None;
+        }
+
+        unsafe {
+            Some(
+                self.orig
+                    .get_unchecked_mut((indices.0 + self.start.0, indices.1 + self.start.1)),
+            )
+        }
     }
 
     unsafe fn get_unchecked_mut(&mut self, indices: (usize, usize)) -> &mut T {
@@ -439,24 +456,26 @@ impl<'a, T: Clone> MatrixLikeMut<T> for MatrixSliceMut<'a, T> {
         struct SliceIterMut<'b, T> {
             base: *mut T,
             flat_index: usize,
-            shape: &'b Shape,
+            len: usize,
+            _marker: PhantomData<&'b T>,
         }
 
         impl<'b, T: 'b> Iterator for SliceIterMut<'b, T> {
             type Item = &'b mut T;
 
             fn next(&mut self) -> Option<Self::Item> {
-                self.shape.tensor_index(self.flat_index).ok()?;
-                self.flat_index += 1;
-                let offset = self.flat_index - 1;
-                Some(unsafe { &mut *self.base.add(offset) })
+                (self.flat_index < self.len).then_some(unsafe {
+                    self.flat_index += 1;
+                    self.base.add(self.flat_index - 1).as_mut()?
+                })
             }
         }
 
         SliceIterMut {
             base: self.orig.elements_mut().as_mut_ptr(),
             flat_index: 0,
-            shape: &self.orig.shape,
+            len: self.shape().element_count(),
+            _marker: Default::default(),
         }
     }
 
@@ -464,7 +483,7 @@ impl<'a, T: Clone> MatrixLikeMut<T> for MatrixSliceMut<'a, T> {
     where
         T: 'b + Send + Sync,
     {
-        let orig_shape = self.orig.shape.clone();
+        let orig_shape = self.orig.shape().clone();
         let slice_shape = self.shape().clone();
         let base = self.orig.elements_mut().as_mut_ptr();
         let count = orig_shape.element_count();
@@ -473,7 +492,7 @@ impl<'a, T: Clone> MatrixLikeMut<T> for MatrixSliceMut<'a, T> {
             slice_start: (usize, usize), // Start of the entire slice
             start: usize,                // Flat index of start (within entire slice)
             end: usize,                  // Flat exclusive end of subslice (within entire slice)
-            base: *mut T,                // start for the entire original tensor
+            base: *mut T,                // start for the entire original matrix
             slice_shape: Shape,          // Shape of the entire slice
             orig_shape: Shape,           // Shape of entire original matrix
             _marker: PhantomData<&'b T>,
@@ -490,17 +509,17 @@ impl<'a, T: Clone> MatrixLikeMut<T> for MatrixSliceMut<'a, T> {
                     return None;
                 }
 
-                let orig_index = self
-                    .slice_shape
-                    .tensor_index(self.start)
-                    .ok()?
-                    .iter()
-                    .zip([self.slice_start.0, self.slice_start.1].iter())
-                    .map(|(a, b)| a + b)
-                    .collect::<Vec<_>>();
+                let orig_index = unsafe {
+                    self.slice_shape
+                        .tensor_index_unchecked(self.start)
+                        .iter()
+                        .zip([self.slice_start.0, self.slice_start.1].iter())
+                        .map(|(a, b)| a + b)
+                        .collect::<Vec<_>>()
+                };
                 let res = unsafe {
                     self.base
-                        .add(self.orig_shape.address(orig_index).ok()?)
+                        .add(self.orig_shape.address_unchecked(orig_index))
                         .as_mut()
                 };
 
@@ -521,18 +540,17 @@ impl<'a, T: Clone> MatrixLikeMut<T> for MatrixSliceMut<'a, T> {
 
                 self.end -= 1;
 
-                let orig_index = self
-                    .slice_shape
-                    .tensor_index(self.end)
-                    .ok()?
-                    .iter()
-                    .zip([self.slice_start.0, self.slice_start.1].iter())
-                    .map(|(a, b)| a + b)
-                    .collect::<Vec<_>>();
-
                 unsafe {
+                    let orig_index = self
+                        .slice_shape
+                        .tensor_index_unchecked(self.end)
+                        .iter()
+                        .zip([self.slice_start.0, self.slice_start.1].iter())
+                        .map(|(a, b)| a + b)
+                        .collect::<Vec<_>>();
+
                     self.base
-                        .add(self.orig_shape.address(orig_index).ok()?)
+                        .add(self.orig_shape.address_unchecked(orig_index))
                         .as_mut()
                 }
             }
@@ -571,10 +589,7 @@ impl<'a, T: Clone> MatrixLikeMut<T> for MatrixSliceMut<'a, T> {
             }
         }
 
-        impl<'b, T> ParallelIterator for MatrixSliceMutIter<'b, T>
-        where
-            T: Send + Sync + 'b,
-        {
+        impl<'b, T: Send + Sync + 'b> ParallelIterator for MatrixSliceMutIter<'b, T> {
             type Item = &'b mut T;
 
             fn drive_unindexed<C>(self, consumer: C) -> C::Result

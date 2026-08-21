@@ -42,9 +42,3 @@ impl Index<usize> for Strides {
         &self.0[index]
     }
 }
-
-impl Into<Vec<usize>> for Strides {
-    fn into(self) -> Vec<usize> {
-        self.0
-    }
-}

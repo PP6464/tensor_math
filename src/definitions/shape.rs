@@ -4,6 +4,12 @@ use crate::utilities::internal_functions::dot_vectors;
 use std::fmt::Display;
 use std::ops::{Index, IndexMut};
 
+/*
+--------------------------------------------
+* Shape definition
+--------------------------------------------
+*/
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Shape(pub(crate) Vec<usize>);
 
@@ -74,7 +80,7 @@ impl Shape {
     }
 
     /// This gives the address for a corresponding shape index and trusts validity
-    unsafe fn address_unchecked(&self, index: Vec<usize>) -> usize {
+    pub(crate) unsafe fn address_unchecked(&self, index: Vec<usize>) -> usize {
         dot_vectors(&Strides::from_shape(self).0, &index)
     }
 
@@ -97,7 +103,28 @@ impl Shape {
 
         Ok(index_vec)
     }
+
+    /// Computes the tensor index for a given address and trusts validity.
+    pub(crate) unsafe fn tensor_index_unchecked(&self, address: usize) -> Vec<usize> {
+        let mut index_vec = Vec::with_capacity(self.rank());
+        let mut remainder = address;
+        let strides = Strides::from_shape(self);
+
+        for j in strides.0.iter() {
+            let floored_div = remainder / j;
+            index_vec.push(floored_div);
+            remainder = remainder % j;
+        }
+
+        index_vec
+    }
 }
+
+/*
+--------------------------------------------
+* Shape indexing           
+--------------------------------------------
+*/
 
 impl Index<usize> for Shape {
     type Output = usize;
@@ -113,6 +140,12 @@ impl IndexMut<usize> for Shape {
     }
 }
 
+/*
+--------------------------------------------
+* Shape conversions       
+--------------------------------------------
+*/
+
 impl FromIterator<usize> for Shape {
     fn from_iter<I: IntoIterator<Item = usize>>(iter: I) -> Self {
         Shape(Vec::from_iter(iter))
@@ -125,17 +158,21 @@ impl From<Vec<usize>> for Shape {
     }
 }
 
+/*
+--------------------------------------------
+* Shape display            
+--------------------------------------------
+*/
+
 impl Display for Shape {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.0.as_slice())
+        write!(f, "(")?;
+        for (i, dim) in self.0.iter().enumerate() {
+            if i > 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "{}", dim)?;
+        }
+        write!(f, ")")
     }
-}
-
-#[macro_export]
-/// Creates a shape from varargs of type usize.
-/// You will need to import the Shape struct, at `tensor_math::definitions::shape::Shape;`
-macro_rules! shape {
-    ($($shape_dimensions:expr),*$(,)?) => {
-        Shape::new(vec![$($shape_dimensions),*])
-    };
 }

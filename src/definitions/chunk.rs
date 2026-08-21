@@ -1,6 +1,12 @@
-use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
-use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::plumbing::{Consumer, ProducerCallback, UnindexedConsumer};
+use rayon::iter::IntoParallelRefIterator;
+use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
+
+/*
+--------------------------------------------
+* Immutable chunks              
+--------------------------------------------
+*/
 
 /// A chunk of data from a tensor-like or matrix-like value. For densely packed
 /// tensors and matrices the data is stored as a borrowed slice; for slices the
@@ -108,6 +114,12 @@ impl<'a, T: Sync + 'a> IndexedParallelIterator for ParChunkIter<'a, T> {
     }
 }
 
+/*
+--------------------------------------------
+* Mutable chunks
+--------------------------------------------
+*/
+
 /// A mutable chunk of data from a tensor-like or matrix-like value. For densely packed
 /// tensors and matrices the data is stored as a borrowed slice; for slices the
 /// data is materialised into a `Vec` because the elements are not guaranteed
@@ -117,7 +129,7 @@ pub enum ChunkMut<'a, T> {
     NonContiguous(Vec<&'a mut T>),
 }
 
-impl <'a, T> ChunkMut<'a, T> {
+impl<'a, T> ChunkMut<'a, T> {
     /// The length of the chunk
     pub fn len(&self) -> usize {
         match self {
@@ -130,7 +142,9 @@ impl <'a, T> ChunkMut<'a, T> {
     pub fn iter_mut(&'a mut self) -> ChunkMutIter<'a, T> {
         match self {
             ChunkMut::Contiguous(s) => ChunkMutIter::Contiguous(s.iter_mut()),
-            ChunkMut::NonContiguous(v) => ChunkMutIter::NonContiguous(v.iter_mut().map(deref_mut_ref)),
+            ChunkMut::NonContiguous(v) => {
+                ChunkMutIter::NonContiguous(v.iter_mut().map(deref_mut_ref))
+            }
         }
     }
 
@@ -141,7 +155,9 @@ impl <'a, T> ChunkMut<'a, T> {
     {
         match self {
             ChunkMut::Contiguous(s) => ParChunkMutIter::Contiguous(s.par_iter_mut()),
-            ChunkMut::NonContiguous(v) => ParChunkMutIter::NonContiguous(v.par_iter_mut().map(deref_mut_ref)),
+            ChunkMut::NonContiguous(v) => {
+                ParChunkMutIter::NonContiguous(v.par_iter_mut().map(deref_mut_ref))
+            }
         }
     }
 }

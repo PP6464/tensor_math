@@ -13,4 +13,5 @@ pub mod tensor;
 pub mod tensor_slice;
 pub mod traits;
 pub mod transpose;
-mod chunk;
+pub mod chunk;
+pub mod macros;
