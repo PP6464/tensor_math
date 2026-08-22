@@ -48,6 +48,12 @@ impl<T> TensorSlice<'_, T> {
     }
 }
 
+/*
+--------------------------------------------
+* Indexing for tensor slices
+--------------------------------------------
+*/
+
 impl<T> Index<&[usize]> for TensorSlice<'_, T> {
     type Output = T;
 
@@ -66,6 +72,12 @@ impl<T> Index<&[usize]> for TensorSlice<'_, T> {
         unsafe { self.orig.get_unchecked(actual_index.as_slice()) }
     }
 }
+
+/*
+--------------------------------------------
+* Conversion into Tensor
+--------------------------------------------
+*/
 
 impl<T: Clone> IntoTensor<T> for TensorSlice<'_, T> {
     fn into_tensor(self) -> Tensor<T> {
@@ -86,6 +98,12 @@ impl<T: Clone> IntoTensor<T> for TensorSlice<'_, T> {
         }
     }
 }
+
+/*
+--------------------------------------------
+* Tensor-like trait implementations
+--------------------------------------------
+*/
 
 impl<'a, T> TensorLike<T> for TensorSlice<'a, T> {
     /// Returns the shape of the tensor slice.
@@ -241,6 +259,12 @@ impl<T> TensorSliceMut<'_, T> {
     }
 }
 
+/*
+--------------------------------------------
+* Indexing for mutable tensor slices
+--------------------------------------------
+*/
+
 impl<T> Index<&[usize]> for TensorSliceMut<'_, T> {
     type Output = T;
 
@@ -277,6 +301,12 @@ impl<T> IndexMut<&[usize]> for TensorSliceMut<'_, T> {
     }
 }
 
+/*
+--------------------------------------------
+* Conversion into Tensor
+--------------------------------------------
+*/
+
 impl<T: Clone> IntoTensor<T> for TensorSliceMut<'_, T> {
     fn into_tensor(self) -> Tensor<T> {
         let mut elements = Vec::with_capacity(self.shape().element_count());
@@ -292,6 +322,12 @@ impl<T: Clone> IntoTensor<T> for TensorSliceMut<'_, T> {
         Tensor::new(&self.shape(), elements).unwrap()
     }
 }
+
+/*
+--------------------------------------------
+* Tensor-like trait implementations
+--------------------------------------------
+*/
 
 impl<'a, T> TensorLike<T> for TensorSliceMut<'a, T> {
     fn shape(&self) -> Shape {

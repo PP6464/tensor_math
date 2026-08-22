@@ -113,6 +113,22 @@ impl<T: Clone> IntoMatrix<T> for MatrixSlice<'_, T> {
     }
 }
 
+impl<T: Clone> MatrixSlice<'_, T> {
+    /// Converts the matrix slice into a new matrix.
+    pub fn clone_to_matrix(&self) -> Matrix<T> {
+        let mut elements = Vec::with_capacity(self.rows() * self.cols());
+        for i in 0..self.rows() * self.cols() {
+            elements.push(self[(i / self.cols(), i % self.cols())].clone());
+        }
+
+        Matrix {
+            rows: self.rows(),
+            cols: self.cols(),
+            elements,
+        }
+    }
+}
+
 /*
 --------------------------------------------
 * Matrix-like trait implementations
@@ -322,6 +338,22 @@ impl<T: Clone> IntoMatrix<T> for MatrixSliceMut<'_, T> {
                         .clone(),
                 );
             }
+        }
+
+        Matrix {
+            rows: self.rows(),
+            cols: self.cols(),
+            elements,
+        }
+    }
+}
+
+impl<T: Clone> MatrixSliceMut<'_, T> {
+    /// Converts the matrix slice into a new matrix.
+    pub fn clone_to_matrix(&self) -> Matrix<T> {
+        let mut elements = Vec::with_capacity(self.rows() * self.cols());
+        for i in 0..self.rows() * self.cols() {
+            elements.push(self[(i / self.cols(), i % self.cols())].clone());
         }
 
         Matrix {
