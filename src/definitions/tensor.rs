@@ -1,18 +1,19 @@
-use crate::definitions::chunk::{Chunk, ChunkMut};
 use crate::definitions::errors::TensorErrors;
 use crate::definitions::matrix::Matrix;
 use crate::definitions::shape::Shape;
 use crate::definitions::strides::Strides;
-use crate::definitions::traits::{MatrixLike, TensorLike, TensorLikeMut};
+use crate::definitions::traits::TryIntoMatrix;
 use crate::shape;
 use crate::utilities::internal_functions::dot_vectors;
 use rayon::iter::{FromParallelIterator, IntoParallelIterator};
-use rayon::iter::{
-    IndexedParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator,
-};
-use rayon::prelude::{ParallelSlice, ParallelSliceMut};
+use rayon::iter::{IndexedParallelIterator, ParallelIterator};
 use std::ops::{Deref, DerefMut, Index, IndexMut};
-use std::vec::IntoIter;
+
+/*
+--------------------------------------------
+* Tensor definition
+--------------------------------------------
+*/
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Tensor<T> {
@@ -47,7 +48,63 @@ impl<T> Tensor<T> {
     pub fn elements_mut(&mut self) -> &mut [T] {
         &mut self.elements
     }
+
+    /// Returns the shape of the tensor.
+    pub fn shape(&self) -> Shape {
+        self.shape.clone()
+    }
+
+    /// Returns the rank of the tensor.
+    pub fn rank(&self) -> usize {
+        self.shape.rank()
+    }
+
+    /// Gets the element at the specified indices, returning `None` if the indices are out of bounds.
+    pub fn get(&self, indices: &[usize]) -> Option<&T> {
+        if indices.len() != self.rank() {
+            return None;
+        }
+        for i in 0..self.rank() {
+            if indices[i] >= self.shape[i] {
+                return None;
+            }
+        }
+        let addr = dot_vectors(&self.strides.0, indices);
+        unsafe { Some(self.elements.get_unchecked(addr)) }
+    }
+
+    /// Gets the element at the specified indices without bounds checking.
+    pub(crate) unsafe fn get_unchecked(&self, indices: &[usize]) -> &T {
+        self.elements
+            .get_unchecked(dot_vectors(&self.strides.0, indices))
+    }
+
+    /// Gets a mutable reference to the element at the specified indices, returning `None` if the indices are out of bounds.
+    pub fn get_mut(&mut self, indices: &[usize]) -> Option<&mut T> {
+        if indices.len() != self.rank() {
+            return None;
+        }
+        for i in 0..self.rank() {
+            if indices[i] >= self.shape[i] {
+                return None;
+            }
+        }
+        let addr = dot_vectors(&self.strides.0, indices);
+        unsafe { Some(self.elements.get_unchecked_mut(addr)) }
+    }
+
+    /// Gets a mutable reference to the element at the specified indices without bounds checking.
+    pub(crate) unsafe fn get_unchecked_mut(&mut self, indices: &[usize]) -> &mut T {
+        self.elements
+            .get_unchecked_mut(dot_vectors(&self.strides.0, indices))
+    }
 }
+
+/*
+--------------------------------------------
+* Tensor indexing
+--------------------------------------------
+*/
 
 impl<T> Index<&[usize]> for Tensor<T> {
     type Output = T;
@@ -93,13 +150,33 @@ impl<T> IndexMut<&[usize]> for Tensor<T> {
     }
 }
 
-impl<T> IntoIterator for Tensor<T> {
-    type Item = T;
-    type IntoIter = IntoIter<Self::Item>;
-    fn into_iter(self) -> Self::IntoIter {
-        self.elements.into_iter()
+/*
+--------------------------------------------
+* Conversion between Matrix and Tensor
+--------------------------------------------
+*/
+
+impl<T> TryIntoMatrix<T> for Tensor<T> {
+    type Error = TensorErrors;
+
+    fn try_into_matrix(self) -> Result<Matrix<T>, TensorErrors> {
+        if self.shape.rank() != 2 {
+            return Err(TensorErrors::RanksDoNotMatch(self.shape.rank(), 2));
+        }
+
+        Ok(Matrix {
+            elements: self.elements,
+            rows: self.shape[0],
+            cols: self.shape[1],
+        })
     }
 }
+
+/*
+--------------------------------------------
+* Collection from iterators
+--------------------------------------------
+*/
 
 impl<T> FromIterator<T> for Tensor<T> {
     /// Converts an iterator into a tensor of shape `(iter.len())`
@@ -128,15 +205,11 @@ impl<T: Send> FromParallelIterator<T> for Tensor<T> {
     }
 }
 
-impl<T> From<Matrix<T>> for Tensor<T> {
-    fn from(value: Matrix<T>) -> Self {
-        Tensor {
-            shape: value.shape(),
-            elements: value.elements,
-            strides: Strides(vec![value.cols, 1]),
-        }
-    }
-}
+/*
+--------------------------------------------
+* Deref and DerefMut implementations
+--------------------------------------------
+*/
 
 impl<T> Deref for Tensor<T> {
     type Target = [T];
@@ -149,112 +222,5 @@ impl<T> Deref for Tensor<T> {
 impl<T> DerefMut for Tensor<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.elements_mut()
-    }
-}
-
-impl<T> TensorLike<T> for Tensor<T> {
-    fn shape(&self) -> Shape {
-        self.shape.clone()
-    }
-
-    fn rank(&self) -> usize {
-        self.shape.rank()
-    }
-
-    fn get(&self, indices: &[usize]) -> Option<&T> {
-        if indices.len() != self.rank() {
-            return None;
-        }
-        for i in 0..self.rank() {
-            if indices[i] >= self.shape[i] {
-                return None;
-            }
-        }
-        let addr = dot_vectors(&self.strides.0, indices);
-        unsafe { Some(self.elements.get_unchecked(addr)) }
-    }
-
-    unsafe fn get_unchecked(&self, indices: &[usize]) -> &T {
-        self.elements
-            .get_unchecked(dot_vectors(&self.strides.0, indices))
-    }
-
-    fn iter<'a>(&'a self) -> impl Iterator<Item = &'a T>
-    where
-        T: 'a,
-    {
-        self.elements.iter()
-    }
-
-    fn par_iter<'a>(&'a self) -> impl IndexedParallelIterator<Item = &'a T>
-    where
-        T: 'a + Send + Sync,
-    {
-        self.elements.par_iter()
-    }
-
-    fn chunks<'a>(&'a self, n: usize) -> impl Iterator<Item = Chunk<'a, T>>
-    where
-        T: 'a,
-    {
-        self.elements.chunks(n).map(Chunk::Contiguous)
-    }
-
-    fn par_chunks<'a>(&'a self, n: usize) -> impl IndexedParallelIterator<Item = Chunk<'a, T>>
-    where
-        T: Send + Sync + 'a,
-    {
-        self.elements.par_chunks(n).map(Chunk::Contiguous)
-    }
-}
-
-impl<T> TensorLikeMut<T> for Tensor<T> {
-    fn get_mut(&mut self, indices: &[usize]) -> Option<&mut T> {
-        if indices.len() != self.rank() {
-            return None;
-        }
-        for i in 0..self.rank() {
-            if indices[i] >= self.shape[i] {
-                return None;
-            }
-        }
-        let addr = dot_vectors(&self.strides.0, indices);
-        unsafe { Some(self.elements.get_unchecked_mut(addr)) }
-    }
-
-    unsafe fn get_unchecked_mut(&mut self, indices: &[usize]) -> &mut T {
-        self.elements
-            .get_unchecked_mut(dot_vectors(&self.strides.0, indices))
-    }
-
-    fn iter_mut<'a>(&'a mut self) -> impl Iterator<Item = &'a mut T>
-    where
-        T: 'a,
-    {
-        self.elements_mut().iter_mut()
-    }
-
-    fn par_iter_mut<'a>(&'a mut self) -> impl IndexedParallelIterator<Item = &'a mut T>
-    where
-        T: 'a + Send + Sync,
-    {
-        self.elements.par_iter_mut()
-    }
-
-    fn chunks_mut<'a>(&'a mut self, n: usize) -> impl Iterator<Item = ChunkMut<'a, T>>
-    where
-        T: 'a,
-    {
-        self.elements.chunks_mut(n).map(ChunkMut::Contiguous)
-    }
-
-    fn par_chunks_mut<'a>(
-        &'a mut self,
-        n: usize,
-    ) -> impl IndexedParallelIterator<Item = ChunkMut<'a, T>>
-    where
-        T: Send + Sync + 'a,
-    {
-        self.elements.par_chunks_mut(n).map(ChunkMut::Contiguous)
     }
 }
