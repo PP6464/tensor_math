@@ -1,11 +1,17 @@
 use crate::definitions::errors::TensorErrors;
+use crate::definitions::errors::TensorErrors::IncompatibleShapes;
 use crate::definitions::matrix::Matrix;
 use crate::definitions::shape::Shape;
 use crate::definitions::strides::Strides;
-use crate::definitions::traits::TryIntoMatrix;
+use crate::definitions::tensor_slice::TensorSlice;
+use crate::definitions::traits::{IntoTensor, TryIntoMatrix};
 use crate::shape;
 use crate::utilities::internal_functions::dot_vectors;
-use rayon::iter::{FromParallelIterator, IntoParallelIterator, ParallelIterator};
+use rayon::iter::IndexedParallelIterator;
+use rayon::iter::{
+    FromParallelIterator, IntoParallelIterator, IntoParallelRefIterator,
+    IntoParallelRefMutIterator, ParallelIterator,
+};
 use std::ops::{Deref, DerefMut, Index, IndexMut};
 use std::vec::IntoIter;
 /*
@@ -97,10 +103,108 @@ impl<T> Tensor<T> {
         self.elements
             .get_unchecked_mut(dot_vectors(&self.strides.0, indices))
     }
-    
+
     /// Consumes the tensor and returns an iterator over its elements.
     pub fn into_iter(self) -> IntoIter<T> {
         self.elements.into_iter()
+    }
+
+    /// Consumes the tensor and returns a parallel iterator over its elements.
+    pub fn into_par_iter(self) -> impl ParallelIterator<Item = T>
+    where
+        T: Send + Sync,
+    {
+        self.elements.into_par_iter()
+    }
+
+    /// Returns an iterator that is enumerated with tensor indices.
+    pub fn enumerated_iter(&self) -> impl Iterator<Item = (Vec<usize>, &T)> {
+        let shape = self.shape();
+        unsafe {
+            self.iter()
+                .enumerate()
+                .map(move |(index, elem)| (shape.tensor_index_unchecked(index), elem))
+        }
+    }
+
+    /// Returns a parallel iterator that is enumerated with tensor indices.
+    pub fn enumerated_par_iter(&self) -> impl ParallelIterator<Item = (Vec<usize>, &T)> + '_
+    where
+        T: Send + Sync,
+    {
+        let shape = self.shape();
+        unsafe {
+            self.par_iter()
+                .enumerate()
+                .map(move |(index, elem)| (shape.tensor_index_unchecked(index), elem))
+        }
+    }
+
+    /// Returns a mutable iterator that is enumerated with tensor indices.
+    pub fn enumerated_iter_mut(&mut self) -> impl Iterator<Item = (Vec<usize>, &mut T)> + '_ {
+        let shape = self.shape();
+        unsafe {
+            self.iter_mut()
+                .enumerate()
+                .map(move |(index, elem)| (shape.tensor_index_unchecked(index), elem))
+        }
+    }
+
+    /// Returns a parallel mutable iterator that is enumerated with tensor indices.
+    pub fn enumerated_par_iter_mut(
+        &mut self,
+    ) -> impl ParallelIterator<Item = (Vec<usize>, &mut T)> + '_
+    where
+        T: Send + Sync,
+    {
+        let shape = self.shape();
+        unsafe {
+            self.par_iter_mut()
+                .enumerate()
+                .map(move |(index, elem)| (shape.tensor_index_unchecked(index), elem))
+        }
+    }
+
+    /// Sets all the values in the tensor to the given values.
+    /// This fails if the shape of the values does not match the tensor's shape.
+    pub fn set_all(&mut self, values: &Tensor<T>) -> Result<(), TensorErrors>
+    where
+        T: Clone,
+    {
+        if self.shape() != values.shape() {
+            return Err(IncompatibleShapes {
+                shape_1: self.shape(),
+                shape_2: values.shape(),
+                op: "set_all",
+            });
+        }
+
+        for (index, value) in values.enumerated_iter() {
+            unsafe { *self.get_unchecked_mut(&index) = value.clone() }
+        }
+
+        Ok(())
+    }
+
+    /// Sets all the values in the tensor to the given values.
+    /// This fails if the shape of the values does not match the tensor's shape.
+    pub fn set_all_from_slice(&mut self, values: &TensorSlice<T>) -> Result<(), TensorErrors>
+    where
+        T: Clone,
+    {
+        if self.shape() != values.shape() {
+            return Err(IncompatibleShapes {
+                shape_1: self.shape(),
+                shape_2: values.shape(),
+                op: "set_all",
+            });
+        }
+
+        for (index, value) in values.enumerated_iter() {
+            unsafe { *self.get_unchecked_mut(&index) = value.clone() }
+        }
+
+        Ok(())
     }
 }
 
@@ -173,6 +277,22 @@ impl<T> TryIntoMatrix<T> for Tensor<T> {
             rows: self.shape[0],
             cols: self.shape[1],
         })
+    }
+}
+
+/*
+--------------------------------------------
+* Conversion from Vector
+--------------------------------------------
+*/
+
+impl<T> IntoTensor<T> for Vec<T> {
+    fn into_tensor(self) -> Tensor<T> {
+        Tensor {
+            shape: shape![self.len()],
+            strides: Strides(vec![1]),
+            elements: self,
+        }
     }
 }
 

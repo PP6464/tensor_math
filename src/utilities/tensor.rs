@@ -2,8 +2,7 @@ use crate::definitions::errors::TensorErrors;
 use crate::definitions::shape::Shape;
 use crate::definitions::strides::Strides;
 use crate::definitions::tensor::Tensor;
-use crate::definitions::tensor_slice::{TensorSlice, TensorSliceMut};
-use crate::definitions::traits::IntoTensor;
+use crate::definitions::tensor_slice::TensorSlice;
 use crate::definitions::transpose::Transpose;
 use crate::shape;
 use crate::utilities::internal_functions::dot_vectors;
@@ -14,6 +13,13 @@ use rayon::prelude::*;
 use std::collections::HashSet;
 use std::mem::MaybeUninit;
 use std::ops::{Add, Div, Range};
+use crate::definitions::tensor_slice_mut::TensorSliceMut;
+
+/*
+--------------------------------------------
+* Tensor utility functions
+--------------------------------------------
+*/
 
 impl<T> Tensor<T> {
     /// Reshapes the tensor.
@@ -108,7 +114,11 @@ impl<T: Clone> Tensor<T> {
             }
 
             if self.shape[i] != other.shape[i] {
-                return Err(TensorErrors::ShapesIncompatible);
+                return Err(TensorErrors::IncompatibleShapes {
+                    shape_1: self.shape.clone(),
+                    shape_2: other.shape.clone(),
+                    op: "concat",
+                });
             }
 
             resultant_shape.push(self.shape[i]);
@@ -180,16 +190,22 @@ impl<T: Clone> Tensor<T> {
             }
         }
 
-        let (start, end) = indices
-            .iter()
-            .map(|range| (range.start, range.end))
-            .unzip();
-        
+        let (start, end) = indices.iter().map(|range| (range.start, range.end)).unzip();
+
         Ok(TensorSlice {
             start,
             orig: self,
             end,
         })
+    }
+
+    /// Returns a slice covering the entire tensor.
+    pub fn as_tensor_slice(&self) -> TensorSlice<T> {
+        TensorSlice {
+            orig: self,
+            start: vec![0; self.rank()],
+            end: self.shape.0,
+        }
     }
 
     /// Returns a mutable slice of a specified region in the tensor.
@@ -200,9 +216,10 @@ impl<T: Clone> Tensor<T> {
         indices: &[Range<usize>],
     ) -> Result<TensorSliceMut<'_, T>, TensorErrors> {
         if indices.len() != self.rank() {
-            return Err(TensorErrors::SliceIncompatibleShape {
-                slice_shape: indices.iter().map(|r| r.end - r.start).collect(),
-                tensor_shape: self.shape.clone(),
+            return Err(TensorErrors::IncompatibleShapes {
+                shape_1: indices.iter().map(|r| r.end - r.start).collect(),
+                shape_2: self.shape.clone(),
+                op: "slice_mut",
             });
         }
 
@@ -283,10 +300,10 @@ impl<T: Clone> Tensor<T> {
         }
 
         if *transpose == Transpose::identity(self.rank()) {
-            return Ok(self.clone())
+            return Ok(self.clone());
         }
 
-        let new_shape = transpose.new_shape(self.shape())?;
+        let new_shape = transpose.new_shape(&self.shape())?;
         let new_strides = Strides::from_shape(&new_shape);
         let mut new_elements = self.elements().to_vec();
 
@@ -493,7 +510,11 @@ impl<T: Clone + Send + Sync> Tensor<T> {
             }
 
             if self.shape[i] != other.shape[i] {
-                return Err(TensorErrors::ShapesIncompatible);
+                return Err(TensorErrors::IncompatibleShapes {
+                    shape_1: self.shape.clone(),
+                    shape_2: other.shape.clone(),
+                    op: "concat",
+                });
             }
 
             resultant_shape.push(self.shape[i]);
@@ -612,10 +633,10 @@ impl<T: Clone + Send + Sync> Tensor<T> {
         }
 
         if *transpose == Transpose::identity(self.rank()) {
-            return Ok(self.clone())
+            return Ok(self.clone());
         }
 
-        let new_shape = transpose.new_shape(self.shape())?;
+        let new_shape = transpose.new_shape(&self.shape())?;
         let mut new_tensor = self.clone().reshape(&new_shape)?;
 
         new_tensor

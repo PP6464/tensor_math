@@ -15,8 +15,6 @@ pub enum TensorErrors {
         axis: usize,
         length: usize,
     },
-    #[error("Shapes are not compatible")]
-    ShapesIncompatible,
     #[error("{0} indices not valid for tensor of rank {1}")]
     IndicesInvalidForRank(usize, usize),
     #[error("Transposition permutation invalid")]
@@ -35,7 +33,7 @@ pub enum TensorErrors {
         end: usize,
     },
     #[error("Shape {shape_1} incompatible with shape {shape_2} for operation {op}")]
-    IncompatibleShape {
+    IncompatibleShapes {
         shape_1: Shape,
         shape_2: Shape,
         op: &'static str,

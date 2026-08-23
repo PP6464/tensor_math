@@ -1,23 +1,33 @@
 use crate::definitions::errors::TensorErrors;
 use crate::definitions::matrix::Matrix;
-use crate::definitions::matrix_slice::{MatrixSlice, MatrixSliceMut};
+use crate::definitions::matrix_slice::MatrixSlice;
+use crate::definitions::matrix_slice_mut::MatrixSliceMut;
 use crate::definitions::shape::Shape;
 use crate::definitions::tensor::Tensor;
-use crate::definitions::traits::IntoMatrix;
 use crate::definitions::transpose::Transpose;
 use crate::{shape, transpose};
 use num::{One, ToPrimitive, Zero};
 use rand::distr::{Distribution, StandardUniform};
-use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
+use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use std::cmp::min;
 use std::ops::{Add, Div, Range};
+
+/*
+--------------------------------------------
+* Matrix utility functions
+--------------------------------------------
+*/
 
 impl<T> Matrix<T> {
     /// Reshapes the matrix.
     /// This will fail if `new_rows * new_cols != self.element_count()`.
     pub fn reshape(self, new_rows: usize, new_cols: usize) -> Result<Matrix<T>, TensorErrors> {
+        if new_rows * new_cols != self.shape().element_count() {
+            return Err(TensorErrors::ShapeSizeDoesNotMatch);
+        }
+
         Ok(Matrix {
-            tensor: self.tensor.reshape(&shape![new_rows, new_cols])?,
+            elements: self.elements,
             rows: new_rows,
             cols: new_cols,
         })
@@ -29,101 +39,64 @@ impl<T> Matrix<T> {
         let cols = self.cols;
 
         Matrix {
-            tensor: self.tensor.map(f),
+            elements: self.elements.into_iter().map(f).collect(),
             rows,
             cols,
         }
     }
 
-    /// Applies the given function over the entire tensor elementwise by reference.
+    /// Applies the given function over the entire tensor elementwise by consuming the elements.
     pub fn map_refs<F>(&self, f: impl FnMut(&T) -> F) -> Matrix<F> {
         let rows = self.rows;
         let cols = self.cols;
 
         Matrix {
-            tensor: self.tensor.map_refs(f),
+            elements: self.iter().map(f).collect(),
             rows,
             cols,
         }
     }
-}
 
-impl<T: Send + Sync> Matrix<T> {
     /// Applies the given function over the entire tensor elementwise by consuming the elements.
-    pub fn par_map<F: Send>(self, f: impl Fn(T) -> F + Send + Sync) -> Matrix<F> {
+    pub fn par_map<F: Send>(self, f: impl Fn(T) -> F + Send + Sync) -> Matrix<F>
+    where
+        T: Send + Sync,
+    {
         let rows = self.rows;
         let cols = self.cols;
 
         Matrix {
-            tensor: self.tensor.par_map(f),
+            elements: self.elements.into_par_iter().map(f).collect(),
             rows,
             cols,
         }
     }
 
-    /// Applies the given function over the entire tensor elementwise by reference.
-    pub fn par_map_refs<F: Send>(&self, f: impl Fn(&T) -> F + Send + Sync) -> Matrix<F> {
+    /// Applies the given function over the entire tensor elementwise by consuming the elements.
+    pub fn par_map_refs<F: Send>(&self, f: impl Fn(&T) -> F + Send + Sync) -> Matrix<F>
+    where
+        T: Send + Sync,
+    {
         let rows = self.rows;
         let cols = self.cols;
 
         Matrix {
-            tensor: self.tensor.par_map_refs(f),
+            elements: self.par_iter().map(f).collect(),
             rows,
             cols,
         }
     }
-}
 
-impl<T: Clone> Matrix<T> {
     /// Creates a matrix from a single value with the specified shape.
-    pub fn from_value(rows: usize, cols: usize, value: T) -> Matrix<T> {
+    pub fn from_value(rows: usize, cols: usize, value: T) -> Matrix<T>
+    where
+        T: Clone,
+    {
         Matrix {
-            tensor: Tensor::from_value(&shape![rows, cols], value),
+            elements: vec![value; rows * cols],
             rows,
             cols,
         }
-    }
-
-    /// Concatenates two matrices along the columns.
-    /// This fails if the number of columns do not match.
-    pub fn concat_cols(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
-        let res = self.tensor.concat(&other.tensor, 1)?;
-        let res_shape = res.shape.clone();
-
-        Ok(Matrix {
-            tensor: res,
-            rows: res_shape[0],
-            cols: res_shape[1],
-        })
-    }
-
-    /// Concatenates two matrices along the rows.
-    /// This fails if the number of rows do not match.
-    pub fn concat_rows(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
-        let res = self.tensor.concat(&other.tensor, 0)?;
-        let res_shape = res.shape.clone();
-
-        Ok(Matrix {
-            tensor: res,
-            rows: res_shape[0],
-            cols: res_shape[1],
-        })
-    }
-
-    /// Returns an enumerated iterator with matrix indices.
-    pub fn enumerated_iter(&self) -> impl Iterator<Item = ((usize, usize), T)> + use<'_, T> {
-        self.tensor
-            .enumerated_iter()
-            .map(|(i, x)| ((i[0], i[1]), x))
-    }
-
-    /// Returns a mutable enumerated iterator with matrix indices.
-    pub fn enumerated_iter_mut(
-        &mut self,
-    ) -> impl Iterator<Item = ((usize, usize), &mut T)> + use<'_, T> {
-        self.tensor
-            .enumerated_iter_mut()
-            .map(|(i, x)| ((i[0], i[1]), x))
     }
 
     /// Returns an immutable cloned slice to a specified region of the matrix.
@@ -134,11 +107,52 @@ impl<T: Clone> Matrix<T> {
         rows_range: Range<usize>,
         cols_range: Range<usize>,
     ) -> Result<MatrixSlice<T>, TensorErrors> {
+        if rows_range.end > self.rows {
+            return Err(TensorErrors::SliceIndicesOutOfBounds {
+                start: rows_range.start,
+                end: rows_range.end,
+                length: self.rows,
+                axis: 0,
+            });
+        }
+
+        if rows_range.start > rows_range.end {
+            return Err(TensorErrors::InvalidInterval {
+                max: rows_range.end as f64,
+                min: rows_range.start as f64,
+            });
+        }
+
+        if cols_range.end > self.cols {
+            return Err(TensorErrors::SliceIndicesOutOfBounds {
+                start: cols_range.start,
+                end: cols_range.end,
+                length: self.cols,
+                axis: 1,
+            });
+        }
+
+        if cols_range.start > cols_range.end {
+            return Err(TensorErrors::InvalidInterval {
+                max: cols_range.end as f64,
+                min: cols_range.start as f64,
+            });
+        }
+
         Ok(MatrixSlice {
             orig: self,
             start: (rows_range.start, cols_range.start),
             end: (rows_range.end, cols_range.end),
         })
+    }
+
+    /// Returns a slice covering the entire matrix.
+    pub fn as_matrix_slice(&self) -> MatrixSlice<T> {
+        MatrixSlice {
+            orig: self,
+            start: (0, 0),
+            end: (self.rows, self.cols),
+        }
     }
 
     /// Returns a mutable slice to a specific region of the matrix.
@@ -185,6 +199,34 @@ impl<T: Clone> Matrix<T> {
             orig: self,
             start: (rows_range.start, cols_range.start),
             end: (rows_range.end, cols_range.end),
+        })
+    }
+}
+
+impl<T: Clone> Matrix<T> {
+    /// Concatenates two matrices along the columns.
+    /// This fails if the number of columns do not match.
+    pub fn concat_cols(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
+        let res = self.tensor.concat(&other.tensor, 1)?;
+        let res_shape = res.shape.clone();
+
+        Ok(Matrix {
+            tensor: res,
+            rows: res_shape[0],
+            cols: res_shape[1],
+        })
+    }
+
+    /// Concatenates two matrices along the rows.
+    /// This fails if the number of rows do not match.
+    pub fn concat_rows(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
+        let res = self.tensor.concat(&other.tensor, 0)?;
+        let res_shape = res.shape.clone();
+
+        Ok(Matrix {
+            tensor: res,
+            rows: res_shape[0],
+            cols: res_shape[1],
         })
     }
 
@@ -435,8 +477,7 @@ impl<T: Clone + Send + Sync> Matrix<T> {
             );
 
             *elem = pool_fn(
-                self
-                    .slice(self_pos.0..self_end_pos.0, self_pos.1..self_end_pos.1)
+                self.slice(self_pos.0..self_end_pos.0, self_pos.1..self_end_pos.1)
                     .unwrap()
                     .into_matrix(),
             );
@@ -482,8 +523,7 @@ impl<T: Clone + Send + Sync> Matrix<T> {
 
             *elem = pool_fn(
                 index,
-                self
-                    .slice(self_pos.0..self_end_pos.0, self_pos.1..self_end_pos.1)
+                self.slice(self_pos.0..self_end_pos.0, self_pos.1..self_end_pos.1)
                     .unwrap()
                     .into_matrix(),
             );
@@ -506,7 +546,7 @@ impl<T: Default + Clone> Matrix<T> {
 
 impl<T: Default + Clone> Matrix<T>
 where
-    StandardUniform: Distribution<T>
+    StandardUniform: Distribution<T>,
 {
     /// Returns a matrix of the specified shape filled with random values.
     pub fn rand(rows: usize, cols: usize) -> Matrix<T> {
@@ -526,43 +566,43 @@ impl<T: Zero + Clone> Matrix<T> {
 }
 
 impl<T: Clone> IntoMatrix<T> for Vec<T> {
-    /// Converts an iterator into a matrix of shape `(1, self.len())`
+    /// Converts a vector into a matrix of shape `(1, self.len())`
     fn into_matrix(self) -> Matrix<T> {
-        Matrix::new(1, self.len(), self).unwrap()
+        Matrix {
+            rows: 1,
+            cols: self.len(),
+            elements: self,
+        }
     }
 }
 
 impl<T: PartialOrd + Clone> Matrix<T> {
     /// Clips the values in the matrix between `[min, max]`
-    pub fn clip(&self, min: T, max: T) -> Matrix<T> {
-        let mut res = self.clone();
-
-        for val in res.iter_mut() {
-            if *val <= min {
-                *val = min.clone();
-            } else if *val >= max {
-                *val = max.clone();
+    pub fn clip(self, min: T, max: T) -> Matrix<T> {
+        self.map(|val| {
+            if val <= min {
+                min.clone()
+            } else if val >= max {
+                max.clone()
+            } else {
+                val
             }
-        }
-
-        res
+        })
     }
 }
 
 impl<T: PartialOrd + Clone + Send + Sync> Matrix<T> {
     /// Clips the values in the matrix between `[min, max]`
-    pub fn par_clip(&self, min: T, max: T) -> Matrix<T> {
-        let mut res = self.clone();
-
-        res.par_iter_mut().for_each(|val| {
-            if *val <= min {
-                *val = min.clone();
-            } else if *val >= max {
-                *val = max.clone();
+    pub fn par_clip(self, min: T, max: T) -> Matrix<T> {
+        self.par_map(|val| {
+            if val <= min {
+                min.clone()
+            } else if val >= max {
+                max.clone()
+            } else {
+                val
             }
-        });
-
-        res
+        })
     }
 }
 
