@@ -1,10 +1,10 @@
 //! Benchmarks for the `enumerated_iter` family on [`Tensor`] and [`Matrix`].
 
-use std::hint::black_box;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use std::hint::black_box;
 use tensor_math::definitions::matrix::Matrix;
-use tensor_math::definitions::tensor::Tensor;
 use tensor_math::definitions::shape::Shape;
+use tensor_math::definitions::tensor::Tensor;
 use tensor_math::shape;
 
 /// Drain a sequential `enumerated_iter` into a checksum.
@@ -129,7 +129,8 @@ fn bench_iter_matrix(c: &mut Criterion) {
             |bench, _| {
                 let mut a = a.clone();
                 bench.iter(|| {
-                    let r = drain_iter_mut(a.enumerated_iter_mut().map(|((r, c), v)| (vec![r, c], v)));
+                    let r =
+                        drain_iter_mut(a.enumerated_iter_mut().map(|((r, c), v)| (vec![r, c], v)));
                     black_box(r);
                 });
             },

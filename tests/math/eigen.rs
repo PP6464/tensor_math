@@ -1,11 +1,11 @@
 #[cfg(test)]
 mod eigen_tests {
+    use float_cmp::approx_eq;
+    use num::complex::{Complex64, ComplexFloat};
     use tensor_math::definitions::errors::TensorErrors;
     use tensor_math::definitions::matrix::Matrix;
     use tensor_math::utilities::matrix::eye;
-    use float_cmp::approx_eq;
-    use num::complex::{Complex64, ComplexFloat};
-    
+
     #[test]
     fn zero_by_zero_case() {
         let m = Matrix::<Complex64>::new(0, 0, vec![]).unwrap();
@@ -29,8 +29,18 @@ mod eigen_tests {
 
         let vals_only = mc.eigenvalues().unwrap();
         assert_eq!(vals.len(), vals_only.len());
-        assert!(approx_eq!(f64, vals[0].re, vals_only[0].re, epsilon = 1e-15));
-        assert!(approx_eq!(f64, vals[0].im, vals_only[0].im, epsilon = 1e-15));
+        assert!(approx_eq!(
+            f64,
+            vals[0].re,
+            vals_only[0].re,
+            epsilon = 1e-15
+        ));
+        assert!(approx_eq!(
+            f64,
+            vals[0].im,
+            vals_only[0].im,
+            epsilon = 1e-15
+        ));
     }
 
     #[test]

@@ -41,7 +41,12 @@ mod kronecker_tests {
         let m1 = Matrix::<i32>::new(30, 30, (0..900).collect()).unwrap();
         let m2 = Matrix::<i32>::new(30, 20, (0..600).collect()).unwrap();
 
-        let ans = m1.clone().into_tensor().kronecker(&m2.clone().into_tensor()).try_into().unwrap();
+        let ans = m1
+            .clone()
+            .into_tensor()
+            .kronecker(&m2.clone().into_tensor())
+            .try_into()
+            .unwrap();
         let res = m1.kronecker(&m2);
 
         assert_eq!(res, ans);

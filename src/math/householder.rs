@@ -16,7 +16,9 @@ impl HouseholderReflectors<f64> {
     pub fn accumulate_q(&self) -> Matrix<f64> {
         let mut q = identity::<f64>(self.rows);
         for (k, u) in self.vectors.iter().enumerate() {
-            if u.rows == 0 { continue; } // skip no-op steps
+            if u.rows == 0 {
+                continue;
+            } // skip no-op steps
             let u_t = u.transpose_mt();
             let q_slice_copy = q.slice(0..self.rows, k..self.rows).unwrap();
             let mut q_slice_mut = q.slice_mut(0..self.rows, k..self.rows).unwrap();
@@ -33,12 +35,15 @@ impl HouseholderReflectors<Complex64> {
     pub fn accumulate_q(&self) -> Matrix<Complex64> {
         let mut q = identity::<Complex64>(self.rows);
         for (k, u) in self.vectors.iter().enumerate() {
-            if u.rows == 0 { continue; }
+            if u.rows == 0 {
+                continue;
+            }
             let u_star = u.conj_transpose_mt();
             let q_slice_copy = q.slice(0..self.rows, k..self.rows).unwrap();
             let mut q_slice_mut = q.slice_mut(0..self.rows, k..self.rows).unwrap();
             let q_u = q_slice_copy.mat_mul_mt(u).unwrap();
-            let q_slice_res = q_slice_copy - q_u.mat_mul_mt(&u_star).unwrap() * Complex64 { re: 2.0, im: 0.0 };
+            let q_slice_res =
+                q_slice_copy - q_u.mat_mul_mt(&u_star).unwrap() * Complex64 { re: 2.0, im: 0.0 };
             q_slice_mut.set_all(&q_slice_res).unwrap();
         }
         q
@@ -86,13 +91,13 @@ impl Matrix<f64> {
             // Update R
             // We can set the kth column directly
             r[(k, k)] = alpha;
-            for i in (k+1)..rows {
+            for i in (k + 1)..rows {
                 r[(i, k)] = 0.0;
             }
 
             if k + 1 < cols {
-                let r_rest_copy = r.slice(k..rows, (k+1)..cols).unwrap();
-                let mut r_rest_mut = r.slice_mut(k..rows, (k+1)..cols).unwrap();
+                let r_rest_copy = r.slice(k..rows, (k + 1)..cols).unwrap();
+                let mut r_rest_mut = r.slice_mut(k..rows, (k + 1)..cols).unwrap();
                 let u_t_r = u_t.mat_mul_mt(&r_rest_copy).unwrap();
                 let r_rest_res = r_rest_copy - u.mat_mul_mt(&u_t_r).unwrap() * 2.0;
                 r_rest_mut.set_all(&r_rest_res).expect("failed to set all");
@@ -147,15 +152,16 @@ impl Matrix<Complex64> {
             // Update R
             // We can set the kth column because we know what it is
             r[(k, k)] = alpha;
-            for i in (k+1)..rows {
+            for i in (k + 1)..rows {
                 r[(i, k)] = Complex64::ZERO;
             }
 
             if k + 1 < cols {
-                let r_rest_copy = r.slice(k..rows, (k+1)..cols).unwrap();
-                let mut r_rest_mut = r.slice_mut(k..rows, (k+1)..cols).unwrap();
+                let r_rest_copy = r.slice(k..rows, (k + 1)..cols).unwrap();
+                let mut r_rest_mut = r.slice_mut(k..rows, (k + 1)..cols).unwrap();
                 let u_star_r = u_star.mat_mul_mt(&r_rest_copy).unwrap();
-                let r_rest_res = r_rest_copy - u.mat_mul_mt(&u_star_r).unwrap() * Complex64 { re: 2.0, im: 0.0 };
+                let r_rest_res =
+                    r_rest_copy - u.mat_mul_mt(&u_star_r).unwrap() * Complex64 { re: 2.0, im: 0.0 };
                 r_rest_mut.set_all(&r_rest_res).expect("failed to set all");
             }
 

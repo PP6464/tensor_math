@@ -1,11 +1,11 @@
 #[cfg(test)]
 mod matrix_utils_tests {
+    use num::complex::Complex64;
     use tensor_math::definitions::errors::TensorErrors;
     use tensor_math::definitions::matrix::Matrix;
     use tensor_math::utilities::matrix::{
         identity, pool_avg_mat, pool_max_mat, pool_min_mat, pool_sum_mat,
     };
-    use num::complex::Complex64;
 
     #[test]
     fn concat() {

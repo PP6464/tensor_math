@@ -1,8 +1,8 @@
 //! Benchmarks for `Matrix::<f64>::householder` and `Matrix::<Complex64>::householder`.
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use std::hint::black_box;
 use num::complex::Complex64;
+use std::hint::black_box;
 use tensor_math::definitions::matrix::Matrix;
 
 fn bench_f64_householder(c: &mut Criterion) {

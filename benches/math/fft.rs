@@ -117,16 +117,12 @@ fn bench_tensor_f64_fft(c: &mut Criterion) {
         group.throughput(Throughput::Elements(s.element_count() as u64));
         let label = shape_label(s);
 
-        group.bench_with_input(
-            BenchmarkId::new("f64/tensor", &label),
-            &label,
-            |b, _| {
-                b.iter(|| {
-                    let r = t.fft().expect("fft must succeed");
-                    black_box(r);
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("f64/tensor", &label), &label, |b, _| {
+            b.iter(|| {
+                let r = t.fft().expect("fft must succeed");
+                black_box(r);
+            });
+        });
     }
     group.finish();
 }
@@ -214,16 +210,12 @@ fn bench_tensor_f64_ifft(c: &mut Criterion) {
         group.throughput(Throughput::Elements(s.element_count() as u64));
         let label = shape_label(s);
 
-        group.bench_with_input(
-            BenchmarkId::new("f64/tensor", &label),
-            &label,
-            |b, _| {
-                b.iter(|| {
-                    let r = t.ifft().expect("ifft must succeed");
-                    black_box(r);
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("f64/tensor", &label), &label, |b, _| {
+            b.iter(|| {
+                let r = t.ifft().expect("ifft must succeed");
+                black_box(r);
+            });
+        });
     }
     group.finish();
 }
@@ -240,21 +232,21 @@ fn bench_tensor_f64_fft_corr_axes(c: &mut Criterion) {
         let a = Tensor::<f64>::rand(s);
         let b = Tensor::<f64>::rand(k);
         group.throughput(Throughput::Elements(s.element_count() as u64));
-        let label = format!(
-            "{}__{}",
-            shape_label(s),
-            shape_label(k)
-        );
+        let label = format!("{}__{}", shape_label(s), shape_label(k));
         let axes: HashSet<usize> = (0..s.rank()).collect();
 
-        group.bench_with_input(BenchmarkId::new("f64/tensor", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = a
-                    .fft_corr_axes(&b, &axes)
-                    .expect("fft_corr_axes must succeed");
-                black_box(r);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("f64/tensor", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = a
+                        .fft_corr_axes(&b, &axes)
+                        .expect("fft_corr_axes must succeed");
+                    black_box(r);
+                });
+            },
+        );
     }
     group.finish();
 }
@@ -274,14 +266,18 @@ fn bench_tensor_f64_fft_conv_axes(c: &mut Criterion) {
         let label = format!("{}__{}", shape_label(s), shape_label(k));
         let axes: HashSet<usize> = (0..s.rank()).collect();
 
-        group.bench_with_input(BenchmarkId::new("f64/tensor", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = a
-                    .fft_conv_axes(&b, &axes)
-                    .expect("fft_conv_axes must succeed");
-                black_box(r);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("f64/tensor", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = a
+                        .fft_conv_axes(&b, &axes)
+                        .expect("fft_conv_axes must succeed");
+                    black_box(r);
+                });
+            },
+        );
     }
     group.finish();
 }
@@ -300,12 +296,16 @@ fn bench_tensor_f64_fft_corr(c: &mut Criterion) {
         group.throughput(Throughput::Elements(s.element_count() as u64));
         let label = format!("{}__{}", shape_label(s), shape_label(k));
 
-        group.bench_with_input(BenchmarkId::new("f64/tensor", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = a.fft_corr(&b).expect("fft_corr must succeed");
-                black_box(r);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("f64/tensor", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = a.fft_corr(&b).expect("fft_corr must succeed");
+                    black_box(r);
+                });
+            },
+        );
     }
     group.finish();
 }
@@ -324,12 +324,16 @@ fn bench_tensor_f64_fft_conv(c: &mut Criterion) {
         group.throughput(Throughput::Elements(s.element_count() as u64));
         let label = format!("{}__{}", shape_label(s), shape_label(k));
 
-        group.bench_with_input(BenchmarkId::new("f64/tensor", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = a.fft_conv(&b).expect("fft_conv must succeed");
-                black_box(r);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("f64/tensor", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = a.fft_conv(&b).expect("fft_conv must succeed");
+                    black_box(r);
+                });
+            },
+        );
     }
     group.finish();
 }
@@ -446,9 +450,7 @@ fn bench_matrix_f64_fft_conv_cols(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("f64/matrix", &label), &label, |b, _| {
             b.iter(|| {
-                let r = m
-                    .fft_conv_cols(&k)
-                    .expect("fft_conv_cols must succeed");
+                let r = m.fft_conv_cols(&k).expect("fft_conv_cols must succeed");
                 black_box(r);
             });
         });
@@ -466,9 +468,7 @@ fn bench_matrix_f64_fft_corr_cols(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("f64/matrix", &label), &label, |b, _| {
             b.iter(|| {
-                let r = m
-                    .fft_corr_cols(&k)
-                    .expect("fft_corr_cols must succeed");
+                let r = m.fft_corr_cols(&k).expect("fft_corr_cols must succeed");
                 black_box(r);
             });
         });
@@ -486,9 +486,7 @@ fn bench_matrix_f64_fft_conv_rows(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("f64/matrix", &label), &label, |b, _| {
             b.iter(|| {
-                let r = m
-                    .fft_conv_rows(&k)
-                    .expect("fft_conv_rows must succeed");
+                let r = m.fft_conv_rows(&k).expect("fft_conv_rows must succeed");
                 black_box(r);
             });
         });
@@ -506,9 +504,7 @@ fn bench_matrix_f64_fft_corr_rows(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("f64/matrix", &label), &label, |b, _| {
             b.iter(|| {
-                let r = m
-                    .fft_corr_rows(&k)
-                    .expect("fft_corr_rows must succeed");
+                let r = m.fft_corr_rows(&k).expect("fft_corr_rows must succeed");
                 black_box(r);
             });
         });
@@ -635,16 +631,12 @@ fn bench_tensor_c64_fft(c: &mut Criterion) {
         group.throughput(Throughput::Elements(s.element_count() as u64));
         let label = shape_label(s);
 
-        group.bench_with_input(
-            BenchmarkId::new("c64/tensor", &label),
-            &label,
-            |b, _| {
-                b.iter(|| {
-                    let r = t.fft().expect("fft must succeed");
-                    black_box(r);
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("c64/tensor", &label), &label, |b, _| {
+            b.iter(|| {
+                let r = t.fft().expect("fft must succeed");
+                black_box(r);
+            });
+        });
     }
     group.finish();
 }
@@ -732,16 +724,12 @@ fn bench_tensor_c64_ifft(c: &mut Criterion) {
         group.throughput(Throughput::Elements(s.element_count() as u64));
         let label = shape_label(s);
 
-        group.bench_with_input(
-            BenchmarkId::new("c64/tensor", &label),
-            &label,
-            |b, _| {
-                b.iter(|| {
-                    let r = t.ifft().expect("ifft must succeed");
-                    black_box(r);
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("c64/tensor", &label), &label, |b, _| {
+            b.iter(|| {
+                let r = t.ifft().expect("ifft must succeed");
+                black_box(r);
+            });
+        });
     }
     group.finish();
 }
@@ -761,14 +749,18 @@ fn bench_tensor_c64_fft_corr_axes(c: &mut Criterion) {
         let label = format!("{}__{}", shape_label(s), shape_label(k));
         let axes: HashSet<usize> = (0..s.rank()).collect();
 
-        group.bench_with_input(BenchmarkId::new("c64/tensor", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = a
-                    .fft_corr_axes(&b, &axes)
-                    .expect("fft_corr_axes must succeed");
-                black_box(r);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("c64/tensor", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = a
+                        .fft_corr_axes(&b, &axes)
+                        .expect("fft_corr_axes must succeed");
+                    black_box(r);
+                });
+            },
+        );
     }
     group.finish();
 }
@@ -788,14 +780,18 @@ fn bench_tensor_c64_fft_conv_axes(c: &mut Criterion) {
         let label = format!("{}__{}", shape_label(s), shape_label(k));
         let axes: HashSet<usize> = (0..s.rank()).collect();
 
-        group.bench_with_input(BenchmarkId::new("c64/tensor", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = a
-                    .fft_conv_axes(&b, &axes)
-                    .expect("fft_conv_axes must succeed");
-                black_box(r);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("c64/tensor", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = a
+                        .fft_conv_axes(&b, &axes)
+                        .expect("fft_conv_axes must succeed");
+                    black_box(r);
+                });
+            },
+        );
     }
     group.finish();
 }
@@ -814,12 +810,16 @@ fn bench_tensor_c64_fft_corr(c: &mut Criterion) {
         group.throughput(Throughput::Elements(s.element_count() as u64));
         let label = format!("{}__{}", shape_label(s), shape_label(k));
 
-        group.bench_with_input(BenchmarkId::new("c64/tensor", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = a.fft_corr(&b).expect("fft_corr must succeed");
-                black_box(r);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("c64/tensor", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = a.fft_corr(&b).expect("fft_corr must succeed");
+                    black_box(r);
+                });
+            },
+        );
     }
     group.finish();
 }
@@ -838,12 +838,16 @@ fn bench_tensor_c64_fft_conv(c: &mut Criterion) {
         group.throughput(Throughput::Elements(s.element_count() as u64));
         let label = format!("{}__{}", shape_label(s), shape_label(k));
 
-        group.bench_with_input(BenchmarkId::new("c64/tensor", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = a.fft_conv(&b).expect("fft_conv must succeed");
-                black_box(r);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("c64/tensor", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = a.fft_conv(&b).expect("fft_conv must succeed");
+                    black_box(r);
+                });
+            },
+        );
     }
     group.finish();
 }
@@ -964,9 +968,7 @@ fn bench_matrix_c64_fft_conv_cols(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("c64/matrix", &label), &label, |b, _| {
             b.iter(|| {
-                let r = m
-                    .fft_conv_cols(&k)
-                    .expect("fft_conv_cols must succeed");
+                let r = m.fft_conv_cols(&k).expect("fft_conv_cols must succeed");
                 black_box(r);
             });
         });
@@ -984,9 +986,7 @@ fn bench_matrix_c64_fft_corr_cols(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("c64/matrix", &label), &label, |b, _| {
             b.iter(|| {
-                let r = m
-                    .fft_corr_cols(&k)
-                    .expect("fft_corr_cols must succeed");
+                let r = m.fft_corr_cols(&k).expect("fft_corr_cols must succeed");
                 black_box(r);
             });
         });
@@ -1004,9 +1004,7 @@ fn bench_matrix_c64_fft_conv_rows(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("c64/matrix", &label), &label, |b, _| {
             b.iter(|| {
-                let r = m
-                    .fft_conv_rows(&k)
-                    .expect("fft_conv_rows must succeed");
+                let r = m.fft_conv_rows(&k).expect("fft_conv_rows must succeed");
                 black_box(r);
             });
         });
@@ -1024,9 +1022,7 @@ fn bench_matrix_c64_fft_corr_rows(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("c64/matrix", &label), &label, |b, _| {
             b.iter(|| {
-                let r = m
-                    .fft_corr_rows(&k)
-                    .expect("fft_corr_rows must succeed");
+                let r = m.fft_corr_rows(&k).expect("fft_corr_rows must succeed");
                 black_box(r);
             });
         });

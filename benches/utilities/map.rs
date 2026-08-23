@@ -3,8 +3,8 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::hint::black_box;
 use tensor_math::definitions::matrix::Matrix;
-use tensor_math::definitions::tensor::Tensor;
 use tensor_math::definitions::shape::Shape;
+use tensor_math::definitions::tensor::Tensor;
 use tensor_math::shape;
 
 fn bench_map_tensor(c: &mut Criterion) {
@@ -30,18 +30,26 @@ fn bench_map_tensor(c: &mut Criterion) {
                 black_box(r);
             });
         });
-        group.bench_with_input(BenchmarkId::new("st/map_refs", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = a.map_refs(|x| *x * 2.0 + 1.0);
-                black_box(r);
-            });
-        });
-        group.bench_with_input(BenchmarkId::new("mt/par_map", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = a.clone().par_map(|x| x * 2.0 + 1.0);
-                black_box(r);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("st/map_refs", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = a.map_refs(|x| *x * 2.0 + 1.0);
+                    black_box(r);
+                });
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new("mt/par_map", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = a.clone().par_map(|x| x * 2.0 + 1.0);
+                    black_box(r);
+                });
+            },
+        );
         group.bench_with_input(
             BenchmarkId::new("mt/par_map_refs", &label),
             &label,
@@ -76,18 +84,26 @@ fn bench_map_matrix(c: &mut Criterion) {
                 black_box(r);
             });
         });
-        group.bench_with_input(BenchmarkId::new("st/map_refs", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = a.map_refs(|x| *x * 2.0 + 1.0);
-                black_box(r);
-            });
-        });
-        group.bench_with_input(BenchmarkId::new("mt/par_map", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = a.clone().par_map(|x| x * 2.0 + 1.0);
-                black_box(r);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("st/map_refs", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = a.map_refs(|x| *x * 2.0 + 1.0);
+                    black_box(r);
+                });
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new("mt/par_map", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = a.clone().par_map(|x| x * 2.0 + 1.0);
+                    black_box(r);
+                });
+            },
+        );
         group.bench_with_input(
             BenchmarkId::new("mt/par_map_refs", &label),
             &label,

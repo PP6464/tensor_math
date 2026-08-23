@@ -1,10 +1,10 @@
 #[cfg(test)]
 mod hessenberg_tests {
+    use float_cmp::approx_eq;
+    use num::complex::{Complex64, ComplexFloat};
     use tensor_math::definitions::errors::TensorErrors;
     use tensor_math::definitions::matrix::Matrix;
     use tensor_math::utilities::matrix::eye;
-    use float_cmp::approx_eq;
-    use num::complex::{Complex64, ComplexFloat};
 
     #[test]
     fn upper_hessenberg() {
@@ -305,11 +305,8 @@ mod hessenberg_tests {
             5,
             5,
             vec![
-                4.0, 1.0, 2.0, 3.0, 1.0,
-                0.0, 3.0, 1.0, 1.0, -1.0,
-                1.0, 1.0, 5.0, 2.0, 3.0,
-                2.0, 1.0, 1.0, 4.0, 4.0,
-                2.0, 0.0, 1.0, 4.0, -2.0,
+                4.0, 1.0, 2.0, 3.0, 1.0, 0.0, 3.0, 1.0, 1.0, -1.0, 1.0, 1.0, 5.0, 2.0, 3.0, 2.0,
+                1.0, 1.0, 4.0, 4.0, 2.0, 0.0, 1.0, 4.0, -2.0,
             ],
         )
         .unwrap();
@@ -369,11 +366,31 @@ mod hessenberg_tests {
             5,
             5,
             vec![
-                Complex64::new(4.0, 1.0), Complex64::new(1.0, 0.0), Complex64::new(2.0, -1.0), Complex64::new(3.0, 0.0), Complex64::new(1.0, 0.0),
-                Complex64::new(3.0, 1.0), Complex64::new(0.0, 0.0), Complex64::new(3.0, 1.0), Complex64::new(-2.0, 0.0), Complex64::new(0.0, 3.0),
-                Complex64::new(1.0, 0.0), Complex64::new(3.0, 2.0), Complex64::new(1.0, 1.0), Complex64::new(1.0, -1.0), Complex64::new(-1.0, 1.0),
-                Complex64::new(2.0, 1.0), Complex64::new(1.0, 0.0), Complex64::new(5.0, 0.0), Complex64::new(2.0, 1.0), Complex64::new(2.0, 2.0),
-                Complex64::new(0.0, 0.0), Complex64::new(0.0, 0.0), Complex64::new(1.0, 0.0), Complex64::new(4.0, 2.0), Complex64::new(2.0, 0.0),
+                Complex64::new(4.0, 1.0),
+                Complex64::new(1.0, 0.0),
+                Complex64::new(2.0, -1.0),
+                Complex64::new(3.0, 0.0),
+                Complex64::new(1.0, 0.0),
+                Complex64::new(3.0, 1.0),
+                Complex64::new(0.0, 0.0),
+                Complex64::new(3.0, 1.0),
+                Complex64::new(-2.0, 0.0),
+                Complex64::new(0.0, 3.0),
+                Complex64::new(1.0, 0.0),
+                Complex64::new(3.0, 2.0),
+                Complex64::new(1.0, 1.0),
+                Complex64::new(1.0, -1.0),
+                Complex64::new(-1.0, 1.0),
+                Complex64::new(2.0, 1.0),
+                Complex64::new(1.0, 0.0),
+                Complex64::new(5.0, 0.0),
+                Complex64::new(2.0, 1.0),
+                Complex64::new(2.0, 2.0),
+                Complex64::new(0.0, 0.0),
+                Complex64::new(0.0, 0.0),
+                Complex64::new(1.0, 0.0),
+                Complex64::new(4.0, 2.0),
+                Complex64::new(2.0, 0.0),
             ],
         )
         .unwrap();

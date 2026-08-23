@@ -91,7 +91,7 @@ mod tensor_slice_mut_tests {
         assert_eq!(slice2.end(), vec![2, 0]);
         assert_eq!(slice2.into_tensor().shape(), &shape![1, 0]);
     }
-    
+
     #[test]
     fn slice_shape() {
         let shape = shape![10, 20, 30];
@@ -165,9 +165,17 @@ mod tensor_slice_mut_tests {
                     let val = *tensor.get(&[i, j, k]).unwrap();
                     if j >= 1 && j < 3 && k >= 1 && k < 4 {
                         let expected = (i * 100 + (j - 1) * 10 + (k - 1) + 1) as i32;
-                        assert_eq!(val, expected, "Mismatch at tensor index [{}, {}, {}]", i, j, k);
+                        assert_eq!(
+                            val, expected,
+                            "Mismatch at tensor index [{}, {}, {}]",
+                            i, j, k
+                        );
                     } else {
-                        assert_eq!(val, 0, "Expected zero at tensor index [{}, {}, {}]", i, j, k);
+                        assert_eq!(
+                            val, 0,
+                            "Expected zero at tensor index [{}, {}, {}]",
+                            i, j, k
+                        );
                     }
                 }
             }

@@ -46,12 +46,16 @@ fn bench_f64_tensor_sum(c: &mut Criterion) {
 
         let label = label_shape(shape);
 
-        group.bench_with_input(BenchmarkId::new("f64/tensor", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = a.sum();
-                black_box(r);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("f64/tensor", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = a.sum();
+                    black_box(r);
+                });
+            },
+        );
     }
 
     group.finish();
@@ -71,12 +75,16 @@ fn bench_f64_tensor_sum_mt(c: &mut Criterion) {
 
         let label = label_shape(shape);
 
-        group.bench_with_input(BenchmarkId::new("f64/tensor", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = a.sum_mt();
-                black_box(r);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("f64/tensor", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = a.sum_mt();
+                    black_box(r);
+                });
+            },
+        );
     }
 
     group.finish();
@@ -96,12 +104,16 @@ fn bench_c64_tensor_sum(c: &mut Criterion) {
 
         let label = label_shape(shape);
 
-        group.bench_with_input(BenchmarkId::new("c64/tensor", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = a.sum();
-                black_box(r);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("c64/tensor", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = a.sum();
+                    black_box(r);
+                });
+            },
+        );
     }
 
     group.finish();
@@ -121,12 +133,16 @@ fn bench_c64_tensor_sum_mt(c: &mut Criterion) {
 
         let label = label_shape(shape);
 
-        group.bench_with_input(BenchmarkId::new("c64/tensor", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = a.sum_mt();
-                black_box(r);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("c64/tensor", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = a.sum_mt();
+                    black_box(r);
+                });
+            },
+        );
     }
 
     group.finish();
@@ -141,12 +157,16 @@ fn bench_f64_matrix_sum(c: &mut Criterion) {
 
         let label = format!("{rows}x{cols}");
 
-        group.bench_with_input(BenchmarkId::new("f64/matrix", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = a.sum();
-                black_box(r);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("f64/matrix", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = a.sum();
+                    black_box(r);
+                });
+            },
+        );
     }
 
     group.finish();
@@ -161,12 +181,16 @@ fn bench_f64_matrix_sum_mt(c: &mut Criterion) {
 
         let label = format!("{rows}x{cols}");
 
-        group.bench_with_input(BenchmarkId::new("f64/matrix", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = a.sum_mt();
-                black_box(r);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("f64/matrix", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = a.sum_mt();
+                    black_box(r);
+                });
+            },
+        );
     }
 
     group.finish();
@@ -181,12 +205,16 @@ fn bench_c64_matrix_sum(c: &mut Criterion) {
 
         let label = format!("{rows}x{cols}");
 
-        group.bench_with_input(BenchmarkId::new("c64/matrix", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = a.sum();
-                black_box(r);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("c64/matrix", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = a.sum();
+                    black_box(r);
+                });
+            },
+        );
     }
 
     group.finish();
@@ -201,12 +229,16 @@ fn bench_c64_matrix_sum_mt(c: &mut Criterion) {
 
         let label = format!("{rows}x{cols}");
 
-        group.bench_with_input(BenchmarkId::new("c64/matrix", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = a.sum_mt();
-                black_box(r);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("c64/matrix", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = a.sum_mt();
+                    black_box(r);
+                });
+            },
+        );
     }
 
     group.finish();
@@ -222,12 +254,16 @@ fn bench_f64_matrix_trace(c: &mut Criterion) {
 
         let label = format!("{n}x{n}");
 
-        group.bench_with_input(BenchmarkId::new("f64/matrix", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = a.trace().expect("trace must succeed");
-                black_box(r);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("f64/matrix", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = a.trace().expect("trace must succeed");
+                    black_box(r);
+                });
+            },
+        );
     }
 
     group.finish();
@@ -242,12 +278,16 @@ fn bench_f64_matrix_trace_mt(c: &mut Criterion) {
 
         let label = format!("{n}x{n}");
 
-        group.bench_with_input(BenchmarkId::new("f64/matrix", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = a.trace_mt().expect("trace_mt must succeed");
-                black_box(r);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("f64/matrix", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = a.trace_mt().expect("trace_mt must succeed");
+                    black_box(r);
+                });
+            },
+        );
     }
 
     group.finish();
@@ -262,12 +302,16 @@ fn bench_c64_matrix_trace(c: &mut Criterion) {
 
         let label = format!("{n}x{n}");
 
-        group.bench_with_input(BenchmarkId::new("c64/matrix", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = a.trace().expect("trace must succeed");
-                black_box(r);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("c64/matrix", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = a.trace().expect("trace must succeed");
+                    black_box(r);
+                });
+            },
+        );
     }
 
     group.finish();
@@ -282,12 +326,16 @@ fn bench_c64_matrix_trace_mt(c: &mut Criterion) {
 
         let label = format!("{n}x{n}");
 
-        group.bench_with_input(BenchmarkId::new("c64/matrix", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = a.trace_mt().expect("trace_mt must succeed");
-                black_box(r);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("c64/matrix", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = a.trace_mt().expect("trace_mt must succeed");
+                    black_box(r);
+                });
+            },
+        );
     }
 
     group.finish();

@@ -1,10 +1,10 @@
 #[cfg(test)]
 mod internal_functions_tests {
+    use float_cmp::approx_eq;
+    use num::complex::Complex64;
     use tensor_math::utilities::internal_functions::{
         bluestein_fft_vec, dot_vectors, fft_vec, ifft_vec, radix_2_fft_vec,
     };
-    use float_cmp::approx_eq;
-    use num::complex::Complex64;
 
     #[test]
     fn radix_2_vec_fft_test() {

@@ -108,12 +108,7 @@ mod householder_tests {
         let m1 = Matrix::new(
             4,
             3,
-            vec![
-                1.0, 2.0, 3.0,
-                1.0, 0.0, 0.0,
-                0.0, 0.0, 0.0,
-                1.0, 0.0, 1.0,
-            ],
+            vec![1.0, 2.0, 3.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0],
         )
         .unwrap();
         let (q1, r1) = m1.householder();
@@ -133,13 +128,22 @@ mod householder_tests {
             .unwrap()
             .approx_eq(m1, F64Margin::default().epsilon(1e-10)));
 
-        let m2= Matrix::<Complex64>::new(
-            4, 3,
+        let m2 = Matrix::<Complex64>::new(
+            4,
+            3,
             vec![
-                Complex64 { re: 1.0, im: 0.0 }, Complex64 { re: 0.5, im: 1.0 }, Complex64 { re: 0.0, im: 0.0 },
-                Complex64 { re: 2.0, im: 1.0 }, Complex64 { re: 0.0, im: 0.0 }, Complex64 { re: 0.0, im: 0.0 },
-                Complex64 { re: 3.0, im: -2.0 }, Complex64 { re: 0.0, im: 0.0 }, Complex64 { re: 0.0, im: 0.0 },
-                Complex64 { re: 3.0, im: -2.0 }, Complex64 { re: 0.0, im: 0.0 }, Complex64 { re: 2.0, im: -10.0 },
+                Complex64 { re: 1.0, im: 0.0 },
+                Complex64 { re: 0.5, im: 1.0 },
+                Complex64 { re: 0.0, im: 0.0 },
+                Complex64 { re: 2.0, im: 1.0 },
+                Complex64 { re: 0.0, im: 0.0 },
+                Complex64 { re: 0.0, im: 0.0 },
+                Complex64 { re: 3.0, im: -2.0 },
+                Complex64 { re: 0.0, im: 0.0 },
+                Complex64 { re: 0.0, im: 0.0 },
+                Complex64 { re: 3.0, im: -2.0 },
+                Complex64 { re: 0.0, im: 0.0 },
+                Complex64 { re: 2.0, im: -10.0 },
             ],
         )
         .unwrap();

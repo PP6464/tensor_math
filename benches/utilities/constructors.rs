@@ -15,18 +15,26 @@ fn bench_constructors_tensor(c: &mut Criterion) {
 
         let label = format!("len{n}");
 
-        group.bench_with_input(BenchmarkId::new("from_value", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = tensor_math::definitions::tensor::Tensor::from_value(&shape, 1.0);
-                black_box(r);
-            });
-        });
-        group.bench_with_input(BenchmarkId::new("from_shape", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = tensor_math::definitions::tensor::Tensor::<f64>::from_shape(&shape);
-                black_box(r);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("from_value", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = tensor_math::definitions::tensor::Tensor::from_value(&shape, 1.0);
+                    black_box(r);
+                });
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new("from_shape", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = tensor_math::definitions::tensor::Tensor::<f64>::from_shape(&shape);
+                    black_box(r);
+                });
+            },
+        );
         group.bench_with_input(BenchmarkId::new("zeros", &label), &label, |bench, _| {
             bench.iter(|| {
                 let r = tensor_math::definitions::tensor::Tensor::<f64>::zeros(&shape);
@@ -51,18 +59,26 @@ fn bench_constructors_matrix(c: &mut Criterion) {
 
         let label = format!("{n}x{n}");
 
-        group.bench_with_input(BenchmarkId::new("from_value", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = Matrix::from_value(n, n, 1.0);
-                black_box(r);
-            });
-        });
-        group.bench_with_input(BenchmarkId::new("from_shape", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = Matrix::<f64>::from_shape(n, n);
-                black_box(r);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("from_value", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = Matrix::from_value(n, n, 1.0);
+                    black_box(r);
+                });
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new("from_shape", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = Matrix::<f64>::from_shape(n, n);
+                    black_box(r);
+                });
+            },
+        );
         group.bench_with_input(BenchmarkId::new("zeros", &label), &label, |bench, _| {
             bench.iter(|| {
                 let r = Matrix::<f64>::zeros(n, n);

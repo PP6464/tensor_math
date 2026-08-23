@@ -1,5 +1,7 @@
 #[cfg(test)]
 mod f64_c64_ops_tests {
+    use float_cmp::{approx_eq, assert_approx_eq};
+    use num::complex::{Complex64, ComplexFloat};
     use tensor_math::definitions::errors::TensorErrors;
     use tensor_math::definitions::matrix::Matrix;
     use tensor_math::definitions::shape::Shape;
@@ -7,8 +9,6 @@ mod f64_c64_ops_tests {
     use tensor_math::definitions::traits::{IntoMatrix, IntoTensor};
     use tensor_math::definitions::transpose::Transpose;
     use tensor_math::{shape, transpose};
-    use float_cmp::{approx_eq, assert_approx_eq};
-    use num::complex::{Complex64, ComplexFloat};
 
     fn setup() -> (
         Tensor<f64>,
@@ -1626,10 +1626,7 @@ mod f64_c64_ops_tests {
         assert_eq!(t_c_empty.clone().exp().elements().len(), 0);
         assert_eq!(t_c_empty.clone().conj().elements().len(), 0);
         assert_eq!(
-            t_c_empty
-                .conj_transpose(&transpose![1, 0])
-                .unwrap()
-                .len(),
+            t_c_empty.conj_transpose(&transpose![1, 0]).unwrap().len(),
             0
         );
         assert_eq!(m_c_empty.conj_transpose().elements().len(), 0);
@@ -1659,24 +1656,14 @@ mod f64_c64_ops_tests {
 
         // 4. Born probabilities on zero tensors (f64 and Complex64)
         let t_zero_f = Tensor::new(&shape![3], vec![0.0, 0.0, 0.0]).unwrap();
-        assert!(t_zero_f
-            .born_probabilities()
-            .iter()
-            .all(|x| x.is_nan()));
+        assert!(t_zero_f.born_probabilities().iter().all(|x| x.is_nan()));
 
         let t_zero_c = Tensor::new(&shape![2], vec![Complex64::ZERO, Complex64::ZERO]).unwrap();
-        assert!(t_zero_c
-            .born_probabilities()
-            .iter()
-            .all(|x| x.is_nan()));
+        assert!(t_zero_c.born_probabilities().iter().all(|x| x.is_nan()));
 
         // 5. Normalization on zeros
         let m_zero_f = Matrix::new(2, 2, vec![0.0; 4]).unwrap();
-        assert!(m_zero_f
-            .clone()
-            .norm_l1()
-            .iter()
-            .all(|x| x.is_nan()));
+        assert!(m_zero_f.clone().norm_l1().iter().all(|x| x.is_nan()));
         assert!(m_zero_f.norm_l2().elements().iter().all(|x| x.is_nan()));
 
         let m_zero_c = Matrix::new(2, 2, vec![Complex64::ZERO; 4]).unwrap();

@@ -37,12 +37,7 @@ fn random_complex_tensor(shape: &Shape) -> Tensor<Complex64> {
 fn bench_f64_matrix_contract_mul(c: &mut Criterion) {
     let mut group = c.benchmark_group("contract_mul");
 
-    for &(rows, inner, cols) in &[
-        (32, 32, 32),
-        (64, 64, 64),
-        (128, 128, 128),
-        (256, 256, 256),
-    ] {
+    for &(rows, inner, cols) in &[(32, 32, 32), (64, 64, 64), (128, 128, 128), (256, 256, 256)] {
         let a = Matrix::<f64>::rand(rows, inner);
         let b = Matrix::<f64>::rand(inner, cols);
         // One fused multiply-add per output element.
@@ -50,12 +45,16 @@ fn bench_f64_matrix_contract_mul(c: &mut Criterion) {
 
         let label = format!("{rows}x{inner}x{cols}");
 
-        group.bench_with_input(BenchmarkId::new("f64/matrix", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = a.contract_mul(&b).expect("contract_mul must succeed");
-                black_box(r);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("f64/matrix", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = a.contract_mul(&b).expect("contract_mul must succeed");
+                    black_box(r);
+                });
+            },
+        );
     }
 
     group.finish();
@@ -64,26 +63,23 @@ fn bench_f64_matrix_contract_mul(c: &mut Criterion) {
 fn bench_f64_matrix_contract_mul_mt(c: &mut Criterion) {
     let mut group = c.benchmark_group("contract_mul_mt");
 
-    for &(rows, inner, cols) in &[
-        (32, 32, 32),
-        (64, 64, 64),
-        (128, 128, 128),
-        (256, 256, 256),
-    ] {
+    for &(rows, inner, cols) in &[(32, 32, 32), (64, 64, 64), (128, 128, 128), (256, 256, 256)] {
         let a = Matrix::<f64>::rand(rows, inner);
         let b = Matrix::<f64>::rand(inner, cols);
         group.throughput(Throughput::Elements((2 * rows * inner * cols) as u64));
 
         let label = format!("{rows}x{inner}x{cols}");
 
-        group.bench_with_input(BenchmarkId::new("f64/matrix", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = a
-                    .contract_mul_mt(&b)
-                    .expect("contract_mul_mt must succeed");
-                black_box(r);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("f64/matrix", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = a.contract_mul_mt(&b).expect("contract_mul_mt must succeed");
+                    black_box(r);
+                });
+            },
+        );
     }
 
     group.finish();
@@ -92,24 +88,23 @@ fn bench_f64_matrix_contract_mul_mt(c: &mut Criterion) {
 fn bench_f64_matrix_mat_mul(c: &mut Criterion) {
     let mut group = c.benchmark_group("mat_mul");
 
-    for &(rows, inner, cols) in &[
-        (32, 32, 32),
-        (64, 64, 64),
-        (128, 128, 128),
-        (256, 256, 256),
-    ] {
+    for &(rows, inner, cols) in &[(32, 32, 32), (64, 64, 64), (128, 128, 128), (256, 256, 256)] {
         let a = Matrix::<f64>::rand(rows, inner);
         let b = Matrix::<f64>::rand(inner, cols);
         group.throughput(Throughput::Elements((2 * rows * inner * cols) as u64));
 
         let label = format!("{rows}x{inner}x{cols}");
 
-        group.bench_with_input(BenchmarkId::new("f64/matrix", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = a.mat_mul(&b).expect("mat_mul must succeed");
-                black_box(r);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("f64/matrix", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = a.mat_mul(&b).expect("mat_mul must succeed");
+                    black_box(r);
+                });
+            },
+        );
     }
 
     group.finish();
@@ -118,24 +113,23 @@ fn bench_f64_matrix_mat_mul(c: &mut Criterion) {
 fn bench_f64_matrix_mat_mul_mt(c: &mut Criterion) {
     let mut group = c.benchmark_group("mat_mul_mt");
 
-    for &(rows, inner, cols) in &[
-        (32, 32, 32),
-        (64, 64, 64),
-        (128, 128, 128),
-        (256, 256, 256),
-    ] {
+    for &(rows, inner, cols) in &[(32, 32, 32), (64, 64, 64), (128, 128, 128), (256, 256, 256)] {
         let a = Matrix::<f64>::rand(rows, inner);
         let b = Matrix::<f64>::rand(inner, cols);
         group.throughput(Throughput::Elements((2 * rows * inner * cols) as u64));
 
         let label = format!("{rows}x{inner}x{cols}");
 
-        group.bench_with_input(BenchmarkId::new("f64/matrix", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = a.mat_mul_mt(&b).expect("mat_mul_mt must succeed");
-                black_box(r);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("f64/matrix", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = a.mat_mul_mt(&b).expect("mat_mul_mt must succeed");
+                    black_box(r);
+                });
+            },
+        );
     }
 
     group.finish();
@@ -144,12 +138,7 @@ fn bench_f64_matrix_mat_mul_mt(c: &mut Criterion) {
 fn bench_c64_matrix_contract_mul(c: &mut Criterion) {
     let mut group = c.benchmark_group("contract_mul");
 
-    for &(rows, inner, cols) in &[
-        (32, 32, 32),
-        (64, 64, 64),
-        (128, 128, 128),
-        (256, 256, 256),
-    ] {
+    for &(rows, inner, cols) in &[(32, 32, 32), (64, 64, 64), (128, 128, 128), (256, 256, 256)] {
         let a = random_complex_matrix(rows, inner);
         let b = random_complex_matrix(inner, cols);
         // Each complex multiply is 4 real multiplies + 2 real adds, and the
@@ -158,12 +147,16 @@ fn bench_c64_matrix_contract_mul(c: &mut Criterion) {
 
         let label = format!("{rows}x{inner}x{cols}");
 
-        group.bench_with_input(BenchmarkId::new("c64/matrix", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = a.contract_mul(&b).expect("contract_mul must succeed");
-                black_box(r);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("c64/matrix", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = a.contract_mul(&b).expect("contract_mul must succeed");
+                    black_box(r);
+                });
+            },
+        );
     }
 
     group.finish();
@@ -172,26 +165,23 @@ fn bench_c64_matrix_contract_mul(c: &mut Criterion) {
 fn bench_c64_matrix_contract_mul_mt(c: &mut Criterion) {
     let mut group = c.benchmark_group("contract_mul_mt");
 
-    for &(rows, inner, cols) in &[
-        (32, 32, 32),
-        (64, 64, 64),
-        (128, 128, 128),
-        (256, 256, 256),
-    ] {
+    for &(rows, inner, cols) in &[(32, 32, 32), (64, 64, 64), (128, 128, 128), (256, 256, 256)] {
         let a = random_complex_matrix(rows, inner);
         let b = random_complex_matrix(inner, cols);
         group.throughput(Throughput::Elements((2 * rows * inner * cols) as u64));
 
         let label = format!("{rows}x{inner}x{cols}");
 
-        group.bench_with_input(BenchmarkId::new("c64/matrix", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = a
-                    .contract_mul_mt(&b)
-                    .expect("contract_mul_mt must succeed");
-                black_box(r);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("c64/matrix", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = a.contract_mul_mt(&b).expect("contract_mul_mt must succeed");
+                    black_box(r);
+                });
+            },
+        );
     }
 
     group.finish();
@@ -200,24 +190,23 @@ fn bench_c64_matrix_contract_mul_mt(c: &mut Criterion) {
 fn bench_c64_matrix_mat_mul(c: &mut Criterion) {
     let mut group = c.benchmark_group("mat_mul");
 
-    for &(rows, inner, cols) in &[
-        (32, 32, 32),
-        (64, 64, 64),
-        (128, 128, 128),
-        (256, 256, 256),
-    ] {
+    for &(rows, inner, cols) in &[(32, 32, 32), (64, 64, 64), (128, 128, 128), (256, 256, 256)] {
         let a = random_complex_matrix(rows, inner);
         let b = random_complex_matrix(inner, cols);
         group.throughput(Throughput::Elements((2 * rows * inner * cols) as u64));
 
         let label = format!("{rows}x{inner}x{cols}");
 
-        group.bench_with_input(BenchmarkId::new("c64/matrix", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = a.mat_mul(&b).expect("mat_mul must succeed");
-                black_box(r);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("c64/matrix", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = a.mat_mul(&b).expect("mat_mul must succeed");
+                    black_box(r);
+                });
+            },
+        );
     }
 
     group.finish();
@@ -226,24 +215,23 @@ fn bench_c64_matrix_mat_mul(c: &mut Criterion) {
 fn bench_c64_matrix_mat_mul_mt(c: &mut Criterion) {
     let mut group = c.benchmark_group("mat_mul_mt");
 
-    for &(rows, inner, cols) in &[
-        (32, 32, 32),
-        (64, 64, 64),
-        (128, 128, 128),
-        (256, 256, 256),
-    ] {
+    for &(rows, inner, cols) in &[(32, 32, 32), (64, 64, 64), (128, 128, 128), (256, 256, 256)] {
         let a = random_complex_matrix(rows, inner);
         let b = random_complex_matrix(inner, cols);
         group.throughput(Throughput::Elements((2 * rows * inner * cols) as u64));
 
         let label = format!("{rows}x{inner}x{cols}");
 
-        group.bench_with_input(BenchmarkId::new("c64/matrix", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = a.mat_mul_mt(&b).expect("mat_mul_mt must succeed");
-                black_box(r);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("c64/matrix", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = a.mat_mul_mt(&b).expect("mat_mul_mt must succeed");
+                    black_box(r);
+                });
+            },
+        );
     }
 
     group.finish();
@@ -267,12 +255,16 @@ fn bench_f64_tensor_contract_mul(c: &mut Criterion) {
 
         let label = format!("{}-x{}x32x32", label_shape(a.shape()), inner);
 
-        group.bench_with_input(BenchmarkId::new("f64/tensor", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = a.contract_mul(&b).expect("contract_mul must succeed");
-                black_box(r);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("f64/tensor", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = a.contract_mul(&b).expect("contract_mul must succeed");
+                    black_box(r);
+                });
+            },
+        );
     }
 
     group.finish();
@@ -295,14 +287,16 @@ fn bench_f64_tensor_contract_mul_mt(c: &mut Criterion) {
 
         let label = format!("{}-x{}x32x32", label_shape(&a.shape()), inner);
 
-        group.bench_with_input(BenchmarkId::new("f64/tensor", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = a
-                    .contract_mul_mt(&b)
-                    .expect("contract_mul_mt must succeed");
-                black_box(r);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("f64/tensor", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = a.contract_mul_mt(&b).expect("contract_mul_mt must succeed");
+                    black_box(r);
+                });
+            },
+        );
     }
 
     group.finish();
@@ -325,12 +319,16 @@ fn bench_c64_tensor_contract_mul(c: &mut Criterion) {
 
         let label = format!("{}-x{}x32x32", label_shape(&a.shape()), inner);
 
-        group.bench_with_input(BenchmarkId::new("c64/tensor", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = a.contract_mul(&b).expect("contract_mul must succeed");
-                black_box(r);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("c64/tensor", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = a.contract_mul(&b).expect("contract_mul must succeed");
+                    black_box(r);
+                });
+            },
+        );
     }
 
     group.finish();
@@ -353,14 +351,16 @@ fn bench_c64_tensor_contract_mul_mt(c: &mut Criterion) {
 
         let label = format!("{}-x{}x32x32", label_shape(&a.shape()), inner);
 
-        group.bench_with_input(BenchmarkId::new("c64/tensor", &label), &label, |bench, _| {
-            bench.iter(|| {
-                let r = a
-                    .contract_mul_mt(&b)
-                    .expect("contract_mul_mt must succeed");
-                black_box(r);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("c64/tensor", &label),
+            &label,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = a.contract_mul_mt(&b).expect("contract_mul_mt must succeed");
+                    black_box(r);
+                });
+            },
+        );
     }
 
     group.finish();

@@ -1,13 +1,13 @@
 #[cfg(test)]
 mod det_inv_tests {
+    use float_cmp::approx_eq;
+    use num::complex::Complex64;
+    use num::FromPrimitive;
     use tensor_math::definitions::errors::TensorErrors;
     use tensor_math::definitions::matrix::Matrix;
     use tensor_math::definitions::traits::IntoMatrix;
     use tensor_math::math::det_inv::{det_slow, inv_slow};
     use tensor_math::utilities::matrix::eye;
-    use float_cmp::approx_eq;
-    use num::complex::Complex64;
-    use num::FromPrimitive;
 
     #[test]
     fn invalid_inversion_square_matrix_only() {

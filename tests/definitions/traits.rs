@@ -3,9 +3,7 @@ mod traits_tests {
     use tensor_math::definitions::matrix::Matrix;
     use tensor_math::definitions::shape::Shape;
     use tensor_math::definitions::tensor::Tensor;
-    use tensor_math::definitions::traits::{
-        MatrixLike, MatrixLikeMut, TensorLike, TensorLikeMut,
-    };
+    use tensor_math::definitions::traits::{MatrixLike, MatrixLikeMut, TensorLike, TensorLikeMut};
 
     fn rank_and_elem_count<T: TensorLike<i32>>(t: &T) -> (usize, usize) {
         (t.rank(), t.elements().len())

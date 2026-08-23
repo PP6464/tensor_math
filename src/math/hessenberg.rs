@@ -16,7 +16,9 @@ impl HessenbergReflectors<f64> {
     pub fn accumulate_q(&self) -> Matrix<f64> {
         let mut q = identity::<f64>(self.rows);
         for (k, u) in self.vectors.iter().enumerate() {
-            if u.rows == 0 { continue; } // skip no-op steps (v was ~0)
+            if u.rows == 0 {
+                continue;
+            } // skip no-op steps (v was ~0)
             let u_t = u.transpose_mt();
             let q_slice_copy = q.slice(0..self.rows, (k + 1)..self.rows).unwrap();
             let mut q_slice_mut = q.slice_mut(0..self.rows, (k + 1)..self.rows).unwrap();
@@ -33,12 +35,15 @@ impl HessenbergReflectors<Complex64> {
     pub fn accumulate_q(&self) -> Matrix<Complex64> {
         let mut q = identity::<Complex64>(self.rows);
         for (k, u) in self.vectors.iter().enumerate() {
-            if u.rows == 0 { continue; }
+            if u.rows == 0 {
+                continue;
+            }
             let u_star = u.conj_transpose_mt();
             let q_slice_copy = q.slice(0..self.rows, (k + 1)..self.rows).unwrap();
             let mut q_slice_mut = q.slice_mut(0..self.rows, (k + 1)..self.rows).unwrap();
             let q_u = q_slice_copy.mat_mul_mt(u).unwrap();
-            let q_slice_res = q_slice_copy - q_u.mat_mul_mt(&u_star).unwrap() * Complex64 { re: 2.0, im: 0.0 };
+            let q_slice_res =
+                q_slice_copy - q_u.mat_mul_mt(&u_star).unwrap() * Complex64 { re: 2.0, im: 0.0 };
             q_slice_mut.set_all(&q_slice_res).unwrap();
         }
         q
@@ -60,7 +65,9 @@ impl Matrix<f64> {
     /// that can be accumulated to construct Q (with the provided method), where Q is a unitary
     /// matrix such that `Q.mat_mul(H).mat_mul(Q.conj_transpose()) == self`.
     /// This fails if the matrix is not square.
-    pub fn upper_hessenberg_h(&self) -> Result<(Matrix<f64>, HessenbergReflectors<f64>), TensorErrors> {
+    pub fn upper_hessenberg_h(
+        &self,
+    ) -> Result<(Matrix<f64>, HessenbergReflectors<f64>), TensorErrors> {
         if !self.is_square() {
             return Err(TensorErrors::NonSquareMatrix);
         }
@@ -69,7 +76,13 @@ impl Matrix<f64> {
 
         // All 0x0, 1x1 and 2x2 matrices are trivially upper Hessenberg
         if ord < 3 {
-            return Ok((self.clone(), HessenbergReflectors { vectors: Vec::new(), rows: ord } ));
+            return Ok((
+                self.clone(),
+                HessenbergReflectors {
+                    vectors: Vec::new(),
+                    rows: ord,
+                },
+            ));
         }
 
         let (mut h, mut vectors) = (self.clone(), Vec::with_capacity(ord - 2));
@@ -116,18 +129,15 @@ impl Matrix<f64> {
             // Calculate c
             let slice_copy = a.slice(reflector_start..ord, 0..1)?;
             let mut c = a;
-            c
-                .slice_mut(reflector_start..ord, 0..1)?
+            c.slice_mut(reflector_start..ord, 0..1)?
                 .set_all(&(slice_copy - u.clone() * s * 2.0))?;
             // Subtract 2 u b
             let h_slice_copy = h.slice(reflector_start..ord, 0..ord)?;
-            h
-                .slice_mut(reflector_start..ord, 0..ord)?
+            h.slice_mut(reflector_start..ord, 0..ord)?
                 .set_all(&(h_slice_copy - u.mat_mul_mt(&(b * 2.0))?))?;
             // Subtract 2 c u*
             let h_slice_copy = h.slice(0..ord, reflector_start..ord)?;
-            h
-                .slice_mut(0..ord, reflector_start..ord)?
+            h.slice_mut(0..ord, reflector_start..ord)?
                 .set_all(&(h_slice_copy - c.mat_mul_mt(&(u_t * 2.0))?))?;
 
             // Add the new vector
@@ -152,7 +162,9 @@ impl Matrix<f64> {
     /// that can be accumulated to construct Q (with the provided method), where Q is a unitary
     /// matrix such that `Q.mat_mul(H).mat_mul(Q.conj_transpose()) == self`.
     /// This fails if the matrix is not square.
-    pub fn lower_hessenberg_h(&self) -> Result<(Matrix<f64>, HessenbergReflectors<f64>), TensorErrors> {
+    pub fn lower_hessenberg_h(
+        &self,
+    ) -> Result<(Matrix<f64>, HessenbergReflectors<f64>), TensorErrors> {
         // Note that Q_l = Q_u so reflectors are the same and H_l = (H_u) ^ T
         let (h_u, reflectors) = self.transpose_mt().upper_hessenberg_h()?;
         Ok((h_u.transpose_mt(), reflectors))
@@ -174,7 +186,9 @@ impl Matrix<Complex64> {
     /// that can be accumulated to construct Q (with the provided method), where Q is a unitary
     /// matrix such that `Q.mat_mul(H).mat_mul(Q.conj_transpose()) == self`.
     /// This fails if the matrix is not square.
-    pub fn upper_hessenberg_h(&self) -> Result<(Matrix<Complex64>, HessenbergReflectors<Complex64>), TensorErrors> {
+    pub fn upper_hessenberg_h(
+        &self,
+    ) -> Result<(Matrix<Complex64>, HessenbergReflectors<Complex64>), TensorErrors> {
         if !self.is_square() {
             return Err(TensorErrors::NonSquareMatrix);
         }
@@ -183,7 +197,13 @@ impl Matrix<Complex64> {
 
         // All 0x0, 1x1 and 2x2 matrices are trivially upper Hessenberg
         if ord < 3 {
-            return Ok((self.clone(), HessenbergReflectors { vectors: Vec::new(), rows: ord }));
+            return Ok((
+                self.clone(),
+                HessenbergReflectors {
+                    vectors: Vec::new(),
+                    rows: ord,
+                },
+            ));
         }
 
         let (mut h, mut vectors) = (self.clone(), Vec::with_capacity(ord - 2));
@@ -230,22 +250,22 @@ impl Matrix<Complex64> {
             // Calculate b
             let b = u_star.mat_mul_mt(&h.slice(reflector_start..ord, 0..ord)?)?;
             // Calculate s
-            let s = u.clone().conj().dot_mt(&a.slice(reflector_start..ord, 0..1)?)?;
+            let s = u
+                .clone()
+                .conj()
+                .dot_mt(&a.slice(reflector_start..ord, 0..1)?)?;
             // Calculate c
             let slice_copy = a.slice(reflector_start..ord, 0..1)?;
             let mut c = a;
-            c
-                .slice_mut(reflector_start..ord, 0..1)?
+            c.slice_mut(reflector_start..ord, 0..1)?
                 .set_all(&(slice_copy - u.clone() * s * Complex64::new(2.0, 0.0)))?;
             // Subtract 2 u b
             let h_slice_copy = h.slice(reflector_start..ord, 0..ord)?;
-            h
-                .slice_mut(reflector_start..ord, 0..ord)?
+            h.slice_mut(reflector_start..ord, 0..ord)?
                 .set_all(&(h_slice_copy - u.mat_mul_mt(&(b * Complex64::new(2.0, 0.0)))?))?;
             // Subtract 2 c u*
             let h_slice_copy = h.slice(0..ord, reflector_start..ord)?;
-            h
-                .slice_mut(0..ord, reflector_start..ord)?
+            h.slice_mut(0..ord, reflector_start..ord)?
                 .set_all(&(h_slice_copy - c.mat_mul_mt(&(u_star * Complex64::new(2.0, 0.0)))?))?;
 
             // Add the new vector
@@ -270,7 +290,9 @@ impl Matrix<Complex64> {
     /// that can be accumulated to construct Q (with the provided method), where Q is a unitary
     /// matrix such that `Q.mat_mul(H).mat_mul(Q.conj_transpose()) == self`.
     /// This fails if the matrix is not square.
-    pub fn lower_hessenberg_h(&self) -> Result<(Matrix<Complex64>, HessenbergReflectors<Complex64>), TensorErrors> {
+    pub fn lower_hessenberg_h(
+        &self,
+    ) -> Result<(Matrix<Complex64>, HessenbergReflectors<Complex64>), TensorErrors> {
         // Note that Q_l = Q_u so reflectors are the same and H_l = (H_u) ^ *
         let (h_u, reflectors) = self.conj_transpose_mt().upper_hessenberg_h()?;
         Ok((h_u.conj_transpose_mt(), reflectors))

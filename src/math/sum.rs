@@ -1,10 +1,10 @@
-use rayon::iter::ParallelIterator;
 use crate::definitions::errors::TensorErrors;
 use crate::definitions::matrix::Matrix;
 use crate::definitions::tensor::Tensor;
 use num::Zero;
-use std::ops::Add;
+use rayon::iter::ParallelIterator;
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator};
+use std::ops::Add;
 
 impl<T: Add<Output = T> + Clone + Zero> Tensor<T> {
     /// Compute the sum of a tensor
@@ -16,7 +16,9 @@ impl<T: Add<Output = T> + Clone + Zero> Tensor<T> {
 impl<T: Add<Output = T> + Clone + Zero + Send + Sync> Tensor<T> {
     /// Compute the sum of a tensor
     pub fn sum_mt(&self) -> T {
-        self.par_iter().cloned().reduce(|| T::zero(), |acc, x| acc + x)
+        self.par_iter()
+            .cloned()
+            .reduce(|| T::zero(), |acc, x| acc + x)
     }
 }
 

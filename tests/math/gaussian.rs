@@ -1,5 +1,7 @@
 #[cfg(test)]
 mod gaussian_distribution_tests {
+    use float_cmp::{approx_eq, assert_approx_eq};
+    use std::f64::consts::PI;
     use tensor_math::definitions::errors::TensorErrors;
     use tensor_math::definitions::matrix::Matrix;
     use tensor_math::definitions::shape::Shape;
@@ -9,8 +11,6 @@ mod gaussian_distribution_tests {
     };
     use tensor_math::shape;
     use tensor_math::utilities::matrix::eye;
-    use float_cmp::{approx_eq, assert_approx_eq};
-    use std::f64::consts::PI;
 
     #[test]
     fn rand_gaussian_sample() {

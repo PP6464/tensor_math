@@ -1,14 +1,14 @@
 #[cfg(test)]
 mod corr_conv_tests {
+    use float_cmp::approx_eq;
+    use num::complex::Complex64;
+    use num::ToPrimitive;
+    use std::collections::HashSet;
     use tensor_math::definitions::errors::TensorErrors;
     use tensor_math::definitions::matrix::Matrix;
     use tensor_math::definitions::shape::Shape;
     use tensor_math::definitions::tensor::Tensor;
     use tensor_math::shape;
-    use float_cmp::approx_eq;
-    use num::complex::Complex64;
-    use num::ToPrimitive;
-    use std::collections::HashSet;
 
     #[test]
     fn cannot_corr_conv_empty_tensors() {

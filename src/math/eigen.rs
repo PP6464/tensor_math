@@ -64,12 +64,10 @@ impl Matrix<Complex64> {
             let shifted = h.slice(0..m, 0..m)? - identity(m) * ws;
             let (qs, rs) = shifted.householder();
 
-            h
-                .slice_mut(0..m, 0..m)?
+            h.slice_mut(0..m, 0..m)?
                 .set_all(&(rs.contract_mul_mt(&qs)? + identity(m) * ws))?;
             let slice_copy = q.slice(0..ord, 0..m)?;
-            q
-                .slice_mut(0..ord, 0..m)?
+            q.slice_mut(0..ord, 0..m)?
                 .set_all(&slice_copy.mat_mul_mt(&qs)?)?;
         }
 
@@ -140,8 +138,7 @@ impl Matrix<Complex64> {
             let shifted = h.slice(0..m, 0..m)? - identity(m) * ws;
             let (qs, rs) = shifted.householder();
 
-            h
-                .slice_mut(0..m, 0..m)?
+            h.slice_mut(0..m, 0..m)?
                 .set_all(&(rs.contract_mul_mt(&qs)? + identity(m) * ws))?;
         }
 
@@ -162,12 +159,20 @@ impl Matrix<f64> {
     /// the columns are the eigenvectors the matrix. The entries of both will be `Complex64`.
     /// This fails if the matrix is not square.
     pub fn eigendecompose(&self) -> Result<(Vec<Complex64>, Matrix<Complex64>), TensorErrors> {
-        self.par_map_refs(|x| Complex64 { re: x.clone(), im: 0.0 }).eigendecompose()
+        self.par_map_refs(|x| Complex64 {
+            re: x.clone(),
+            im: 0.0,
+        })
+        .eigendecompose()
     }
 
     /// Returns the eigenvalues for a matrix.
     /// This fails if the matrix is not square or if the process could not converge on eigenvalues.
     pub fn eigenvalues(&self) -> Result<Vec<Complex64>, TensorErrors> {
-        self.par_map_refs(|x| Complex64 { re: x.clone(), im: 0.0 }).eigenvalues()
+        self.par_map_refs(|x| Complex64 {
+            re: x.clone(),
+            im: 0.0,
+        })
+        .eigenvalues()
     }
 }

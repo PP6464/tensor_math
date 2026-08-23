@@ -1,9 +1,9 @@
 #[cfg(test)]
 mod row_echelon_tests {
-    use tensor_math::definitions::matrix::Matrix;
-    use tensor_math::utilities::matrix::{eye, identity};
     use float_cmp::approx_eq;
     use num::complex::Complex64;
+    use tensor_math::definitions::matrix::Matrix;
+    use tensor_math::utilities::matrix::{eye, identity};
 
     #[test]
     fn ref_test() {

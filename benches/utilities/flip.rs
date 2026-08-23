@@ -4,8 +4,8 @@ use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Through
 use std::collections::HashSet;
 use std::hint::black_box;
 use tensor_math::definitions::matrix::Matrix;
-use tensor_math::definitions::tensor::Tensor;
 use tensor_math::definitions::shape::Shape;
+use tensor_math::definitions::tensor::Tensor;
 use tensor_math::shape;
 
 fn bench_flip_tensor(c: &mut Criterion) {

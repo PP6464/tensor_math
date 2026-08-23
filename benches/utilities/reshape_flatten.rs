@@ -31,12 +31,16 @@ fn bench_reshape_tensor(c: &mut Criterion) {
         let flat = Shape::new(vec![n]);
         let label2 = format!("2d_{n}->1d");
 
-        group.bench_with_input(BenchmarkId::new("2d_to_1d", &label2), &label2, |bench, _| {
-            bench.iter(|| {
-                let r = a2.clone().reshape(&flat).expect("reshape must succeed");
-                black_box(r);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("2d_to_1d", &label2),
+            &label2,
+            |bench, _| {
+                bench.iter(|| {
+                    let r = a2.clone().reshape(&flat).expect("reshape must succeed");
+                    black_box(r);
+                });
+            },
+        );
     }
     group.finish();
 }

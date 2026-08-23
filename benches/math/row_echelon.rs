@@ -1,9 +1,9 @@
 //! Benchmarks for `Matrix<f64>::row_echelon` / `reduced_row_echelon`
 //! and `Matrix<Complex64>::row_echelon` / `reduced_row_echelon`.
 
-use std::hint::black_box;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use num::complex::Complex64;
+use std::hint::black_box;
 use tensor_math::definitions::matrix::Matrix;
 
 fn bench_f64_row_echelon(c: &mut Criterion) {

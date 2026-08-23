@@ -1,10 +1,10 @@
 #[cfg(test)]
 mod polynomials_tests {
-    use tensor_math::definitions::errors::TensorErrors;
-    use tensor_math::math::polynomials::{solve_cubic, solve_quadratic, solve_quartic};
     use float_cmp::assert_approx_eq;
     use num::complex::{Complex64, ComplexFloat};
     use std::ops::Add;
+    use tensor_math::definitions::errors::TensorErrors;
+    use tensor_math::math::polynomials::{solve_cubic, solve_quadratic, solve_quartic};
 
     #[test]
     fn leading_coefficient_is_zero() {

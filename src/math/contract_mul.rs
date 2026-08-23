@@ -6,8 +6,8 @@ use crate::definitions::traits::IntoTensor;
 use crate::definitions::transpose::Transpose;
 use crate::utilities::internal_functions::dot_vectors;
 use num::Zero;
-use rayon::iter::ParallelIterator;
 use rayon::iter::IndexedParallelIterator;
+use rayon::iter::ParallelIterator;
 use rayon::prelude::ParallelSlice;
 use std::ops::{Add, Mul};
 
@@ -143,15 +143,8 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Send + Sync> Tensor<T
             .cloned()
             .collect::<Vec<usize>>();
 
-        resultant_shape_vec.extend(
-            other
-                .shape
-                .0
-                .iter()
-                .skip(1)
-                .cloned(),
-        );
-        let res_shape : Shape = resultant_shape_vec.into();
+        resultant_shape_vec.extend(other.shape.0.iter().skip(1).cloned());
+        let res_shape: Shape = resultant_shape_vec.into();
 
         if self.is_empty() || other.is_empty() {
             return Ok(Tensor::zeros(&res_shape));
@@ -160,9 +153,12 @@ impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Send + Sync> Tensor<T
         let other_transpose = other
             .transpose_mt(&Transpose::identity(other.rank()).swap_axes(0, other.rank() - 1)?)?;
 
-        self
-            .par_chunks(self.shape()[self.rank() - 1])
-            .flat_map(|s| other_transpose.par_chunks(other.shape()[0]).map(|o| dot_vectors(s, o)))
+        self.par_chunks(self.shape()[self.rank() - 1])
+            .flat_map(|s| {
+                other_transpose
+                    .par_chunks(other.shape()[0])
+                    .map(|o| dot_vectors(s, o))
+            })
             .collect::<Tensor<_>>()
             .reshape(&res_shape)
 

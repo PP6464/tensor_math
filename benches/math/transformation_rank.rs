@@ -1,8 +1,8 @@
 //! Benchmarks for `Matrix::<f64/Complex64>::transformation_rank`.
 
-use std::hint::black_box;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use num::complex::Complex64;
+use std::hint::black_box;
 use tensor_math::definitions::matrix::Matrix;
 
 fn bench_f64_transformation_rank(c: &mut Criterion) {

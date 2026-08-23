@@ -1,13 +1,13 @@
 #[cfg(test)]
 mod elementwise_ops_tests {
+    use crate::test_helpers::assert_panics;
+    use num::complex::Complex64;
     use tensor_math::definitions::matrix::Matrix;
     use tensor_math::definitions::shape::Shape;
     use tensor_math::definitions::tensor::Tensor;
     use tensor_math::definitions::traits::IntoMatrix;
     use tensor_math::shape;
-    use crate::test_helpers::assert_panics;
     use tensor_math::utilities::matrix::identity;
-    use num::complex::Complex64;
 
     #[test]
     fn add_tensors() {

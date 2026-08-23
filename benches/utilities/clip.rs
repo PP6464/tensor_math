@@ -3,8 +3,8 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::hint::black_box;
 use tensor_math::definitions::matrix::Matrix;
-use tensor_math::definitions::tensor::Tensor;
 use tensor_math::definitions::shape::Shape;
+use tensor_math::definitions::tensor::Tensor;
 use tensor_math::shape;
 
 fn bench_clip_tensor(c: &mut Criterion) {
@@ -16,10 +16,7 @@ fn bench_clip_tensor(c: &mut Criterion) {
         (1024, 1024),
         (2048, 4096),
     ] {
-        let a = Tensor::from_value(
-            &shape![rows, cols],
-            1.0
-        );
+        let a = Tensor::from_value(&shape![rows, cols], 1.0);
         let elems = (rows * cols) as u64;
         group.throughput(Throughput::Elements(elems));
 
@@ -43,13 +40,7 @@ fn bench_clip_tensor(c: &mut Criterion) {
 
 fn bench_clip_matrix(c: &mut Criterion) {
     let mut group = c.benchmark_group("clip/matrix");
-    for &(rows, cols) in &[
-        (32, 32),
-        (128, 128),
-        (512, 512),
-        (1024, 1024),
-        (2048, 4096),
-    ] {
+    for &(rows, cols) in &[(32, 32), (128, 128), (512, 512), (1024, 1024), (2048, 4096)] {
         let a = Matrix::from_value(rows, cols, 1.0);
         group.throughput(Throughput::Elements((rows * cols) as u64));
 

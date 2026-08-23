@@ -1,11 +1,11 @@
 //! Benchmarks for the single-threaded vs. multi-threaded `concat` implementations
 //! of [`Tensor`] and [`Matrix`].
 
-use std::hint::black_box;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use tensor_math::definitions::tensor::Tensor;
+use std::hint::black_box;
 use tensor_math::definitions::matrix::Matrix;
 use tensor_math::definitions::shape::Shape;
+use tensor_math::definitions::tensor::Tensor;
 use tensor_math::shape;
 
 fn bench_concat_1d(c: &mut Criterion) {

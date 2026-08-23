@@ -1,11 +1,11 @@
 #[cfg(test)]
 mod contract_mul_tests {
+    use float_cmp::approx_eq;
     use tensor_math::definitions::errors::TensorErrors;
     use tensor_math::definitions::matrix::Matrix;
     use tensor_math::definitions::shape::Shape;
     use tensor_math::definitions::tensor::Tensor;
     use tensor_math::shape;
-    use float_cmp::approx_eq;
 
     #[test]
     fn contract_mul_with_scalar_tensors() {

@@ -1,14 +1,14 @@
 #[cfg(test)]
 mod tensor_utils_tests {
+    use rayon::prelude::*;
+    use std::collections::HashSet;
+    use std::f64::consts::PI;
     use tensor_math::definitions::errors::TensorErrors;
     use tensor_math::definitions::shape::Shape;
     use tensor_math::definitions::tensor::Tensor;
     use tensor_math::definitions::transpose::Transpose;
     use tensor_math::utilities::tensor::{pool_avg, pool_max, pool_min, pool_sum};
     use tensor_math::{shape, transpose};
-    use rayon::prelude::*;
-    use std::collections::HashSet;
-    use std::f64::consts::PI;
 
     #[test]
     fn concat() {
@@ -634,13 +634,13 @@ mod tensor_utils_tests {
 
         let err = t1.slice(&[0..1]).unwrap_err();
         match err {
-            TensorErrors::SliceIncompatibleShape { .. } => {}
+            TensorErrors::IncompatibleShapes { .. } => {}
             _ => panic!("Incorrect error"),
         }
 
         let err = t1.slice_mut(&[0..1]).unwrap_err();
         match err {
-            TensorErrors::SliceIncompatibleShape { .. } => {}
+            TensorErrors::IncompatibleShapes { .. } => {}
             _ => panic!("Incorrect error"),
         }
     }

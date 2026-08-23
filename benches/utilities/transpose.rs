@@ -3,20 +3,17 @@
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::hint::black_box;
-use tensor_math::definitions::tensor::Tensor;
+use tensor_math::definitions::matrix::Matrix;
 use tensor_math::definitions::shape::Shape;
+use tensor_math::definitions::tensor::Tensor;
 use tensor_math::definitions::transpose::Transpose;
 use tensor_math::{shape, transpose};
-use tensor_math::definitions::matrix::Matrix;
 
 fn bench_transpose_1d(c: &mut Criterion) {
     let mut group = c.benchmark_group("transpose/tensor_1d");
     let perm: Transpose = transpose![0];
     for &n in &[1_000usize, 100_000, 1_000_000, 10_000_000] {
-        let a = Tensor::from_value(
-            &shape![n],
-            1.0
-        );
+        let a = Tensor::from_value(&shape![n], 1.0);
         group.throughput(Throughput::Elements(n as u64));
 
         group.bench_with_input(BenchmarkId::new("st", n), &n, |bench, _| {

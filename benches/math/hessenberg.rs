@@ -1,8 +1,8 @@
 //! Benchmarks for `Matrix::<f64/Compelx64>::upper_hessenberg` and `lower_hessenberg`.
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use std::hint::black_box;
 use num::complex::Complex64;
+use std::hint::black_box;
 use tensor_math::definitions::matrix::Matrix;
 
 fn bench_f64_upper_hessenberg(c: &mut Criterion) {

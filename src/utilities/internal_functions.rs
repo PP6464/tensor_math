@@ -20,9 +20,9 @@ pub fn dot_vectors<T: Add<Output = T> + Mul<Output = T> + Zero + Clone>(
     for i in 0..chunks {
         let base = i * 4;
         acc[0] = acc[0].clone() + vec1[base].clone() * vec2[base].clone();
-        acc[1] = acc[1].clone() + vec1[base+1].clone() * vec2[base+1].clone();
-        acc[2] = acc[2].clone() + vec1[base+2].clone() * vec2[base+2].clone();
-        acc[3] = acc[3].clone() + vec1[base+3].clone() * vec2[base+3].clone();
+        acc[1] = acc[1].clone() + vec1[base + 1].clone() * vec2[base + 1].clone();
+        acc[2] = acc[2].clone() + vec1[base + 2].clone() * vec2[base + 2].clone();
+        acc[3] = acc[3].clone() + vec1[base + 3].clone() * vec2[base + 3].clone();
     }
 
     let mut total = acc[0].clone() + acc[1].clone() + acc[2].clone() + acc[3].clone();

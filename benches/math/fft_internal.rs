@@ -23,9 +23,7 @@ fn rand_vec(n: usize) -> Vec<Complex64> {
 
 /// Powers of two, used to exercise `radix_2_fft_vec` and the radix-2 path of
 /// `fft_vec`/`ifft_vec`.
-const POWERS_OF_TWO: &[usize] = &[
-    16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384,
-];
+const POWERS_OF_TWO: &[usize] = &[16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384];
 
 /// Non-powers-of-two sizes, used to exercise `bluestein_fft_vec` and the
 /// Bluestein dispatch path of `fft_vec`/`ifft_vec`.

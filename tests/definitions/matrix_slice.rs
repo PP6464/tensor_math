@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod matrix_slice_mut_tests {
-    use tensor_math::definitions::shape::Shape;
     use tensor_math::definitions::matrix::Matrix;
+    use tensor_math::definitions::shape::Shape;
     use tensor_math::definitions::traits::{IntoMatrix, TryIntoMatrix};
     use tensor_math::shape;
 
@@ -106,7 +106,12 @@ mod matrix_slice_mut_tests {
         let mut slice = m1.slice_mut(1..3, 0..4).unwrap();
         slice.for_each_mut(|x| *x = 0);
 
-        let ans = Matrix::new(4, 4, vec![0, 1, 2, 3, 0, 0, 0, 0, 0, 0, 0, 0, 12, 13, 14, 15]).unwrap();
+        let ans = Matrix::new(
+            4,
+            4,
+            vec![0, 1, 2, 3, 0, 0, 0, 0, 0, 0, 0, 0, 12, 13, 14, 15],
+        )
+        .unwrap();
 
         assert_eq!(m1, ans);
     }

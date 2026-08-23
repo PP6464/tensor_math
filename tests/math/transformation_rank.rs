@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod transformation_rank_tests {
+    use num::complex::Complex64;
     use tensor_math::definitions::matrix::Matrix;
     use tensor_math::utilities::matrix::identity;
-    use num::complex::Complex64;
 
     #[test]
     fn transformation_rank() {

@@ -5,18 +5,13 @@ use std::ops::Range;
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use tensor_math::definitions::matrix::Matrix;
-use tensor_math::definitions::tensor::Tensor;
 use tensor_math::definitions::shape::Shape;
+use tensor_math::definitions::tensor::Tensor;
 use tensor_math::shape;
 
 fn bench_slice_tensor(c: &mut Criterion) {
     let mut group = c.benchmark_group("slice/tensor_2d");
-    for &(rows, cols) in &[
-        (128usize, 128usize),
-        (512, 512),
-        (1024, 1024),
-        (2048, 2048),
-    ] {
+    for &(rows, cols) in &[(128usize, 128usize), (512, 512), (1024, 1024), (2048, 2048)] {
         let a = Tensor::from_value(&shape![rows, cols], 1.0);
         let r0 = rows / 4..(3 * rows) / 4;
         let c0 = cols / 4..(3 * cols) / 4;
@@ -27,7 +22,9 @@ fn bench_slice_tensor(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("st", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = a.slice(&[r0.clone(), c0.clone()]).expect("slice must succeed");
+                let r = a
+                    .slice(&[r0.clone(), c0.clone()])
+                    .expect("slice must succeed");
                 black_box(r);
             });
         });
@@ -37,12 +34,7 @@ fn bench_slice_tensor(c: &mut Criterion) {
 
 fn bench_slice_mut_tensor(c: &mut Criterion) {
     let mut group = c.benchmark_group("slice_mut/tensor_2d");
-    for &(rows, cols) in &[
-        (128usize, 128usize),
-        (512, 512),
-        (1024, 1024),
-        (2048, 2048),
-    ] {
+    for &(rows, cols) in &[(128usize, 128usize), (512, 512), (1024, 1024), (2048, 2048)] {
         let elems = ((3 * rows / 4 - rows / 4) * (3 * cols / 4 - cols / 4)) as u64;
         group.throughput(Throughput::Elements(elems));
 
@@ -52,10 +44,7 @@ fn bench_slice_mut_tensor(c: &mut Criterion) {
             bench.iter(|| {
                 let mut a = Tensor::from_value(&shape![rows, cols], 1.0);
                 let view = a
-                    .slice_mut(&[
-                        rows / 4..(3 * rows) / 4,
-                        cols / 4..(3 * cols) / 4,
-                    ])
+                    .slice_mut(&[rows / 4..(3 * rows) / 4, cols / 4..(3 * cols) / 4])
                     .expect("slice_mut must succeed");
                 // Read every element via Index to make sure the view is
                 // observably used; the result is fed to `black_box`.
@@ -76,12 +65,7 @@ fn bench_slice_mut_tensor(c: &mut Criterion) {
 
 fn bench_set_all_mut_tensor(c: &mut Criterion) {
     let mut group = c.benchmark_group("set_all_mut/tensor_2d");
-    for &(rows, cols) in &[
-        (128usize, 128usize),
-        (512, 512),
-        (1024, 1024),
-        (2048, 2048),
-    ] {
+    for &(rows, cols) in &[(128usize, 128usize), (512, 512), (1024, 1024), (2048, 2048)] {
         let slice_rows = (3 * rows / 4) - (rows / 4);
         let slice_cols = (3 * cols / 4) - (cols / 4);
         let elems = (slice_rows * slice_cols) as u64;
@@ -96,10 +80,7 @@ fn bench_set_all_mut_tensor(c: &mut Criterion) {
             bench.iter(|| {
                 let mut a = Tensor::from_value(&shape![rows, cols], 0.0);
                 let mut view = a
-                    .slice_mut(&[
-                        rows / 4..(3 * rows) / 4,
-                        cols / 4..(3 * cols) / 4,
-                    ])
+                    .slice_mut(&[rows / 4..(3 * rows) / 4, cols / 4..(3 * cols) / 4])
                     .expect("slice_mut must succeed");
                 view.set_all(&values).expect("set_all must succeed");
                 black_box(a);
@@ -111,12 +92,7 @@ fn bench_set_all_mut_tensor(c: &mut Criterion) {
 
 fn bench_slice_matrix(c: &mut Criterion) {
     let mut group = c.benchmark_group("slice/matrix");
-    for &(rows, cols) in &[
-        (128usize, 128usize),
-        (512, 512),
-        (1024, 1024),
-        (2048, 2048),
-    ] {
+    for &(rows, cols) in &[(128usize, 128usize), (512, 512), (1024, 1024), (2048, 2048)] {
         let a = Matrix::from_value(rows, cols, 1.0);
         let r0: Range<usize> = rows / 4..(3 * rows) / 4;
         let c0: Range<usize> = cols / 4..(3 * cols) / 4;
@@ -137,12 +113,7 @@ fn bench_slice_matrix(c: &mut Criterion) {
 
 fn bench_slice_mut_matrix(c: &mut Criterion) {
     let mut group = c.benchmark_group("slice_mut/matrix");
-    for &(rows, cols) in &[
-        (128usize, 128usize),
-        (512, 512),
-        (1024, 1024),
-        (2048, 2048),
-    ] {
+    for &(rows, cols) in &[(128usize, 128usize), (512, 512), (1024, 1024), (2048, 2048)] {
         let elems = ((3 * rows / 4 - rows / 4) * (3 * cols / 4 - cols / 4)) as u64;
         group.throughput(Throughput::Elements(elems));
 
@@ -171,12 +142,7 @@ fn bench_slice_mut_matrix(c: &mut Criterion) {
 
 fn bench_set_all_mut_matrix(c: &mut Criterion) {
     let mut group = c.benchmark_group("set_all_mut/matrix");
-    for &(rows, cols) in &[
-        (128usize, 128usize),
-        (512, 512),
-        (1024, 1024),
-        (2048, 2048),
-    ] {
+    for &(rows, cols) in &[(128usize, 128usize), (512, 512), (1024, 1024), (2048, 2048)] {
         let slice_rows = (3 * rows / 4) - (rows / 4);
         let slice_cols = (3 * cols / 4) - (cols / 4);
         let elems = (slice_rows * slice_cols) as u64;
