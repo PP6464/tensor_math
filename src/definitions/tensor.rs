@@ -5,10 +5,9 @@ use crate::definitions::strides::Strides;
 use crate::definitions::traits::TryIntoMatrix;
 use crate::shape;
 use crate::utilities::internal_functions::dot_vectors;
-use rayon::iter::{FromParallelIterator, IntoParallelIterator};
-use rayon::iter::{IndexedParallelIterator, ParallelIterator};
+use rayon::iter::{FromParallelIterator, IntoParallelIterator, ParallelIterator};
 use std::ops::{Deref, DerefMut, Index, IndexMut};
-
+use std::vec::IntoIter;
 /*
 --------------------------------------------
 * Tensor definition
@@ -97,6 +96,11 @@ impl<T> Tensor<T> {
     pub(crate) unsafe fn get_unchecked_mut(&mut self, indices: &[usize]) -> &mut T {
         self.elements
             .get_unchecked_mut(dot_vectors(&self.strides.0, indices))
+    }
+    
+    /// Consumes the tensor and returns an iterator over its elements.
+    pub fn into_iter(self) -> IntoIter<T> {
+        self.elements.into_iter()
     }
 }
 

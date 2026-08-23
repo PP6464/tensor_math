@@ -4,7 +4,7 @@ use crate::definitions::tensor::Tensor;
 use rayon::iter::plumbing::{bridge, Consumer, Producer, ProducerCallback, UnindexedConsumer};
 use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 use std::marker::PhantomData;
-use std::ops::{Deref, Index, IndexMut};
+use std::ops::{Index, IndexMut};
 
 /*
 --------------------------------------------
@@ -80,36 +80,10 @@ impl<T> TensorSlice<'_, T> {
 
     /// Returns an iterator over the elements of the tensor slice.
     pub fn iter(&self) -> impl Iterator<Item = &T> {
-        struct SliceIter<'a, T> {
-            slice: &'a TensorSlice<'a, T>,
-            len: usize,
-            flat_index: usize,
-        }
-
-        impl<'a, T> Iterator for SliceIter<'a, T> {
-            type Item = &'a T;
-
-            fn next(&mut self) -> Option<Self::Item> {
-                if self.flat_index >= self.len {
-                    return None;
-                }
-
-                let res = unsafe {
-                    self.slice
-                        .get_unchecked(&self.slice.shape().tensor_index_unchecked(self.flat_index))
-                };
-
-                self.flat_index += 1;
-
-                Some(res)
-            }
-        }
-
-        SliceIter {
-            slice: self,
-            len: self.shape().element_count(),
-            flat_index: 0,
-        }
+        let shape = self.shape();
+        (0..shape.element_count()).map(move |i| unsafe {
+            self.get_unchecked(&shape.tensor_index_unchecked(i))
+        })
     }
 
     /// Returns a parallel iterator over the elements of the tensor slice.
@@ -126,7 +100,7 @@ impl<T> TensorSlice<'_, T> {
     }
 
     /// Returns an iterator over chunks of elements.
-    fn chunks(&self, n: usize) -> impl Iterator<Item = Vec<&T>> {
+    pub fn chunks(&self, n: usize) -> impl Iterator<Item = Vec<&T>> {
         let mut it = self.iter();
         std::iter::from_fn(move || {
             let v: Vec<&T> = it.by_ref().take(n).collect();
@@ -135,7 +109,7 @@ impl<T> TensorSlice<'_, T> {
     }
 
     /// Returns a parallel iterator over chunks of elements.
-    fn par_chunks(&self, n: usize) -> impl IndexedParallelIterator<Item = Vec<&T>>
+    pub fn par_chunks(&self, n: usize) -> impl IndexedParallelIterator<Item = Vec<&T>>
     where
         T: Send + Sync,
     {
@@ -202,7 +176,7 @@ impl<T: Clone> TensorSlice<'_, T> {
             return Tensor {
                 shape: Shape::new(vec![]),
                 strides: Strides::from_shape(&Shape::new(vec![])),
-                elements: self.orig.elements,
+                elements: self.orig.elements.clone(),
             };
         }
 
@@ -210,7 +184,7 @@ impl<T: Clone> TensorSlice<'_, T> {
 
         unsafe {
             let per_chunk_delta = self.orig.strides.0.get_unchecked(0);
-            let slice_start_pos = self.orig.shape.address_unchecked(self.start);
+            let slice_start_pos = self.orig.shape.address_unchecked(&self.start);
             let n_chunks = self.shape().0.get_unchecked(0..self.rank() - 1).iter().product();
 
             for i in 0..n_chunks {
@@ -242,6 +216,64 @@ pub struct TensorSliceMut<'a, T> {
 }
 
 impl<T> TensorSliceMut<'_, T> {
+    /// Returns the start position of the tensor slice.
+    pub fn start(&self) -> &[usize] {
+        &self.start
+    }
+
+    /// Returns the end position of the tensor slice.
+    pub fn end(&self) -> &[usize] {
+        &self.end
+    }
+
+    /// Returns the shape of the tensor slice.
+    pub fn shape(&self) -> Shape {
+        Shape::new(
+            self.end
+                .iter()
+                .zip(self.start.iter())
+                .map(|(e, s)| e - s)
+                .collect(),
+        )
+    }
+
+    /// Returns the rank of the tensor slice.
+    pub fn rank(&self) -> usize {
+        self.end.len()
+    }
+
+    /// Gets a reference to the element at the specified indices in the tensor slice, returning `None` if the indices are out of bounds.
+    pub fn get(&self, indices: &[usize]) -> Option<&T> {
+        if indices.len() != self.orig.rank() {
+            return None;
+        }
+
+        let orig_index = indices
+            .iter()
+            .zip(self.start.iter())
+            .map(|(x, y)| x + y)
+            .collect::<Vec<usize>>();
+
+        for i in 0..self.orig.rank() {
+            if self.end[i] <= orig_index[i] {
+                return None;
+            }
+        }
+
+        unsafe { Some(self.orig.get_unchecked(orig_index.as_slice())) }
+    }
+
+    /// Gets a reference to the element at the specified indices in the tensor slice without bounds checking.
+    pub(crate) unsafe fn get_unchecked(&self, indices: &[usize]) -> &T {
+        self.orig.get_unchecked(
+            &indices
+                .iter()
+                .zip(self.start.iter())
+                .map(|(x, y)| x + y)
+                .collect::<Vec<_>>(),
+        )
+    }
+
     /// Gets a mutable reference to the element at the specified indices in the tensor slice, returning `None` if the indices are out of bounds.
     pub fn get_mut(&mut self, indices: &[usize]) -> Option<&mut T> {
         if indices.len() != self.orig.rank() {
@@ -274,6 +306,28 @@ impl<T> TensorSliceMut<'_, T> {
         )
     }
 
+    /// Returns an iterator over the elements of the tensor slice.
+    pub fn iter(&self) -> impl Iterator<Item = &T> {
+        let shape = self.shape();
+        (0..shape.element_count()).map(move |i| unsafe {
+            self.get_unchecked(&shape.tensor_index_unchecked(i))
+        })
+    }
+
+    /// Returns a parallel iterator over the elements of the tensor slice.
+    pub fn par_iter(&self) -> impl IndexedParallelIterator<Item = &T>
+    where
+        T: Send + Sync,
+    {
+        let shape = self.shape();
+        unsafe {
+            (0..shape.element_count())
+                .into_par_iter()
+                .map(move |i| self.get_unchecked(&shape.tensor_index_unchecked(i)))
+        }
+    }
+
+    /// Returns a mutable iterator over the elements of the tensor slice.
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
         struct SliceIterMut<'a, T> {
             base: *mut T,            // Pointer to the start of the original tensor's elements
@@ -298,7 +352,7 @@ impl<T> TensorSliceMut<'_, T> {
                 Some(unsafe {
                     &mut *self.base.add(
                         self.orig_shape.address_unchecked(
-                            self.slice_shape
+                            &self.slice_shape
                                 .tensor_index_unchecked(self.flat_index - 1)
                                 .iter()
                                 .zip(self.slice_start.iter())
@@ -321,6 +375,7 @@ impl<T> TensorSliceMut<'_, T> {
         }
     }
 
+    /// Returns a parallel mutable iterator over the elements of the tensor slice.
     pub fn par_iter_mut(&mut self) -> impl IndexedParallelIterator<Item = &mut T>
     where
         T: Send + Sync,
@@ -360,7 +415,7 @@ impl<T> TensorSliceMut<'_, T> {
                         .map(|(a, b)| a + b)
                         .collect::<Vec<_>>();
                     self.base
-                        .add(self.orig_shape.address_unchecked(orig_index))
+                        .add(self.orig_shape.address_unchecked(&orig_index))
                         .as_mut()
                 };
 
@@ -390,7 +445,7 @@ impl<T> TensorSliceMut<'_, T> {
                         .map(|(a, b)| a + b)
                         .collect::<Vec<_>>();
                     self.base
-                        .add(self.orig_shape.address_unchecked(orig_index))
+                        .add(self.orig_shape.address_unchecked(&orig_index))
                         .as_mut()
                 }
             }
@@ -468,6 +523,24 @@ impl<T> TensorSliceMut<'_, T> {
         }
     }
 
+    /// Returns an iterator over chunks of elements.
+    pub fn chunks(&self, n: usize) -> impl Iterator<Item = Vec<&T>> {
+        let mut it = self.iter();
+        std::iter::from_fn(move || {
+            let v: Vec<&T> = it.by_ref().take(n).collect();
+            (!v.is_empty()).then_some(v)
+        })
+    }
+
+    /// Returns a parallel iterator over chunks of elements.
+    pub fn par_chunks(&self, n: usize) -> impl IndexedParallelIterator<Item = Vec<&T>>
+    where
+        T: Send + Sync,
+    {
+        self.par_iter().chunks(n)
+    }
+
+    /// Returns an iterator over chunks of mutable elements.
     pub fn chunks_mut(&mut self, n: usize) -> impl Iterator<Item = Vec<&mut T>> {
         let mut it = self.iter_mut();
         std::iter::from_fn(move || {
@@ -476,11 +549,33 @@ impl<T> TensorSliceMut<'_, T> {
         })
     }
 
+    /// Returns a parallel iterator over chunks of mutable elements.
     pub fn par_chunks_mut(&mut self, n: usize) -> impl IndexedParallelIterator<Item = Vec<&mut T>>
     where
         T: Send + Sync,
     {
         self.par_iter_mut().chunks(n)
+    }
+
+    /// Applies the given function to each element of the slice.
+    pub fn for_each(&self, mut closure: impl FnMut(&T)) {
+        let shape = self.shape();
+        for i in 0..shape.element_count() {
+            unsafe {
+                closure(&self.get_unchecked(&shape.tensor_index_unchecked(i)));
+            }
+        }
+    }
+
+    /// Applies the given function to each element of the slice with the index in the slice.
+    pub fn enumerated_for_each(&self, mut closure: impl FnMut(&[usize], &T)) {
+        let shape = self.shape();
+        for i in 0..shape.element_count() {
+            unsafe {
+                let index = shape.tensor_index_unchecked(i);
+                closure(&index, self.get_unchecked(&index));
+            }
+        }
     }
 
     /// Applies the given function to each element of the slice.
@@ -502,24 +597,6 @@ impl<T> TensorSliceMut<'_, T> {
                 let index = shape.tensor_index_unchecked(i);
                 closure(&index, &mut self.get_unchecked_mut(&index));
             }
-        }
-    }
-}
-
-/*
---------------------------------------------
-* Deref implementation
---------------------------------------------
-*/
-
-impl<'a, T> Deref for TensorSliceMut<'a, T> {
-    type Target = TensorSlice<'a, T>;
-
-    fn deref(&self) -> &Self::Target {
-        &TensorSlice {
-            orig: self.orig,
-            start: self.start.clone(),
-            end: self.end.clone(),
         }
     }
 }

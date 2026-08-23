@@ -80,8 +80,8 @@ impl Shape {
     }
 
     /// This gives the address for a corresponding shape index and trusts validity
-    pub(crate) unsafe fn address_unchecked(&self, index: Vec<usize>) -> usize {
-        dot_vectors(&Strides::from_shape(self).0, &index)
+    pub(crate) unsafe fn address_unchecked(&self, index: &Vec<usize>) -> usize {
+        dot_vectors(&Strides::from_shape(self).0, index)
     }
 
     /// Computes the tensor index for a given address.

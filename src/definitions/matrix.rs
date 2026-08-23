@@ -5,9 +5,9 @@ use crate::definitions::tensor::Tensor;
 use crate::definitions::traits::IntoTensor;
 use crate::{mat_addr, shape};
 use rayon::iter::{FromParallelIterator, IntoParallelIterator};
-use rayon::iter::{IndexedParallelIterator, ParallelIterator};
+use rayon::iter::ParallelIterator;
 use std::ops::{Deref, DerefMut, Index, IndexMut};
-
+use std::vec::IntoIter;
 /*
 --------------------------------------------
 * Matrix definition
@@ -98,6 +98,11 @@ impl<T> Matrix<T> {
     pub(crate) unsafe fn get_unchecked_mut(&mut self, indices: (usize, usize)) -> &mut T {
         self.elements
             .get_unchecked_mut(mat_addr!(indices, self.cols))
+    }
+
+    /// Consumes the matrix and returns an iterator.
+    pub fn into_iter(self) -> IntoIter<T> {
+        self.elements.into_iter()
     }
 }
 
