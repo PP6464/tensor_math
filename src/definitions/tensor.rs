@@ -30,15 +30,15 @@ pub struct Tensor<T> {
 impl<T> Tensor<T> {
     /// Returns a new tensor with the specified shape and elements.
     /// This fails if the number of elements does not match `shape.element_count()`.
-    pub fn new(shape: &Shape, elements: Vec<T>) -> Result<Self, TensorErrors> {
+    pub fn new(shape: Shape, elements: Vec<T>) -> Result<Self, TensorErrors> {
         if shape.element_count() != elements.len() {
             return Err(TensorErrors::ShapeSizeDoesNotMatch);
         }
 
-        let strides = Strides::from_shape(shape);
+        let strides = Strides::from_shape(&shape);
 
         Ok(Tensor {
-            shape: shape.clone(),
+            shape,
             strides,
             elements,
         })
