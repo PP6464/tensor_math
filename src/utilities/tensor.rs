@@ -1,5 +1,4 @@
 use crate::definitions::errors::TensorErrors;
-use crate::definitions::errors::TensorErrors::IncompatibleShapes;
 use crate::definitions::shape::Shape;
 use crate::definitions::strides::Strides;
 use crate::definitions::tensor::Tensor;
@@ -91,20 +90,33 @@ impl<T: Default> Default for Tensor<T> {
 
 /*
 --------------------------------------------
-* Tensor utility functions
+* Basic tensor utility functions
 --------------------------------------------
 */
 
 impl<T> Tensor<T> {
     /// Reshapes the tensor.
     /// This fails if `new_shape.element_count() != self.shape().element_count()`.
-    pub fn reshape(self, new_shape: &Shape) -> Result<Tensor<T>, TensorErrors> {
+    pub fn reshape(self, new_shape: Shape) -> Result<Tensor<T>, TensorErrors> {
         if new_shape.element_count() != self.shape.element_count() {
             return Err(TensorErrors::ShapeSizeDoesNotMatch);
         }
 
-        Ok(Tensor::new(new_shape, self.elements)?)
+        Ok(Tensor {
+            strides: Strides::from_shape(&new_shape),
+            shape: new_shape,
+            elements: self.elements,
+        })
     }
+    
+    /// Reshapes the tensor without checking compatibility of shapes.
+    pub(crate) unsafe fn reshape_unchecked(self, new_shape: Shape) -> Tensor<T> {
+        Tensor {
+            strides: Strides::from_shape(&new_shape),
+            shape: new_shape,
+            elements: self.elements,
+        }
+    } 
 
     /// Flatten a tensor on a given dimension.
     /// This fails if the shape of the tensor at the given axis is not 1,
@@ -123,37 +135,34 @@ impl<T> Tensor<T> {
 
         let mut copy = self.shape;
         copy.0.remove(axis);
-        Ok(Tensor::new(&copy, self.elements)?)
+        Ok(Tensor {
+            strides: Strides::from_shape(&copy),
+            shape: copy,
+            elements: self.elements,
+        })
     }
 
     /// Applies the given function over the entire tensor elementwise by consuming the elements.
     pub fn map<O>(self, closure: impl FnMut(T) -> O) -> Tensor<O> {
-        let shape = self.shape().clone();
-        let new_elements = self.elements.into_iter().map(closure).collect();
-        Tensor::new(&shape, new_elements).unwrap()
+        let shape = self.shape();
+        unsafe { self.into_iter().map(closure).collect::<Tensor<_>>().reshape_unchecked(shape) }
+    }
+
+    /// Applies the given function over the entire tensor elementwise by consuming the elements
+    pub fn par_map<O: Send>(self, closure: impl Fn(T) -> O + Sync + Send) -> Tensor<O>
+    where T: Send + Sync {
+        self.into_par_iter().map(closure).collect()
     }
 
     /// Applies the given function over the entire tensor elementwise by reference.
     pub fn map_refs<O>(&self, closure: impl FnMut(&T) -> O) -> Tensor<O> {
-        let shape = self.shape().clone();
-        let new_elements = self.elements.iter().map(closure).collect();
-        Tensor::new(&shape, new_elements).unwrap()
-    }
-}
-
-impl<T: Send + Sync> Tensor<T> {
-    /// Applies the given function over the entire tensor elementwise by consuming the elements
-    pub fn par_map<O: Send>(self, closure: impl Fn(T) -> O + Sync + Send) -> Tensor<O> {
-        let shape = self.shape().clone();
-        let new_elements = self.elements.into_par_iter().map(closure).collect();
-        Tensor::new(&shape, new_elements).unwrap()
+        let shape = self.shape();
+        unsafe { self.iter().map(closure).collect::<Tensor<_>>().reshape_unchecked(shape) }
     }
 
     /// Applies the given function over the entire tensor elementwise by reference.
-    pub fn par_map_refs<O: Send>(&self, closure: impl Fn(&T) -> O + Sync + Send) -> Tensor<O> {
-        let shape = self.shape().clone();
-        let new_elements = self.elements.par_iter().map(closure).collect();
-        Tensor::new(&shape, new_elements).unwrap()
+    pub fn par_map_refs<O: Send>(&self, closure: impl Fn(&T) -> O + Sync + Send) -> Tensor<O> where T: Send + Sync {
+        self.iter().map(closure).collect()
     }
 
     /// Returns an iterator that is enumerated with tensor indices.
@@ -211,7 +220,26 @@ impl<T: Send + Sync> Tensor<T> {
         T: Clone,
     {
         if self.shape() != values.shape() {
-            return Err(IncompatibleShapes {
+            return Err(TensorErrors::IncompatibleShapes {
+                shape_1: self.shape(),
+                shape_2: values.shape(),
+                op: "set_all",
+            });
+        }
+
+        self.elements.clone_from_slice(values);
+
+        Ok(())
+    }
+
+    /// Sets all the values in the tensor to the given values.
+    /// This fails if the shape of the values does not match the tensor's shape.
+    pub fn set_all_from_slice(&mut self, values: &TensorSlice<T>) -> Result<(), TensorErrors>
+    where
+        T: Clone,
+    {
+        if self.shape() != values.shape() {
+            return Err(TensorErrors::IncompatibleShapes {
                 shape_1: self.shape(),
                 shape_2: values.shape(),
                 op: "set_all",
@@ -225,25 +253,123 @@ impl<T: Send + Sync> Tensor<T> {
         Ok(())
     }
 
-    /// Sets all the values in the tensor to the given values.
-    /// This fails if the shape of the values does not match the tensor's shape.
-    pub fn set_all_from_slice(&mut self, values: &TensorSlice<T>) -> Result<(), TensorErrors>
-    where
-        T: Clone,
-    {
-        if self.shape() != values.shape() {
-            return Err(IncompatibleShapes {
-                shape_1: self.shape(),
-                shape_2: values.shape(),
-                op: "set_all",
+    /// Returns a cloned immutable slice to a specified region in the tensor.
+    /// This fails if `range.start > range.end` for any index range,
+    /// or if the region includes an out-of-bounds index.
+    pub fn slice(&self, indices: &[Range<usize>]) -> Result<TensorSlice<T>, TensorErrors> {
+        if indices.len() != self.rank() {
+            return Err(TensorErrors::IncompatibleShapes {
+                shape_1: indices.iter().map(|r| r.end - r.start).collect(),
+                shape_2: self.shape.clone(),
+                op: "slice_mut",
+            });
+        }
+        
+        for (i, range) in indices.iter().enumerate() {
+            if range.start > range.end {
+                return Err(TensorErrors::InvalidInterval {
+                    max: range.end as f64,
+                    min: range.start as f64,
+                });
+            }
+            
+            if range.end > self.shape[i] {
+                return Err(TensorErrors::SliceIndicesOutOfBounds {
+                    start: range.start,
+                    end: range.end,
+                    length: self.shape[i],
+                    axis: i,
+                });
+            }
+        }
+
+        let (start, end) = indices.iter().map(|range| (range.start, range.end)).unzip();
+
+        Ok(TensorSlice {
+            start,
+            orig: self,
+            end,
+        })
+    }
+    
+    /// Slices the tensor without checking bounds.
+    pub(crate) unsafe fn slice_unchecked(&self, indices: &[Range<usize>]) -> TensorSlice<T> {
+        let (start, end) = indices.iter().map(|range| (range.start, range.end)).unzip();
+        
+        TensorSlice {
+            start,
+            orig: self,
+            end,
+        } 
+    }
+
+    /// Returns a slice covering the entire tensor.
+    pub fn as_tensor_slice(&self) -> TensorSlice<T> {
+        TensorSlice {
+            orig: self,
+            start: vec![0; self.rank()],
+            end: self.shape.0.clone(),
+        }
+    }
+
+    /// Returns a mutable slice of a specified region in the tensor.
+    /// This fails if `range.start > range.end` for any index range,
+    /// or if the region includes an out-of-bounds index.
+    pub fn slice_mut(
+        &'_ mut self,
+        indices: &[Range<usize>],
+    ) -> Result<TensorSliceMut<'_, T>, TensorErrors> {
+        if indices.len() != self.rank() {
+            return Err(TensorErrors::IncompatibleShapes {
+                shape_1: indices.iter().map(|r| r.end - r.start).collect(),
+                shape_2: self.shape.clone(),
+                op: "slice_mut",
             });
         }
 
-        for (index, value) in values.enumerated_iter() {
-            unsafe { *self.get_unchecked_mut(&index) = value.clone() }
+        for (i, range) in indices.iter().enumerate() {
+            if range.end > self.shape[i] {
+                return Err(TensorErrors::SliceIndicesOutOfBounds {
+                    start: range.start,
+                    end: range.end,
+                    axis: i,
+                    length: self.shape[i],
+                });
+            }
+
+            if range.start > range.end {
+                return Err(TensorErrors::InvalidInterval {
+                    max: range.end as f64,
+                    min: range.start as f64,
+                });
+            }
         }
 
-        Ok(())
+        let start = indices
+            .iter()
+            .map(|range| range.start)
+            .collect::<Vec<usize>>();
+        let end = indices
+            .iter()
+            .map(|range| range.end)
+            .collect::<Vec<usize>>();
+
+        Ok(TensorSliceMut {
+            start,
+            end,
+            orig: self,
+        })
+    }
+    
+    /// Slices the tensor mutably without checking bounds.
+    pub(crate) fn slice_unchecked_mut(&'_ mut self, indices: &[Range<usize>]) -> TensorSliceMut<'_, T> {
+        let (start, end) = indices.iter().map(|range| (range.start, range.end)).unzip();
+
+        TensorSliceMut {
+            start,
+            orig: self,
+            end,
+        }
     }
 }
 
@@ -315,87 +441,6 @@ impl<T: Clone> Tensor<T> {
         let result = Tensor::new(&resultant_shape, resultant_elements)?;
 
         Ok(result)
-    }
-
-    /// Returns a cloned immutable slice to a specified region in the tensor.
-    /// This fails if `range.start > range.end` for any index range,
-    /// or if the region includes an out-of-bounds index.
-    pub fn slice(&self, indices: &[Range<usize>]) -> Result<TensorSlice<T>, TensorErrors> {
-        // We have to check this up front because otherwise we would have subtraction with underflow
-        for range in indices.iter() {
-            if range.start > range.end {
-                return Err(TensorErrors::InvalidInterval {
-                    max: range.end as f64,
-                    min: range.start as f64,
-                });
-            }
-        }
-
-        let (start, end) = indices.iter().map(|range| (range.start, range.end)).unzip();
-
-        Ok(TensorSlice {
-            start,
-            orig: self,
-            end,
-        })
-    }
-
-    /// Returns a slice covering the entire tensor.
-    pub fn as_tensor_slice(&self) -> TensorSlice<T> {
-        TensorSlice {
-            orig: self,
-            start: vec![0; self.rank()],
-            end: self.shape.0,
-        }
-    }
-
-    /// Returns a mutable slice of a specified region in the tensor.
-    /// This fails if `range.start > range.end` for any index range,
-    /// or if the region includes an out-of-bounds index.
-    pub fn slice_mut(
-        &'_ mut self,
-        indices: &[Range<usize>],
-    ) -> Result<TensorSliceMut<'_, T>, TensorErrors> {
-        if indices.len() != self.rank() {
-            return Err(TensorErrors::IncompatibleShapes {
-                shape_1: indices.iter().map(|r| r.end - r.start).collect(),
-                shape_2: self.shape.clone(),
-                op: "slice_mut",
-            });
-        }
-
-        for (i, range) in indices.iter().enumerate() {
-            if range.end > self.shape[i] {
-                return Err(TensorErrors::SliceIndicesOutOfBounds {
-                    start: range.start,
-                    end: range.end,
-                    axis: i,
-                    length: self.shape[i],
-                });
-            }
-
-            if range.start > range.end {
-                return Err(TensorErrors::InvalidInterval {
-                    max: range.end as f64,
-                    min: range.start as f64,
-                });
-            }
-        }
-
-        let start = indices
-            .iter()
-            .map(|range| range.start)
-            .collect::<Vec<usize>>();
-        let end = indices
-            .iter()
-            .map(|range| range.end)
-            .collect::<Vec<usize>>();
-
-        Ok(TensorSliceMut {
-            start,
-            end,
-            orig: self,
-        })
     }
 
     /// Flips a tensor along a list of specified axes.

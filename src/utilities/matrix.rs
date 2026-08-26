@@ -113,7 +113,7 @@ impl<T: Default> Default for Matrix<T> {
 
 /*
 --------------------------------------------
-* Matrix utility functions
+* Basic matrix utility functions
 --------------------------------------------
 */
 
@@ -130,6 +130,15 @@ impl<T> Matrix<T> {
             rows: new_rows,
             cols: new_cols,
         })
+    }
+
+    /// Reshapes the tensor without checking compatibility of shapes.
+    pub(crate) unsafe fn reshape_unchecked(self, new_rows: usize, new_cols: usize) -> Matrix<T> {
+        Matrix {
+            elements: self.elements,
+            rows: new_rows,
+            cols: new_cols,
+        }
     }
 
     /// Applies the given function over the entire tensor elementwise by consuming the elements.
@@ -186,6 +195,86 @@ impl<T> Matrix<T> {
         }
     }
 
+    /// Returns an iterator that is enumerated with matrix indices.
+    pub fn enumerated_iter(&self) -> impl Iterator<Item = ((usize, usize), &T)> {
+        let cols = self.cols();
+        self.iter()
+            .enumerate()
+            .map(move |(index, elem)| ((index / cols, index % cols), elem))
+    }
+
+    /// Returns a parallel iterator that is enumerated with matrix indices.
+    pub fn enumerated_par_iter(&self) -> impl ParallelIterator<Item = ((usize, usize), &T)>
+    where
+        T: Send + Sync,
+    {
+        let cols = self.cols();
+        self.par_iter()
+            .enumerate()
+            .map(move |(index, elem)| ((index / cols, index % cols), elem))
+    }
+
+    /// Returns a mutable iterator that is enumerated with matrix indices.
+    pub fn enumerated_iter_mut(&mut self) -> impl Iterator<Item = ((usize, usize), &mut T)> {
+        let cols = self.cols();
+        self.iter_mut()
+            .enumerate()
+            .map(move |(index, elem)| ((index / cols, index % cols), elem))
+    }
+
+    /// Returns a parallel mutable iterator that is enumerated with matrix indices.
+    pub fn enumerated_par_iter_mut(
+        &mut self,
+    ) -> impl ParallelIterator<Item = ((usize, usize), &mut T)>
+    where
+        T: Send + Sync,
+    {
+        let cols = self.cols();
+        self.par_iter_mut()
+            .enumerate()
+            .map(move |(index, elem)| ((index / cols, index % cols), elem))
+    }
+
+    /// Sets all the values in the mutable matrix to the given values.
+    /// This fails if the shape of the values does not match the matrix's shape.
+    pub fn set_all(&mut self, values: &Matrix<T>) -> Result<(), TensorErrors>
+    where
+        T: Clone,
+    {
+        if self.rows() != values.rows() || self.cols() != values.cols() {
+            return Err(IncompatibleShapes {
+                shape_1: self.shape(),
+                shape_2: values.shape(),
+                op: "set_all",
+            });
+        }
+
+        self.elements.clone_from_slice(values);
+
+        Ok(())
+    }
+
+    /// Sets all the values in the mutable matrix to the given values.
+    /// This fails if the shape of the values does not match the matrix's shape.
+    pub fn set_all_from_slice(&mut self, values: &MatrixSlice<T>) -> Result<(), TensorErrors>
+    where
+        T: Clone,
+    {
+        if self.rows() != values.rows() || self.cols() != values.cols() {
+            return Err(IncompatibleShapes {
+                shape_1: self.shape(),
+                shape_2: values.shape(),
+                op: "set_all",
+            });
+        }
+
+        for (index, value) in values.enumerated_iter() {
+            unsafe { *self.get_unchecked_mut(index) = value.clone() }
+        }
+
+        Ok(())
+    }
+
     /// Returns an immutable cloned slice to a specified region of the matrix.
     /// This fails if for either range, `range.start > range.end`,
     /// or if the indices include an out-of-bounds index.
@@ -231,6 +320,15 @@ impl<T> Matrix<T> {
             start: (rows_range.start, cols_range.start),
             end: (rows_range.end, cols_range.end),
         })
+    }
+
+    /// Slices the matrix without checking bounds.
+    pub(crate) unsafe fn slice_unchecked(&self, rows_range: Range<usize>, cols_range: Range<usize>) -> MatrixSlice<T> {
+        MatrixSlice {
+            orig: self,
+            start: (rows_range.start, cols_range.start),
+            end: (rows_range.end, cols_range.end),
+        }
     }
 
     /// Returns a slice covering the entire matrix.
@@ -289,86 +387,13 @@ impl<T> Matrix<T> {
         })
     }
 
-    /// Returns an iterator that is enumerated with matrix indices.
-    pub fn enumerated_iter(&self) -> impl Iterator<Item = ((usize, usize), &T)> {
-        let cols = self.cols();
-        self.iter()
-            .enumerate()
-            .map(move |(index, elem)| ((index / cols, index % cols), elem))
-    }
-
-    /// Returns a parallel iterator that is enumerated with matrix indices.
-    pub fn enumerated_par_iter(&self) -> impl ParallelIterator<Item = ((usize, usize), &T)>
-    where
-        T: Send + Sync,
-    {
-        let cols = self.cols();
-        self.par_iter()
-            .enumerate()
-            .map(move |(index, elem)| ((index / cols, index % cols), elem))
-    }
-
-    /// Returns a mutable iterator that is enumerated with matrix indices.
-    pub fn enumerated_iter_mut(&mut self) -> impl Iterator<Item = ((usize, usize), &mut T)> {
-        let cols = self.cols();
-        self.iter_mut()
-            .enumerate()
-            .map(move |(index, elem)| ((index / cols, index % cols), elem))
-    }
-
-    /// Returns a parallel mutable iterator that is enumerated with matrix indices.
-    pub fn enumerated_par_iter_mut(
-        &mut self,
-    ) -> impl ParallelIterator<Item = ((usize, usize), &mut T)>
-    where
-        T: Send + Sync,
-    {
-        let cols = self.cols();
-        self.par_iter_mut()
-            .enumerate()
-            .map(move |(index, elem)| ((index / cols, index % cols), elem))
-    }
-
-    /// Sets all the values in the mutable matrix to the given values.
-    /// This fails if the shape of the values does not match the matrix's shape.
-    pub fn set_all(&mut self, values: &Matrix<T>) -> Result<(), TensorErrors>
-    where
-        T: Clone,
-    {
-        if self.rows() != values.rows() || self.cols() != values.cols() {
-            return Err(IncompatibleShapes {
-                shape_1: self.shape(),
-                shape_2: values.shape(),
-                op: "set_all",
-            });
+    /// Slices the matrix mutably without checking bounds.
+    pub(crate) unsafe fn slice_unchecked_mut(&'_ mut self, rows_range: Range<usize>, cols_range: Range<usize>) -> MatrixSliceMut<'_, T> {
+        MatrixSliceMut {
+            orig: self,
+            start: (rows_range.start, cols_range.start),
+            end: (rows_range.end, cols_range.end),
         }
-
-        for (index, value) in values.enumerated_iter() {
-            unsafe { *self.get_unchecked_mut(index) = value.clone() }
-        }
-
-        Ok(())
-    }
-
-    /// Sets all the values in the mutable matrix to the given values.
-    /// This fails if the shape of the values does not match the matrix's shape.
-    pub fn set_all_from_slice(&mut self, values: &MatrixSlice<T>) -> Result<(), TensorErrors>
-    where
-        T: Clone,
-    {
-        if self.rows() != values.rows() || self.cols() != values.cols() {
-            return Err(IncompatibleShapes {
-                shape_1: self.shape(),
-                shape_2: values.shape(),
-                op: "set_all",
-            });
-        }
-
-        for (index, value) in values.enumerated_iter() {
-            unsafe { *self.get_unchecked_mut(index) = value.clone() }
-        }
-
-        Ok(())
     }
 }
 

@@ -15,7 +15,7 @@ use rayon::iter::ParallelIterator;
 impl<T> TensorSliceMut<'_, T> {
     /// Applies the given function over the entire tensor elementwise by reference.
     pub fn map_refs<F>(&self, f: impl FnMut(&T) -> F) -> Tensor<F> {
-        self.iter().map(f).collect()
+        unsafe { self.iter().map(f).collect::<Tensor<_>>().reshape_unchecked(self.shape()) }
     }
 
     /// Applies the given function over the entire tensor elementwise by reference.
@@ -23,7 +23,20 @@ impl<T> TensorSliceMut<'_, T> {
     where
         T: Send + Sync,
     {
-        self.par_iter().map(f).collect()
+        unsafe { self.par_iter().map(f).collect::<Tensor<_>>().reshape_unchecked(self.shape()) }
+    }
+
+    /// Applies the given function over the entire tensor elementwise by reference, enumerated with tensor indices.
+    pub fn enumerated_map_refs<F>(&self, f: impl FnMut((Vec<usize>, &T)) -> F) -> Tensor<F> {
+        unsafe { self.enumerated_iter().map(f).collect::<Tensor<_>>().reshape_unchecked(self.shape()) }
+    }
+
+    /// Applies the given function over the entire tensor elementwise by reference, enumerated with tensor indices.
+    pub fn enumerated_par_map_refs<F: Send>(&self, f: impl Fn((Vec<usize>, &T)) -> F + Send + Sync) -> Tensor<F>
+    where
+        T: Send + Sync,
+    {
+        unsafe { self.enumerated_par_iter().map(f).collect::<Tensor<_>>().reshape_unchecked(self.shape()) }
     }
 
     /// Returns an iterator that is enumerated with tensor indices.

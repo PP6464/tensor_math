@@ -14,7 +14,7 @@ use rayon::iter::ParallelIterator;
 impl<T> MatrixSliceMut<'_, T> {
     /// Applies the given function over the entire matrix elementwise by reference.
     pub fn map_refs<F>(&self, f: impl FnMut(&T) -> F) -> Matrix<F> {
-        self.iter().map(f).collect()
+        unsafe { self.iter().map(f).collect::<Matrix<_>>().reshape_unchecked(self.rows(), self.cols()) }
     }
 
     /// Applies the given function over the entire matrix elementwise by reference.
@@ -22,7 +22,20 @@ impl<T> MatrixSliceMut<'_, T> {
     where
         T: Send + Sync,
     {
-        self.par_iter().map(f).collect()
+        unsafe { self.par_iter().map(f).collect::<Matrix<_>>().reshape_unchecked(self.rows(), self.cols()) }
+    }
+
+    /// Applies the given function over the entire matrix elementwise by reference, enumerated with matrix indices.
+    pub fn enumerated_map_refs<F>(&self, f: impl FnMut(((usize, usize), &T)) -> F) -> Matrix<F> {
+        unsafe { self.enumerated_iter().map(f).collect::<Matrix<_>>().reshape_unchecked(self.rows(), self.cols()) }
+    }
+
+    /// Applies the given function over the entire matrix elementwise by reference, enumerated with matrix indices.
+    pub fn enumerated_par_map_refs<F: Send>(&self, f: impl Fn(((usize, usize), &T)) -> F + Send + Sync) -> Matrix<F>
+    where
+        T: Send + Sync,
+    {
+        unsafe { self.enumerated_par_iter().map(f).collect::<Matrix<_>>().reshape_unchecked(self.rows(), self.cols()) }
     }
 
     /// Returns an iterator that is enumerated with matrix indices.
