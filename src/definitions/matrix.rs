@@ -1,14 +1,12 @@
 use crate::definitions::errors::TensorErrors;
-use crate::definitions::errors::TensorErrors::IncompatibleShapes;
-use crate::definitions::matrix_slice::MatrixSlice;
 use crate::definitions::shape::Shape;
 use crate::definitions::strides::Strides;
 use crate::definitions::tensor::Tensor;
 use crate::definitions::traits::{IntoMatrix, IntoTensor};
 use crate::{mat_addr, shape};
 use rayon::iter::IndexedParallelIterator;
-use rayon::iter::{FromParallelIterator, IntoParallelIterator, IntoParallelRefIterator};
-use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
+use rayon::iter::{FromParallelIterator, IntoParallelIterator};
+use rayon::iter::ParallelIterator;
 use std::ops::{Deref, DerefMut, Index, IndexMut};
 use std::vec::IntoIter;
 /*
@@ -114,88 +112,6 @@ impl<T> Matrix<T> {
         T: Send + Sync,
     {
         self.elements.into_par_iter()
-    }
-
-    /// Returns an iterator that is enumerated with matrix indices.
-    pub fn enumerated_iter(&self) -> impl Iterator<Item = ((usize, usize), &T)> {
-        let cols = self.cols();
-        self.iter()
-            .enumerate()
-            .map(move |(index, elem)| ((index / cols, index % cols), elem))
-    }
-
-    /// Returns a parallel iterator that is enumerated with matrix indices.
-    pub fn enumerated_par_iter(&self) -> impl ParallelIterator<Item = ((usize, usize), &T)>
-    where
-        T: Send + Sync,
-    {
-        let cols = self.cols();
-        self.par_iter()
-            .enumerate()
-            .map(move |(index, elem)| ((index / cols, index % cols), elem))
-    }
-
-    /// Returns a mutable iterator that is enumerated with matrix indices.
-    pub fn enumerated_iter_mut(&mut self) -> impl Iterator<Item = ((usize, usize), &mut T)> {
-        let cols = self.cols();
-        self.iter_mut()
-            .enumerate()
-            .map(move |(index, elem)| ((index / cols, index % cols), elem))
-    }
-
-    /// Returns a parallel mutable iterator that is enumerated with matrix indices.
-    pub fn enumerated_par_iter_mut(
-        &mut self,
-    ) -> impl ParallelIterator<Item = ((usize, usize), &mut T)>
-    where
-        T: Send + Sync,
-    {
-        let cols = self.cols();
-        self.par_iter_mut()
-            .enumerate()
-            .map(move |(index, elem)| ((index / cols, index % cols), elem))
-    }
-
-    /// Sets all the values in the mutable matrix to the given values.
-    /// This fails if the shape of the values does not match the matrix's shape.
-    pub fn set_all(&mut self, values: &Matrix<T>) -> Result<(), TensorErrors>
-    where
-        T: Clone,
-    {
-        if self.rows() != values.rows() || self.cols() != values.cols() {
-            return Err(IncompatibleShapes {
-                shape_1: self.shape(),
-                shape_2: values.shape(),
-                op: "set_all",
-            });
-        }
-
-        for (index, value) in values.enumerated_iter() {
-            unsafe { *self.get_unchecked_mut(index) = value.clone() }
-        }
-
-        Ok(())
-    }
-
-    /// Sets all the values in the mutable matrix to the given values.
-    /// This fails if the shape of the values does not match the matrix's shape.
-    pub fn set_all_from_slice(&mut self, values: &MatrixSlice<T>) -> Result<(), TensorErrors>
-    where
-        T: Clone,
-    {
-        if self.rows() != values.rows() || self.cols() != values.cols() {
-            return Err(IncompatibleShapes {
-                shape_1: self.shape(),
-                shape_2: values.shape(),
-                op: "set_all",
-            });
-        }
-
-        for (index, value) in values.enumerated_iter() {
-            unsafe { *self.get_unchecked_mut(index) = value.clone() }
-        }
-
-        Ok(())
     }
 }
 
@@ -313,23 +229,6 @@ impl<T> Deref for Matrix<T> {
 impl<T> DerefMut for Matrix<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.elements
-    }
-}
-
-/*
---------------------------------------------
-* Default implementation
---------------------------------------------
-*/
-
-impl<T: Default + Clone> Default for Matrix<T> {
-    /// Returns a single-element matrix with the single element being `T::default()`.
-    fn default() -> Self {
-        Matrix {
-            elements: vec![T::default()],
-            rows: 1,
-            cols: 1,
-        }
     }
 }
 
