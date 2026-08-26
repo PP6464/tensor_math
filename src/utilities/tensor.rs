@@ -1,8 +1,11 @@
 use crate::definitions::errors::TensorErrors;
+use crate::definitions::errors::TensorErrors::IncompatibleShapes;
 use crate::definitions::shape::Shape;
 use crate::definitions::strides::Strides;
 use crate::definitions::tensor::Tensor;
 use crate::definitions::tensor_slice::TensorSlice;
+use crate::definitions::tensor_slice_mut::TensorSliceMut;
+use crate::definitions::traits::IntoTensor;
 use crate::definitions::transpose::Transpose;
 use crate::shape;
 use crate::utilities::internal_functions::dot_vectors;
@@ -13,7 +16,78 @@ use rayon::prelude::*;
 use std::collections::HashSet;
 use std::mem::MaybeUninit;
 use std::ops::{Add, Div, Range};
-use crate::definitions::tensor_slice_mut::TensorSliceMut;
+/*
+--------------------------------------------
+* Tensor utility constructors
+--------------------------------------------
+*/
+
+impl<T> Tensor<T> {
+    /// Creates a tensor from a single value with specified shape.
+    pub fn from_value(shape: Shape, value: T) -> Self
+    where
+        T: Clone,
+    {
+        let elements = vec![value; shape.element_count()];
+        Tensor::new(shape, elements).unwrap()
+    }
+
+    /// Generate a tensor of the specified shape filled with random values.
+    pub fn rand(shape: Shape) -> Tensor<T>
+    where
+        StandardUniform: Distribution<T>,
+    {
+        let mut elements = Vec::with_capacity(shape.element_count());
+        let mut buf = elements.spare_capacity_mut();
+        let mut rng = rand::rng();
+
+        buf.iter_mut().for_each(|e| {
+            e.write(rng.random());
+        });
+
+        unsafe {
+            elements.set_len(shape.element_count());
+        }
+
+        Tensor {
+            strides: Strides::from_shape(&shape),
+            shape,
+            elements,
+        }
+    }
+
+    /// Constructs a tensor of the specified shape filled with `T::default()`.
+    pub fn from_shape(shape: Shape) -> Tensor<T>
+    where
+        T: Default + Clone,
+    {
+        let elements = vec![T::default(); shape.element_count()];
+        Tensor {
+            strides: Strides::from_shape(&shape),
+            elements,
+            shape,
+        }
+    }
+
+    /// Returns a matrix of the specified shape filled with `T::zero()`.
+    pub fn zeros(shape: Shape) -> Tensor<T>
+    where
+        T: Zero + Clone,
+    {
+        Tensor::from_value(shape, T::zero())
+    }
+}
+
+impl<T: Default> Default for Tensor<T> {
+    /// Returns a tensor with shape (1) and a single element of `T::default()`.
+    fn default() -> Self {
+        Tensor {
+            shape: shape![1],
+            strides: Strides(vec![1]),
+            elements: vec![T::default()],
+        }
+    }
+}
 
 /*
 --------------------------------------------
@@ -81,15 +155,99 @@ impl<T: Send + Sync> Tensor<T> {
         let new_elements = self.elements.par_iter().map(closure).collect();
         Tensor::new(&shape, new_elements).unwrap()
     }
+
+    /// Returns an iterator that is enumerated with tensor indices.
+    pub fn enumerated_iter(&self) -> impl Iterator<Item = (Vec<usize>, &T)> {
+        let shape = self.shape();
+        unsafe {
+            self.iter()
+                .enumerate()
+                .map(move |(index, elem)| (shape.tensor_index_unchecked(index), elem))
+        }
+    }
+
+    /// Returns a parallel iterator that is enumerated with tensor indices.
+    pub fn enumerated_par_iter(&self) -> impl ParallelIterator<Item = (Vec<usize>, &T)> + '_
+    where
+        T: Send + Sync,
+    {
+        let shape = self.shape();
+        unsafe {
+            self.par_iter()
+                .enumerate()
+                .map(move |(index, elem)| (shape.tensor_index_unchecked(index), elem))
+        }
+    }
+
+    /// Returns a mutable iterator that is enumerated with tensor indices.
+    pub fn enumerated_iter_mut(&mut self) -> impl Iterator<Item = (Vec<usize>, &mut T)> + '_ {
+        let shape = self.shape();
+        unsafe {
+            self.iter_mut()
+                .enumerate()
+                .map(move |(index, elem)| (shape.tensor_index_unchecked(index), elem))
+        }
+    }
+
+    /// Returns a parallel mutable iterator that is enumerated with tensor indices.
+    pub fn enumerated_par_iter_mut(
+        &mut self,
+    ) -> impl ParallelIterator<Item = (Vec<usize>, &mut T)> + '_
+    where
+        T: Send + Sync,
+    {
+        let shape = self.shape();
+        unsafe {
+            self.par_iter_mut()
+                .enumerate()
+                .map(move |(index, elem)| (shape.tensor_index_unchecked(index), elem))
+        }
+    }
+
+    /// Sets all the values in the tensor to the given values.
+    /// This fails if the shape of the values does not match the tensor's shape.
+    pub fn set_all(&mut self, values: &Tensor<T>) -> Result<(), TensorErrors>
+    where
+        T: Clone,
+    {
+        if self.shape() != values.shape() {
+            return Err(IncompatibleShapes {
+                shape_1: self.shape(),
+                shape_2: values.shape(),
+                op: "set_all",
+            });
+        }
+
+        for (index, value) in values.enumerated_iter() {
+            unsafe { *self.get_unchecked_mut(&index) = value.clone() }
+        }
+
+        Ok(())
+    }
+
+    /// Sets all the values in the tensor to the given values.
+    /// This fails if the shape of the values does not match the tensor's shape.
+    pub fn set_all_from_slice(&mut self, values: &TensorSlice<T>) -> Result<(), TensorErrors>
+    where
+        T: Clone,
+    {
+        if self.shape() != values.shape() {
+            return Err(IncompatibleShapes {
+                shape_1: self.shape(),
+                shape_2: values.shape(),
+                op: "set_all",
+            });
+        }
+
+        for (index, value) in values.enumerated_iter() {
+            unsafe { *self.get_unchecked_mut(&index) = value.clone() }
+        }
+
+        Ok(())
+    }
 }
 
 impl<T: Clone> Tensor<T> {
-    /// Creates a tensor from a single value with specified shape.
-    pub fn from_value(shape: &Shape, value: T) -> Self {
-        let elements = vec![value; shape.element_count()];
-        Tensor::new(shape, elements).unwrap()
-    }
-
     /// Concatenates a tensor with another tensor along the specified dimension.
     /// This fails if `self.shape()[i] != other.shape()[i]` for all `i` that is not `axis`,
     /// or if the ranks do not match.
@@ -157,23 +315,6 @@ impl<T: Clone> Tensor<T> {
         let result = Tensor::new(&resultant_shape, resultant_elements)?;
 
         Ok(result)
-    }
-
-    /// Returns an iterator that is enumerated with tensor indices.
-    pub fn enumerated_iter(&self) -> impl Iterator<Item = (Vec<usize>, T)> + '_ {
-        self.elements
-            .iter()
-            .cloned()
-            .enumerate()
-            .map(|(index, element)| (self.shape.tensor_index(index).unwrap(), element))
-    }
-
-    /// Returns a mutable iterator that is enumerated with tensor indices.
-    pub fn enumerated_iter_mut(&mut self) -> impl Iterator<Item = (Vec<usize>, &mut T)> + '_ {
-        self.elements
-            .iter_mut()
-            .enumerate()
-            .map(|(index, element)| (self.shape.tensor_index(index).unwrap(), element))
     }
 
     /// Returns a cloned immutable slice to a specified region in the tensor.
@@ -571,25 +712,6 @@ impl<T: Clone + Send + Sync> Tensor<T> {
         Tensor::new(&resultant_shape, buf)
     }
 
-    /// Returns a parallel iterator that is enumerated with tensor indices.
-    pub fn enumerated_par_iter(&self) -> impl ParallelIterator<Item = (Vec<usize>, T)> + '_ {
-        self.elements
-            .par_iter()
-            .cloned()
-            .enumerate()
-            .map(|(index, element)| (self.shape.tensor_index(index).unwrap(), element))
-    }
-
-    /// Returns a parallel mutable iterator that is enumerated with tensor indices.
-    pub fn enumerated_par_iter_mut(
-        &mut self,
-    ) -> impl ParallelIterator<Item = (Vec<usize>, &mut T)> + '_ {
-        self.elements
-            .par_iter_mut()
-            .enumerate()
-            .map(|(index, element)| (self.shape.tensor_index(index).unwrap(), element))
-    }
-
     /// Flips a tensor along specified axes (using multiple threads).
     /// This fails if the axes are out of bounds.
     pub fn flip_axes_mt(&self, axes: &HashSet<usize>) -> Result<Tensor<T>, TensorErrors> {
@@ -800,54 +922,6 @@ impl<T: Clone + Send + Sync> Tensor<T> {
         });
 
         Ok(result)
-    }
-}
-
-impl<T: Default + Clone> Tensor<T> {
-    /// Constructs a tensor of the specified shape filled with `T::default()`.
-    pub fn from_shape(shape: &Shape) -> Tensor<T> {
-        let elements = vec![T::default(); shape.element_count()];
-        Tensor {
-            elements,
-            shape: shape.clone(),
-            strides: Strides::from_shape(shape),
-        }
-    }
-}
-
-impl<T: Default + Clone> Tensor<T>
-where
-    StandardUniform: Distribution<T>,
-{
-    /// Generate a tensor of the specified shape filled with random values.
-    pub fn rand(shape: &Shape) -> Tensor<T> {
-        let mut elements = vec![T::default(); shape.element_count()];
-        let mut rng = rand::rng();
-
-        elements.iter_mut().for_each(|e| *e = rng.random());
-
-        Tensor::new(shape, elements).unwrap()
-    }
-}
-
-impl<T: Clone> IntoTensor<T> for Vec<T> {
-    /// This converts the vector into a 1-d tensor.
-    fn into_tensor(self) -> Tensor<T> {
-        self.iter().into()
-    }
-}
-
-impl<T: Default + Clone> Default for Tensor<T> {
-    /// Returns a tensor with shape (1) and a single element of `T::default()`.
-    fn default() -> Self {
-        Tensor::from_shape(&shape![1])
-    }
-}
-
-impl<T: Zero + Clone> Tensor<T> {
-    /// Returns a matrix of the specified shape filled with `T::zero()`.
-    pub fn zeros(shape: &Shape) -> Tensor<T> {
-        Tensor::from_value(shape, T::zero())
     }
 }
 

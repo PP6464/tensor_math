@@ -1,16 +1,115 @@
 use crate::definitions::errors::TensorErrors;
+use crate::definitions::errors::TensorErrors::IncompatibleShapes;
 use crate::definitions::matrix::Matrix;
 use crate::definitions::matrix_slice::MatrixSlice;
 use crate::definitions::matrix_slice_mut::MatrixSliceMut;
-use crate::definitions::shape::Shape;
-use crate::definitions::tensor::Tensor;
+use crate::definitions::traits::IntoMatrix;
 use crate::definitions::transpose::Transpose;
-use crate::{shape, transpose};
+use crate::transpose;
 use num::{One, ToPrimitive, Zero};
 use rand::distr::{Distribution, StandardUniform};
-use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use rand::RngExt;
+use rayon::iter::IndexedParallelIterator;
+use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator};
 use std::cmp::min;
 use std::ops::{Add, Div, Range};
+/*
+--------------------------------------------
+* Matrix utility constructors
+--------------------------------------------
+*/
+
+impl<T> Matrix<T> {
+    /// Creates a tensor from a single value with specified shape.
+    pub fn from_value(rows: usize, cols: usize, value: T) -> Self
+    where
+        T: Clone,
+    {
+        let elements = vec![value; rows * cols];
+        Matrix {
+            rows,
+            cols,
+            elements,
+        }
+    }
+
+    /// Generate a tensor of the specified shape filled with random values.
+    pub fn rand(rows: usize, cols: usize) -> Matrix<T>
+    where
+        StandardUniform: Distribution<T>,
+    {
+        let mut elements = Vec::with_capacity(rows * cols);
+        let mut buf = elements.spare_capacity_mut();
+        let mut rng = rand::rng();
+
+        buf.iter_mut().for_each(|e| {
+            e.write(rng.random());
+        });
+
+        unsafe {
+            elements.set_len(rows * cols);
+        }
+
+        Matrix {
+            rows,
+            cols,
+            elements,
+        }
+    }
+
+    /// Constructs a tensor of the specified shape filled with `T::default()`.
+    pub fn from_shape(rows: usize, cols: usize) -> Matrix<T>
+    where
+        T: Default + Clone,
+    {
+        let elements = vec![T::default(); rows * cols];
+        Matrix {
+            rows,
+            cols,
+            elements,
+        }
+    }
+
+    /// Returns a matrix of the specified shape filled with `T::zero()`.
+    pub fn zeros(rows: usize, cols: usize) -> Matrix<T>
+    where
+        T: Zero + Clone,
+    {
+        Matrix::from_value(rows, cols, T::zero())
+    }
+}
+
+/// Constructs an identity matrix of `T` values of the given size.
+pub fn identity<T: Zero + One + Clone>(n: usize) -> Matrix<T> {
+    let mut t = Matrix::zeros(n, n);
+
+    for i in 0..n {
+        t[&[i, i]] = T::one();
+    }
+
+    t
+}
+
+/// Constructs an identity matrix of `T` values of the given size.
+pub fn eye<T: Zero + One + Clone>(n: usize) -> Matrix<T> {
+    let mut t = Matrix::zeros(n, n);
+
+    for i in 0..n {
+        t[&[i, i]] = T::one();
+    }
+
+    t
+}
+
+impl<T: Default> Default for Matrix<T> {
+    fn default() -> Self {
+        Matrix {
+            rows: 1,
+            cols: 1,
+            elements: vec![T::default()],
+        }
+    }
+}
 
 /*
 --------------------------------------------
@@ -82,18 +181,6 @@ impl<T> Matrix<T> {
 
         Matrix {
             elements: self.par_iter().map(f).collect(),
-            rows,
-            cols,
-        }
-    }
-
-    /// Creates a matrix from a single value with the specified shape.
-    pub fn from_value(rows: usize, cols: usize, value: T) -> Matrix<T>
-    where
-        T: Clone,
-    {
-        Matrix {
-            elements: vec![value; rows * cols],
             rows,
             cols,
         }
@@ -200,6 +287,88 @@ impl<T> Matrix<T> {
             start: (rows_range.start, cols_range.start),
             end: (rows_range.end, cols_range.end),
         })
+    }
+
+    /// Returns an iterator that is enumerated with matrix indices.
+    pub fn enumerated_iter(&self) -> impl Iterator<Item = ((usize, usize), &T)> {
+        let cols = self.cols();
+        self.iter()
+            .enumerate()
+            .map(move |(index, elem)| ((index / cols, index % cols), elem))
+    }
+
+    /// Returns a parallel iterator that is enumerated with matrix indices.
+    pub fn enumerated_par_iter(&self) -> impl ParallelIterator<Item = ((usize, usize), &T)>
+    where
+        T: Send + Sync,
+    {
+        let cols = self.cols();
+        self.par_iter()
+            .enumerate()
+            .map(move |(index, elem)| ((index / cols, index % cols), elem))
+    }
+
+    /// Returns a mutable iterator that is enumerated with matrix indices.
+    pub fn enumerated_iter_mut(&mut self) -> impl Iterator<Item = ((usize, usize), &mut T)> {
+        let cols = self.cols();
+        self.iter_mut()
+            .enumerate()
+            .map(move |(index, elem)| ((index / cols, index % cols), elem))
+    }
+
+    /// Returns a parallel mutable iterator that is enumerated with matrix indices.
+    pub fn enumerated_par_iter_mut(
+        &mut self,
+    ) -> impl ParallelIterator<Item = ((usize, usize), &mut T)>
+    where
+        T: Send + Sync,
+    {
+        let cols = self.cols();
+        self.par_iter_mut()
+            .enumerate()
+            .map(move |(index, elem)| ((index / cols, index % cols), elem))
+    }
+
+    /// Sets all the values in the mutable matrix to the given values.
+    /// This fails if the shape of the values does not match the matrix's shape.
+    pub fn set_all(&mut self, values: &Matrix<T>) -> Result<(), TensorErrors>
+    where
+        T: Clone,
+    {
+        if self.rows() != values.rows() || self.cols() != values.cols() {
+            return Err(IncompatibleShapes {
+                shape_1: self.shape(),
+                shape_2: values.shape(),
+                op: "set_all",
+            });
+        }
+
+        for (index, value) in values.enumerated_iter() {
+            unsafe { *self.get_unchecked_mut(index) = value.clone() }
+        }
+
+        Ok(())
+    }
+
+    /// Sets all the values in the mutable matrix to the given values.
+    /// This fails if the shape of the values does not match the matrix's shape.
+    pub fn set_all_from_slice(&mut self, values: &MatrixSlice<T>) -> Result<(), TensorErrors>
+    where
+        T: Clone,
+    {
+        if self.rows() != values.rows() || self.cols() != values.cols() {
+            return Err(IncompatibleShapes {
+                shape_1: self.shape(),
+                shape_2: values.shape(),
+                op: "set_all",
+            });
+        }
+
+        for (index, value) in values.enumerated_iter() {
+            unsafe { *self.get_unchecked_mut(index) = value.clone() }
+        }
+
+        Ok(())
     }
 }
 
@@ -358,24 +527,6 @@ impl<T: Clone> Matrix<T> {
 }
 
 impl<T: Clone + Send + Sync> Matrix<T> {
-    /// Returns a parallel enumerated iterator with matrix indices.
-    pub fn enumerated_par_iter(
-        &self,
-    ) -> impl ParallelIterator<Item = ((usize, usize), T)> + use<'_, T> {
-        self.tensor
-            .enumerated_par_iter()
-            .map(|(i, x)| ((i[0], i[1]), x))
-    }
-
-    /// Returns a parallel mutable enumerated iterator with matrix indices.
-    pub fn enumerated_par_iter_mut(
-        &mut self,
-    ) -> impl ParallelIterator<Item = ((usize, usize), &mut T)> + use<'_, T> {
-        self.tensor
-            .enumerated_par_iter_mut()
-            .map(|(i, x)| ((i[0], i[1]), x))
-    }
-
     /// Concatenates two matrices along the columns.
     /// This fails if the number of columns do not match.
     pub fn concat_cols_mt(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
@@ -533,49 +684,6 @@ impl<T: Clone + Send + Sync> Matrix<T> {
     }
 }
 
-impl<T: Default + Clone> Matrix<T> {
-    /// Returns a matrix of the specified shape filled with `T::default()`.
-    pub fn from_shape(rows: usize, cols: usize) -> Matrix<T> {
-        Matrix {
-            tensor: Tensor::<T>::from_shape(&shape![rows, cols]),
-            rows,
-            cols,
-        }
-    }
-}
-
-impl<T: Default + Clone> Matrix<T>
-where
-    StandardUniform: Distribution<T>,
-{
-    /// Returns a matrix of the specified shape filled with random values.
-    pub fn rand(rows: usize, cols: usize) -> Matrix<T> {
-        Matrix {
-            tensor: Tensor::<T>::rand(&shape![rows, cols]),
-            rows,
-            cols,
-        }
-    }
-}
-
-impl<T: Zero + Clone> Matrix<T> {
-    /// Returns a matrix of the specified shape filled with `T::zero()`.
-    pub fn zeros(rows: usize, cols: usize) -> Matrix<T> {
-        Matrix::from_value(rows, cols, T::zero())
-    }
-}
-
-impl<T: Clone> IntoMatrix<T> for Vec<T> {
-    /// Converts a vector into a matrix of shape `(1, self.len())`
-    fn into_matrix(self) -> Matrix<T> {
-        Matrix {
-            rows: 1,
-            cols: self.len(),
-            elements: self,
-        }
-    }
-}
-
 impl<T: PartialOrd + Clone> Matrix<T> {
     /// Clips the values in the matrix between `[min, max]`
     pub fn clip(self, min: T, max: T) -> Matrix<T> {
@@ -604,28 +712,6 @@ impl<T: PartialOrd + Clone + Send + Sync> Matrix<T> {
             }
         })
     }
-}
-
-/// Constructs an identity matrix of `T` values of the given size.
-pub fn identity<T: Zero + One + Clone>(n: usize) -> Matrix<T> {
-    let mut t = Matrix::zeros(n, n);
-
-    for i in 0..n {
-        t[&[i, i]] = T::one();
-    }
-
-    t
-}
-
-/// Constructs an identity matrix of `T` values of the given size.
-pub fn eye<T: Zero + One + Clone>(n: usize) -> Matrix<T> {
-    let mut t = Matrix::zeros(n, n);
-
-    for i in 0..n {
-        t[&[i, i]] = T::one();
-    }
-
-    t
 }
 
 /// Default pooling function to sum the values.
