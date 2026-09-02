@@ -1,17 +1,18 @@
 use crate::definitions::errors::TensorErrors;
-use crate::definitions::errors::TensorErrors::IncompatibleShapes;
 use crate::definitions::matrix::Matrix;
 use crate::definitions::matrix_slice::MatrixSlice;
 use crate::definitions::matrix_slice_mut::MatrixSliceMut;
 use crate::definitions::traits::IntoMatrix;
-use crate::definitions::transpose::Transpose;
-use crate::transpose;
 use num::{One, ToPrimitive, Zero};
 use rand::distr::{Distribution, StandardUniform};
 use rand::RngExt;
-use rayon::iter::IndexedParallelIterator;
-use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator};
+use rayon::iter::{IndexedParallelIterator, ParallelExtend};
+use rayon::iter::{
+    IntoParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator,
+};
+use rayon::slice::{ParallelSlice, ParallelSliceMut};
 use std::cmp::min;
+use std::mem::MaybeUninit;
 use std::ops::{Add, Div, Range};
 /*
 --------------------------------------------
@@ -242,7 +243,7 @@ impl<T> Matrix<T> {
         T: Clone,
     {
         if self.rows() != values.rows() || self.cols() != values.cols() {
-            return Err(IncompatibleShapes {
+            return Err(TensorErrors::IncompatibleShapes {
                 shape_1: self.shape(),
                 shape_2: values.shape(),
                 op: "set_all",
@@ -261,7 +262,7 @@ impl<T> Matrix<T> {
         T: Clone,
     {
         if self.rows() != values.rows() || self.cols() != values.cols() {
-            return Err(IncompatibleShapes {
+            return Err(TensorErrors::IncompatibleShapes {
                 shape_1: self.shape(),
                 shape_2: values.shape(),
                 op: "set_all",
@@ -323,7 +324,11 @@ impl<T> Matrix<T> {
     }
 
     /// Slices the matrix without checking bounds.
-    pub(crate) unsafe fn slice_unchecked(&self, rows_range: Range<usize>, cols_range: Range<usize>) -> MatrixSlice<T> {
+    pub(crate) unsafe fn slice_unchecked(
+        &self,
+        rows_range: Range<usize>,
+        cols_range: Range<usize>,
+    ) -> MatrixSlice<T> {
         MatrixSlice {
             orig: self,
             start: (rows_range.start, cols_range.start),
@@ -388,84 +393,301 @@ impl<T> Matrix<T> {
     }
 
     /// Slices the matrix mutably without checking bounds.
-    pub(crate) unsafe fn slice_unchecked_mut(&'_ mut self, rows_range: Range<usize>, cols_range: Range<usize>) -> MatrixSliceMut<'_, T> {
+    pub(crate) unsafe fn slice_unchecked_mut(
+        &'_ mut self,
+        rows_range: Range<usize>,
+        cols_range: Range<usize>,
+    ) -> MatrixSliceMut<'_, T> {
         MatrixSliceMut {
             orig: self,
             start: (rows_range.start, cols_range.start),
             end: (rows_range.end, cols_range.end),
         }
     }
-}
 
-impl<T: Clone> Matrix<T> {
+    /// Flips the contents of the rows of a matrix.
+    pub fn flip_rows(mut self) -> Matrix<T> {
+        let cols = self.cols;
+
+        self.elements.chunks_mut(cols).for_each(|c| c.reverse());
+
+        self
+    }
+
+    /// Flips the contents of the rows of a matrix.
+    pub fn flip_rows_mt(mut self) -> Matrix<T>
+    where
+        T: Send + Sync,
+    {
+        let cols = self.cols;
+
+        self.elements.par_chunks_mut(cols).for_each(|c| c.reverse());
+
+        self
+    }
+
+    /// Flips the contents of the columns of a matrix.
+    pub fn flip_cols(mut self) -> Matrix<T> {
+        let cols = self.cols;
+        let rows = self.rows;
+
+        let (mut low, mut high) = (0, rows - 1);
+
+        unsafe {
+            while low < high {
+                let (top, bottom) = self.elements.split_at_mut_unchecked(high * cols);
+                let row_low = top.get_unchecked_mut(low * cols..low * cols + cols);
+                let row_high = bottom.get_unchecked_mut(..cols);
+                row_low.swap_with_slice(row_high);
+                low += 1;
+                high -= 1;
+            }
+        }
+
+        self
+    }
+
+    /// Flips the contents of the columns of a matrix.
+    pub fn flip_cols_mt(mut self) -> Matrix<T>
+    where
+        T: Send + Sync,
+    {
+        let cols = self.cols;
+        let mid = self.rows / 2;
+
+        unsafe {
+            let (top, rest) = self.elements.split_at_mut_unchecked(mid * cols);
+            let bottom = rest.get_unchecked_mut(rest.len() - mid * cols..);
+
+            top.par_chunks_mut(cols)
+                .zip(bottom.par_chunks_mut(cols).rev())
+                .for_each(|(t, b)| t.swap_with_slice(b));
+        }
+
+        self
+    }
+
+    /// Flips a matrix along both the rows and the columns.
+    pub fn flip(mut self) -> Matrix<T> {
+        let cols = self.cols;
+        let rows = self.rows;
+
+        let (mut low, mut high) = (0, rows - 1);
+
+        unsafe {
+            while low < high {
+                let (top, bottom) = self.elements.split_at_mut_unchecked(high * cols);
+                let row_low = top.get_unchecked_mut(low * cols..low * cols + cols);
+                let row_high = bottom.get_unchecked_mut(..cols);
+                row_low.swap_with_slice(row_high);
+
+                // Flip the row contents as well
+                row_low.reverse();
+                row_high.reverse();
+
+                low += 1;
+                high -= 1;
+            }
+
+            if low == high {
+                // Need to flip the middle row
+                self.elements
+                    .get_unchecked_mut(low * cols..low * cols + cols)
+                    .reverse();
+            }
+        }
+
+        self
+    }
+
+    /// Flips a matrix along both the rows and the columns.
+    pub fn flip_mt(mut self) -> Matrix<T>
+    where
+        T: Send + Sync,
+    {
+        let cols = self.cols;
+        let mid = self.rows / 2;
+
+        unsafe {
+            let (top, rest) = self.elements.split_at_mut_unchecked(mid * cols);
+            let bottom = rest.get_unchecked_mut(rest.len() - mid * cols..);
+
+            top.par_chunks_mut(cols)
+                .zip(bottom.par_chunks_mut(cols).rev())
+                .for_each(|(t, b)| {
+                    t.swap_with_slice(b);
+                    // Need to flip along the rows too
+                    t.reverse();
+                    b.reverse();
+                });
+
+            if self.rows % 2 == 0 {
+                // Need to flip the middle row
+                self.elements
+                    .get_unchecked_mut(mid * cols..mid * cols + cols)
+                    .reverse();
+            }
+        }
+
+        self
+    }
+
+    /// Transpose a matrix.
+    pub fn transpose(mut self) -> Matrix<T> {
+        let mut new_elements = Vec::<T>::with_capacity(self.elements.len());
+        let buf = new_elements.spare_capacity_mut();
+
+        self.elements
+            .into_iter()
+            .enumerate()
+            .for_each(|(index, e)| unsafe {
+                let i = index / self.cols;
+                let j = index % self.cols;
+                let new_index = j * self.rows + i;
+                buf.get_unchecked_mut(new_index).write(e);
+            });
+
+        unsafe {
+            new_elements.set_len(self.rows * self.cols);
+        }
+
+        Matrix {
+            elements: new_elements,
+            rows: self.cols,
+            cols: self.rows,
+        }
+    }
+
+    /// Transposes a matrix.
+    pub fn transpose_mt(self) -> Matrix<T>
+    where
+        T: Send + Sync,
+    {
+        struct ThreadSafePtr<O>(*mut O);
+
+        impl<O> ThreadSafePtr<O> {
+            fn add(&self, offset: usize) -> ThreadSafePtr<O> {
+                unsafe { ThreadSafePtr(self.0.add(offset)) }
+            }
+
+            fn write(&self, value: O) {
+                unsafe { self.0.write(value) }
+            }
+        }
+
+        unsafe impl<O> Sync for ThreadSafePtr<O> {}
+        unsafe impl<O> Send for ThreadSafePtr<O> {}
+
+        let mut new_elements = Vec::<T>::with_capacity(self.elements.len());
+        let buf = new_elements.spare_capacity_mut();
+        let buf_start = ThreadSafePtr(buf.as_mut_ptr());
+
+        self.elements
+            .into_par_iter()
+            .enumerate()
+            .for_each(|(index, e)| unsafe {
+                let i = index / self.cols;
+                let j = index % self.cols;
+                let new_index = j * self.rows + i;
+                let to_insert = MaybeUninit::new(e);
+                buf_start.add(new_index).write(to_insert);
+            });
+
+        unsafe {
+            new_elements.set_len(self.rows * self.cols);
+        }
+
+        Matrix {
+            elements: new_elements,
+            rows: self.cols,
+            cols: self.rows,
+        }
+    }
+
     /// Concatenates two matrices along the columns.
     /// This fails if the number of columns do not match.
-    pub fn concat_cols(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
-        let res = self.tensor.concat(&other.tensor, 1)?;
-        let res_shape = res.shape.clone();
+    pub fn concat_cols(mut self, other: Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
+        if self.cols != other.cols {
+            return Err(TensorErrors::IncompatibleShapes {
+                shape_1: self.shape(),
+                shape_2: other.shape(),
+                op: "concat_cols",
+            });
+        }
+
+        self.elements.extend(other.elements.into_iter());
 
         Ok(Matrix {
-            tensor: res,
-            rows: res_shape[0],
-            cols: res_shape[1],
+            rows: self.rows + other.rows,
+            cols: self.cols,
+            elements: self.elements,
         })
+    }
+
+    /// Concatenates two matrices along the columns without checking for shape compatibility.
+    pub(crate) unsafe fn concat_cols_unchecked(mut self, other: Matrix<T>) -> Matrix<T> {
+        self.elements.extend(other.elements.into_iter());
+
+        Matrix {
+            rows: self.rows + other.rows,
+            cols: self.cols,
+            elements: self.elements,
+        }
     }
 
     /// Concatenates two matrices along the rows.
     /// This fails if the number of rows do not match.
-    pub fn concat_rows(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
-        let res = self.tensor.concat(&other.tensor, 0)?;
-        let res_shape = res.shape.clone();
+    pub fn concat_rows(self, other: Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
+        if self.rows != other.rows {
+            return Err(TensorErrors::IncompatibleShapes {
+                shape_1: self.shape(),
+                shape_2: other.shape(),
+                op: "concat_rows",
+            });
+        }
+
+        let mut new_elements = Vec::with_capacity(self.elements.len() + other.elements.len());
+        let mut self_iter = self.elements.into_iter();
+        let mut other_iter = other.elements.into_iter();
+
+        (0..self.rows).for_each(|_| {
+            new_elements.extend(self_iter.by_ref().take(self.cols));
+            new_elements.extend(other_iter.by_ref().take(other.cols));
+        });
 
         Ok(Matrix {
-            tensor: res,
-            rows: res_shape[0],
-            cols: res_shape[1],
+            rows: self.rows,
+            cols: self.cols + other.cols,
+            elements: new_elements,
         })
     }
 
-    /// Transpose a matrix and returns the result.
-    pub fn transpose(&self) -> Matrix<T> {
-        self.tensor
-            .transpose(&transpose![1, 0])
-            .unwrap()
-            .try_into()
-            .unwrap()
-    }
+    /// Concatenates two matrices along the rows without checking for shape compatibility.
+    pub(crate) unsafe fn concat_rows_unchecked(self, other: Matrix<T>) -> Matrix<T> {
+        let mut new_elements = Vec::with_capacity(self.elements.len() + other.elements.len());
+        let mut self_iter = self.elements.into_iter();
+        let mut other_iter = other.elements.into_iter();
 
-    /// Flips the columns of a matrix.
-    pub fn flip_rows(&self) -> Matrix<T> {
-        let mut res = self.clone();
+        (0..self.rows).for_each(|_| {
+            new_elements.extend(self_iter.by_ref().take(self.cols));
+            new_elements.extend(other_iter.by_ref().take(other.cols));
+        });
 
-        for ((row, col), v) in self.enumerated_iter() {
-            res[(row, self.cols - col - 1)] = v;
+        Matrix {
+            rows: self.rows,
+            cols: self.cols + other.cols,
+            elements: new_elements,
         }
-
-        res
     }
+}
 
-    /// Flips the rows of a matrix.
-    pub fn flip_cols(&self) -> Matrix<T> {
-        let mut res = self.clone();
+/*
+--------------------------------------------
+* Pooling and concatenation for matrices
+--------------------------------------------
+*/
 
-        for ((row, col), v) in self.enumerated_iter() {
-            res[(self.rows - row - 1, col)] = v
-        }
-
-        res
-    }
-
-    /// Flips a matrix along both the rows and the columns.
-    pub fn flip(&self) -> Matrix<T> {
-        let mut res = self.clone();
-
-        for ((row, col), v) in self.enumerated_iter() {
-            res[(self.rows - row - 1, self.cols - col - 1)] = v;
-        }
-
-        res
-    }
-
+impl<T: Clone> Matrix<T> {
     /// Pools a `Matrix<T>` into a `Matrix<O>` using a custom pooling function.
     /// The custom function will take a `Matrix<T>` that corresponds to the slice that the kernel covers.
     /// If the kernel is hanging over the edge of the matrix, then only the bit of the matrix that fits is included.
@@ -552,71 +774,6 @@ impl<T: Clone> Matrix<T> {
 }
 
 impl<T: Clone + Send + Sync> Matrix<T> {
-    /// Concatenates two matrices along the columns.
-    /// This fails if the number of columns do not match.
-    pub fn concat_cols_mt(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
-        let res_tensor = self.tensor.concat_mt(&other.tensor, 1)?;
-
-        res_tensor.try_into()
-    }
-
-    /// Concatenates a matrix along the rows.
-    /// This fails if the number of rows do not match.
-    pub fn concat_rows_mt(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
-        let res_tensor = self.tensor.concat_mt(&other.tensor, 0)?;
-
-        res_tensor.try_into()
-    }
-
-    /// Flips the columns of a matrix (using multiple threads).
-    pub fn flip_cols_mt(&self) -> Matrix<T> {
-        let mut res = self.clone();
-
-        res.enumerated_par_iter_mut()
-            .for_each(|((row, col), elem)| {
-                *elem = self[(self.rows - row - 1, col)].clone();
-            });
-
-        res
-    }
-
-    /// Flips the rows of a matrix (using multiple threads).
-    pub fn flip_rows_mt(&self) -> Matrix<T> {
-        let mut res = self.clone();
-
-        res.enumerated_par_iter_mut()
-            .for_each(|((row, col), elem)| {
-                *elem = self[(row, self.cols - col - 1)].clone();
-            });
-
-        res
-    }
-
-    /// Flips the matrix along both the rows and columns (using multiple threads).
-    pub fn flip_mt(&self) -> Matrix<T> {
-        let mut res = self.clone();
-
-        res.enumerated_par_iter_mut()
-            .for_each(|((row, col), elem)| {
-                *elem = self[(self.rows - row - 1, self.cols - col - 1)].clone();
-            });
-
-        res
-    }
-
-    /// Transposes a matrix (using multiple threads).
-    pub fn transpose_mt(&self) -> Matrix<T> {
-        let mut new_matrix = self.clone().reshape(self.cols, self.rows).unwrap();
-
-        new_matrix
-            .enumerated_par_iter_mut()
-            .for_each(|((row, col), elem)| {
-                *elem = self[(col, row)].clone();
-            });
-
-        new_matrix
-    }
-
     /// Pools a `Matrix<T>` into a `Matrix<O>` using a custom pooling function.
     /// The custom function will take a `Matrix<T>` that corresponds to the slice that the kernel covers.
     /// If the kernel is hanging over the edge of the matrix, then only the bit of the matrix that fits is included.

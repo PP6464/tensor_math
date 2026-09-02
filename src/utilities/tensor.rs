@@ -7,7 +7,6 @@ use crate::definitions::tensor_slice_mut::TensorSliceMut;
 use crate::definitions::traits::IntoTensor;
 use crate::definitions::transpose::Transpose;
 use crate::shape;
-use crate::utilities::internal_functions::dot_vectors;
 use num::{ToPrimitive, Zero};
 use rand::distr::{Distribution, StandardUniform};
 use rand::RngExt;
@@ -37,7 +36,7 @@ impl<T> Tensor<T> {
         StandardUniform: Distribution<T>,
     {
         let mut elements = Vec::with_capacity(shape.element_count());
-        let mut buf = elements.spare_capacity_mut();
+        let buf = elements.spare_capacity_mut();
         let mut rng = rand::rng();
 
         buf.iter_mut().for_each(|e| {
@@ -108,7 +107,7 @@ impl<T> Tensor<T> {
             elements: self.elements,
         })
     }
-    
+
     /// Reshapes the tensor without checking compatibility of shapes.
     pub(crate) unsafe fn reshape_unchecked(self, new_shape: Shape) -> Tensor<T> {
         Tensor {
@@ -116,7 +115,7 @@ impl<T> Tensor<T> {
             shape: new_shape,
             elements: self.elements,
         }
-    } 
+    }
 
     /// Flatten a tensor on a given dimension.
     /// This fails if the shape of the tensor at the given axis is not 1,
@@ -145,23 +144,38 @@ impl<T> Tensor<T> {
     /// Applies the given function over the entire tensor elementwise by consuming the elements.
     pub fn map<O>(self, closure: impl FnMut(T) -> O) -> Tensor<O> {
         let shape = self.shape();
-        unsafe { self.into_iter().map(closure).collect::<Tensor<_>>().reshape_unchecked(shape) }
+        unsafe {
+            self.into_iter()
+                .map(closure)
+                .collect::<Tensor<_>>()
+                .reshape_unchecked(shape)
+        }
     }
 
     /// Applies the given function over the entire tensor elementwise by consuming the elements
     pub fn par_map<O: Send>(self, closure: impl Fn(T) -> O + Sync + Send) -> Tensor<O>
-    where T: Send + Sync {
+    where
+        T: Send + Sync,
+    {
         self.into_par_iter().map(closure).collect()
     }
 
     /// Applies the given function over the entire tensor elementwise by reference.
     pub fn map_refs<O>(&self, closure: impl FnMut(&T) -> O) -> Tensor<O> {
         let shape = self.shape();
-        unsafe { self.iter().map(closure).collect::<Tensor<_>>().reshape_unchecked(shape) }
+        unsafe {
+            self.iter()
+                .map(closure)
+                .collect::<Tensor<_>>()
+                .reshape_unchecked(shape)
+        }
     }
 
     /// Applies the given function over the entire tensor elementwise by reference.
-    pub fn par_map_refs<O: Send>(&self, closure: impl Fn(&T) -> O + Sync + Send) -> Tensor<O> where T: Send + Sync {
+    pub fn par_map_refs<O: Send>(&self, closure: impl Fn(&T) -> O + Sync + Send) -> Tensor<O>
+    where
+        T: Send + Sync,
+    {
         self.iter().map(closure).collect()
     }
 
@@ -264,7 +278,7 @@ impl<T> Tensor<T> {
                 op: "slice_mut",
             });
         }
-        
+
         for (i, range) in indices.iter().enumerate() {
             if range.start > range.end {
                 return Err(TensorErrors::InvalidInterval {
@@ -272,7 +286,7 @@ impl<T> Tensor<T> {
                     min: range.start as f64,
                 });
             }
-            
+
             if range.end > self.shape[i] {
                 return Err(TensorErrors::SliceIndicesOutOfBounds {
                     start: range.start,
@@ -291,16 +305,16 @@ impl<T> Tensor<T> {
             end,
         })
     }
-    
+
     /// Slices the tensor without checking bounds.
     pub(crate) unsafe fn slice_unchecked(&self, indices: &[Range<usize>]) -> TensorSlice<T> {
         let (start, end) = indices.iter().map(|range| (range.start, range.end)).unzip();
-        
+
         TensorSlice {
             start,
             orig: self,
             end,
-        } 
+        }
     }
 
     /// Returns a slice covering the entire tensor.
@@ -360,9 +374,12 @@ impl<T> Tensor<T> {
             orig: self,
         })
     }
-    
+
     /// Slices the tensor mutably without checking bounds.
-    pub(crate) fn slice_unchecked_mut(&'_ mut self, indices: &[Range<usize>]) -> TensorSliceMut<'_, T> {
+    pub(crate) fn slice_unchecked_mut(
+        &'_ mut self,
+        indices: &[Range<usize>],
+    ) -> TensorSliceMut<'_, T> {
         let (start, end) = indices.iter().map(|range| (range.start, range.end)).unzip();
 
         TensorSliceMut {
@@ -371,16 +388,372 @@ impl<T> Tensor<T> {
             end,
         }
     }
-}
 
-impl<T: Clone> Tensor<T> {
-    /// Concatenates a tensor with another tensor along the specified dimension.
+    /// Flips the tensor along a single axis.
+    /// This fails if the axis is out of bounds.
+    pub fn flip_axis(mut self, axis: usize) -> Result<Tensor<T>, TensorErrors> {
+        if axis >= self.rank() {
+            return Err(TensorErrors::AxisOutOfBounds {
+                axis,
+                rank: self.rank(),
+            });
+        }
+
+        let inner = self.strides[axis];
+        let outer = self.shape[axis];
+
+        if axis == self.rank() - 1 {
+            self.chunks_mut(outer).for_each(|c| c.reverse());
+            return Ok(self);
+        }
+
+        self.elements
+            .chunks_mut(inner * outer)
+            .for_each(|outer_chunk| unsafe {
+                let mid = outer / 2;
+                let (top, rest) = outer_chunk.split_at_mut_unchecked(mid * inner);
+                let bottom = rest.get_unchecked_mut(rest.len() - mid * inner..);
+
+                top.chunks_mut(inner)
+                    .zip(bottom.chunks_mut(inner).rev())
+                    .for_each(|(t, b)| {
+                        t.swap_with_slice(b);
+                    });
+            });
+
+        Ok(self)
+    }
+
+    /// Flips the tensor along a single axis without bounds checking the axis.
+    pub(crate) unsafe fn flip_axis_unchecked(mut self, axis: usize) -> Tensor<T> {
+        let inner = self.strides[axis];
+        let outer = self.shape[axis];
+
+        if axis == self.rank() - 1 {
+            self.chunks_mut(outer).for_each(|c| c.reverse());
+            return self;
+        }
+
+        self.elements
+            .chunks_mut(inner * outer)
+            .for_each(|outer_chunk| {
+                let mid = outer / 2;
+                let (top, rest) = outer_chunk.split_at_mut_unchecked(mid * inner);
+                let bottom = rest.get_unchecked_mut(rest.len() - mid * inner..);
+
+                top.chunks_mut(inner)
+                    .zip(bottom.chunks_mut(inner).rev())
+                    .for_each(|(t, b)| {
+                        t.swap_with_slice(b);
+                    });
+            });
+
+        self
+    }
+
+    /// Flips the tensor along a single axis.
+    /// This fails if the axis is out of bounds.
+    pub fn flip_axis_mt(mut self, axis: usize) -> Result<Tensor<T>, TensorErrors>
+    where
+        T: Send + Sync,
+    {
+        if axis >= self.rank() {
+            return Err(TensorErrors::AxisOutOfBounds {
+                axis,
+                rank: self.rank(),
+            });
+        }
+
+        let inner = self.strides[axis];
+        let outer = self.shape[axis];
+
+        self.elements
+            .par_chunks_mut(inner * outer)
+            .for_each(|outer_chunk| unsafe {
+                let mid = outer / 2;
+                let (top, rest) = outer_chunk.split_at_mut_unchecked(mid * inner);
+                let bottom = rest.get_unchecked_mut(rest.len() - mid * inner..);
+
+                top.par_chunks_mut(inner)
+                    .zip(bottom.par_chunks_mut(inner).rev())
+                    .for_each(|(t, b)| {
+                        t.swap_with_slice(b);
+                    });
+            });
+
+        Ok(self)
+    }
+
+    /// Flips the tensor along a single axis without bounds checking the axis.
+    pub(crate) unsafe fn flip_axis_unchecked_mt(mut self, axis: usize) -> Tensor<T>
+    where
+        T: Send + Sync,
+    {
+        let inner = self.strides[axis];
+        let outer = self.shape[axis];
+
+        self.elements
+            .par_chunks_mut(inner * outer)
+            .for_each(|outer_chunk| {
+                let mid = outer / 2;
+                let (top, rest) = outer_chunk.split_at_mut_unchecked(mid * inner);
+                let bottom = rest.get_unchecked_mut(rest.len() - mid * inner..);
+
+                top.par_chunks_mut(inner)
+                    .zip(bottom.par_chunks_mut(inner).rev())
+                    .for_each(|(t, b)| {
+                        t.swap_with_slice(b);
+                    });
+            });
+
+        self
+    }
+
+    /// Flips the tensor along the specified axes.
+    /// This fails if any of the axes are out of bounds.
+    pub fn flip_axes(mut self, axes: HashSet<usize>) -> Result<Tensor<T>, TensorErrors> {
+        for &axis in axes.iter() {
+            self = self.flip_axis(axis)?;
+        }
+
+        Ok(self)
+    }
+
+    /// Flips the tensor along the specified axes without bounds checking the axes.
+    pub(crate) unsafe fn flip_axes_unchecked(mut self, axes: HashSet<usize>) -> Tensor<T> {
+        for &axis in axes.iter() {
+            unsafe {
+                self = self.flip_axis_unchecked(axis);
+            }
+        }
+
+        self
+    }
+
+    /// Flips the tensor along the specified axes.
+    /// This fails if any of the axes are out of bounds.
+    pub fn flip_axes_mt(mut self, axes: HashSet<usize>) -> Result<Tensor<T>, TensorErrors>
+    where
+        T: Send + Sync,
+    {
+        let rank = self.rank();
+
+        for &axis in axes.iter() {
+            if axis >= rank {
+                return Err(TensorErrors::AxisOutOfBounds { axis, rank });
+            }
+
+            unsafe {
+                self = self.flip_axis_unchecked_mt(axis);
+            }
+        }
+
+        Ok(self)
+    }
+
+    /// Flips the tensor along the specified axes without bounds checking the axes.
+    pub(crate) unsafe fn flip_axes_unchecked_mt(mut self, axes: HashSet<usize>) -> Tensor<T>
+    where
+        T: Send + Sync,
+    {
+        for &axis in axes.iter() {
+            unsafe {
+                self = self.flip_axis_unchecked_mt(axis);
+            }
+        }
+
+        self
+    }
+
+    /// Flips the tensor along all axes.
+    pub fn flip(self) -> Tensor<T> {
+        let rank = self.rank();
+        unsafe { self.flip_axes_unchecked((0..rank).collect()) }
+    }
+
+    /// Flips the tensor along all axes.
+    pub fn flip_mt(self) -> Tensor<T>
+    where
+        T: Send + Sync,
+    {
+        let rank = self.rank();
+        unsafe { self.flip_axes_unchecked_mt((0..rank).collect()) }
+    }
+
+    /// Transposes a tensor and returns the result.
+    /// This fails if `self.rank() != transpose.permutation().len()`.
+    pub fn transpose(self, transpose: Transpose) -> Result<Tensor<T>, TensorErrors> {
+        if transpose.permutation.len() != self.shape().rank() {
+            return Err(TensorErrors::TransposeIncompatibleRank {
+                rank: self.rank(),
+                trank: transpose.permutation.len(),
+            });
+        }
+
+        let mut new_elements = Vec::with_capacity(self.shape().element_count());
+        let buf = new_elements.spare_capacity_mut();
+
+        let shape = self.shape;
+
+        self.elements
+            .into_iter()
+            .enumerate()
+            .for_each(|(index, elem)| unsafe {
+                let new_index = transpose.new_index_unchecked(shape.tensor_index_unchecked(index));
+                let new_address = shape.address_unchecked(&new_index);
+                buf.get_unchecked_mut(new_address).write(elem);
+            });
+
+        unsafe {
+            new_elements.set_len(shape.element_count());
+            let new_shape = transpose.new_shape_unchecked(shape);
+
+            Ok(Tensor {
+                strides: Strides::from_shape(&new_shape),
+                shape: new_shape,
+                elements: new_elements,
+            })
+        }
+    }
+
+    /// Transposes a tensor without checking the rank of the transpose.
+    pub(crate) fn transpose_unchecked(self, transpose: Transpose) -> Tensor<T> {
+        let mut new_elements = Vec::with_capacity(self.shape().element_count());
+        let buf = new_elements.spare_capacity_mut();
+
+        let shape = self.shape;
+
+        self.elements
+            .into_iter()
+            .enumerate()
+            .for_each(|(index, elem)| unsafe {
+                let new_index = transpose.new_index_unchecked(shape.tensor_index_unchecked(index));
+                let new_address = shape.address_unchecked(&new_index);
+                buf.get_unchecked_mut(new_address).write(elem);
+            });
+
+        unsafe {
+            new_elements.set_len(shape.element_count());
+            let new_shape = transpose.new_shape_unchecked(shape);
+
+            Tensor {
+                strides: Strides::from_shape(&new_shape),
+                shape: new_shape,
+                elements: new_elements,
+            }
+        }
+    }
+
+    /// Transposes a tensor and returns the result.
+    /// This fails if `self.rank() != transpose.permutation().len()`.
+    pub fn transpose_mt(self, transpose: Transpose) -> Result<Tensor<T>, TensorErrors>
+    where
+        T: Send + Sync,
+    {
+        struct ThreadSafePtr<O>(*mut O);
+
+        impl<O> ThreadSafePtr<O> {
+            fn add(&self, offset: usize) -> ThreadSafePtr<O> {
+                unsafe { ThreadSafePtr(self.0.add(offset)) }
+            }
+
+            fn write(&self, value: O) {
+                unsafe { self.0.write(value) }
+            }
+        }
+
+        unsafe impl<O> Sync for ThreadSafePtr<O> {}
+        unsafe impl<O> Send for ThreadSafePtr<O> {}
+
+        if transpose.permutation.len() != self.shape().rank() {
+            return Err(TensorErrors::TransposeIncompatibleRank {
+                rank: self.rank(),
+                trank: transpose.permutation.len(),
+            });
+        }
+
+        let mut new_elements = Vec::with_capacity(self.shape().element_count());
+        let buf = new_elements.spare_capacity_mut();
+        let buf_ptr = ThreadSafePtr(buf.as_mut_ptr());
+
+        let shape = self.shape;
+
+        self.elements
+            .into_par_iter()
+            .enumerate()
+            .for_each(|(index, elem)| unsafe {
+                let new_index = transpose.new_index_unchecked(shape.tensor_index_unchecked(index));
+                let new_address = shape.address_unchecked(&new_index);
+                buf_ptr.add(new_address).write(MaybeUninit::new(elem));
+            });
+
+        unsafe {
+            new_elements.set_len(shape.element_count());
+            let new_shape = transpose.new_shape_unchecked(shape);
+
+            Ok(Tensor {
+                strides: Strides::from_shape(&new_shape),
+                shape: new_shape,
+                elements: new_elements,
+            })
+        }
+    }
+
+    /// Transposes a tensor and returns the result, without checking the rank of the transpose.
+    pub(crate) fn transpose_unchecked_mt(self, transpose: Transpose) -> Tensor<T>
+    where
+        T: Send + Sync,
+    {
+        struct ThreadSafePtr<O>(*mut O);
+
+        impl<O> ThreadSafePtr<O> {
+            fn add(&self, offset: usize) -> ThreadSafePtr<O> {
+                unsafe { ThreadSafePtr(self.0.add(offset)) }
+            }
+
+            fn write(&self, value: O) {
+                unsafe { self.0.write(value) }
+            }
+        }
+
+        unsafe impl<O> Sync for ThreadSafePtr<O> {}
+        unsafe impl<O> Send for ThreadSafePtr<O> {}
+
+        let mut new_elements = Vec::with_capacity(self.shape().element_count());
+        let buf = new_elements.spare_capacity_mut();
+        let buf_ptr = ThreadSafePtr(buf.as_mut_ptr());
+
+        let shape = self.shape;
+
+        self.elements
+            .into_par_iter()
+            .enumerate()
+            .for_each(|(index, elem)| unsafe {
+                let new_index = transpose.new_index_unchecked(shape.tensor_index_unchecked(index));
+                let new_address = shape.address_unchecked(&new_index);
+                buf_ptr.add(new_address).write(MaybeUninit::new(elem));
+            });
+
+        unsafe {
+            new_elements.set_len(shape.element_count());
+            let new_shape = transpose.new_shape_unchecked(shape);
+
+            Tensor {
+                strides: Strides::from_shape(&new_shape),
+                shape: new_shape,
+                elements: new_elements,
+            }
+        }
+    }
+
+    /// Concatenates a tensor with another tensor along the specified axis.
     /// This fails if `self.shape()[i] != other.shape()[i]` for all `i` that is not `axis`,
     /// or if the ranks do not match.
-    pub fn concat(&self, other: &Tensor<T>, axis: usize) -> Result<Tensor<T>, TensorErrors> {
+    pub fn concat(self, other: Tensor<T>, axis: usize) -> Result<Tensor<T>, TensorErrors> {
         if self.rank() != other.rank() {
             return Err(TensorErrors::RanksDoNotMatch(self.rank(), other.rank()));
         }
+
         let mut resultant_shape: Vec<usize> = Vec::with_capacity(self.rank());
 
         if axis >= self.rank() {
@@ -390,7 +763,6 @@ impl<T: Clone> Tensor<T> {
             });
         }
 
-        // Ensure shapes match on every dim that is not the dim along which to concatenate
         for i in 0..self.rank() {
             if i == axis {
                 resultant_shape.push(self.shape[i] + other.shape[i]);
@@ -409,99 +781,48 @@ impl<T: Clone> Tensor<T> {
         }
 
         let resultant_shape: Shape = resultant_shape.into();
+        let mut new_elements = Vec::with_capacity(self.shape.element_count() + other.shape.element_count());
 
-        // Check for emptiness and short-circuit here as we have ensured shape compatibility.
-        if self.shape.0.iter().any(|&x| x == 0) {
-            return other.clone().reshape(&resultant_shape);
-        } else if other.shape.0.iter().any(|&x| x == 0) {
-            return self.clone().reshape(&resultant_shape);
+        let mut self_iter = self.elements.into_iter();
+        let mut other_iter = other.elements.into_iter();
+
+        for _ in 0..self.shape.element_count() / self.strides[axis] {
+            new_elements.extend(self_iter.by_ref().take(self.strides[axis]));
+            new_elements.extend(other_iter.by_ref().take(other.strides[axis]));
         }
 
-        let mut resultant_elements: Vec<T> = Vec::with_capacity(resultant_shape.element_count());
-
-        if axis == 0 {
-            // If the dimension is 0 we can just merge the elements one after another
-            resultant_elements = self.elements.clone();
-            resultant_elements.extend(other.elements.clone());
-            return Ok(Tensor::new(&resultant_shape, resultant_elements)?);
-        }
-
-        let mut self_chunks = self.elements.chunks(self.strides[axis - 1]);
-        let mut other_chunks = other.elements.chunks(other.strides[axis - 1]);
-
-        // Merge together chunks from self and other in the correct manner to get
-        // the result for concatenating self and other (in that order)
-        // Note self_chunks and other_chunks have the same length
-        // Because their shapes are the same in the dimensions to the left of the concatenation dim
-        for _ in 0..self_chunks.len() {
-            resultant_elements.extend_from_slice(self_chunks.next().unwrap());
-            resultant_elements.extend_from_slice(other_chunks.next().unwrap());
-        }
-
-        let result = Tensor::new(&resultant_shape, resultant_elements)?;
-
-        Ok(result)
+        Ok(Tensor {
+            strides: Strides::from_shape(&resultant_shape),
+            shape: resultant_shape,
+            elements: new_elements,
+        })
     }
 
-    /// Flips a tensor along a list of specified axes.
-    /// This fails if any of the axes are out-of-bounds.
-    pub fn flip_axes(&self, axes: &HashSet<usize>) -> Result<Tensor<T>, TensorErrors> {
-        for &axis in axes.iter() {
-            if axis >= self.rank() {
-                return Err(TensorErrors::AxisOutOfBounds {
-                    axis,
-                    rank: self.rank(),
-                });
-            }
+    /// Concatenates a tensor with another tensor along the specified axis without validation.
+    pub(crate) fn concat_unchecked(self, other: Tensor<T>, axis: usize) -> Tensor<T> {
+        let mut resultant_shape: Vec<usize> = self.shape.0.clone();
+        resultant_shape[axis] += other.shape[axis];
+
+        let resultant_shape: Shape = resultant_shape.into();
+        let mut new_elements = Vec::with_capacity(self.shape.element_count() + other.shape.element_count());
+
+        let mut self_iter = self.elements.into_iter();
+        let mut other_iter = other.elements.into_iter();
+
+        for _ in 0..self.shape.element_count() / self.strides[axis] {
+            new_elements.extend(self_iter.by_ref().take(self.strides[axis]));
+            new_elements.extend(other_iter.by_ref().take(other.strides[axis]));
         }
 
-        let mut res = self.clone();
-
-        for (i, e) in self.enumerated_iter() {
-            let mut new_index = i.clone();
-
-            for &axis in axes {
-                new_index[axis] = self.shape[axis] - i[axis] - 1;
-            }
-
-            res[&new_index] = e;
+        Tensor {
+            strides: Strides::from_shape(&resultant_shape),
+            shape: resultant_shape,
+            elements: new_elements,
         }
-
-        Ok(res)
     }
+}
 
-    /// Flips a tensor along all axes.
-    pub fn flip(&self) -> Tensor<T> {
-        self.flip_axes(&(0..self.rank()).collect()).unwrap()
-    }
-
-    /// Transposes a tensor and returns the result.
-    /// This fails if `self.rank() != transpose.permutation().len()`.
-    pub fn transpose(&self, transpose: &Transpose) -> Result<Tensor<T>, TensorErrors> {
-        if transpose.permutation.len() != self.shape().rank() {
-            return Err(TensorErrors::TransposeIncompatibleRank {
-                rank: self.rank(),
-                trank: transpose.permutation.len(),
-            });
-        }
-
-        if *transpose == Transpose::identity(self.rank()) {
-            return Ok(self.clone());
-        }
-
-        let new_shape = transpose.new_shape(&self.shape())?;
-        let new_strides = Strides::from_shape(&new_shape);
-        let mut new_elements = self.elements().to_vec();
-
-        for (old_index, elem) in self.enumerated_iter() {
-            let new_index = transpose.new_index(&old_index)?;
-            let new_addr = dot_vectors(&new_index, &new_strides.0);
-
-            new_elements[new_addr] = elem;
-        }
-
-        Ok(Tensor::new(&new_shape, new_elements.to_vec())?)
-    }
+impl<T: Clone> Tensor<T> {
 
     /// Pools a `Tensor<T>` into a `Tensor<O>` using a custom pooling function.
     /// The custom function will take a `Tensor<T>` that corresponds to the slice
@@ -755,64 +1076,6 @@ impl<T: Clone + Send + Sync> Tensor<T> {
         }
 
         Tensor::new(&resultant_shape, buf)
-    }
-
-    /// Flips a tensor along specified axes (using multiple threads).
-    /// This fails if the axes are out of bounds.
-    pub fn flip_axes_mt(&self, axes: &HashSet<usize>) -> Result<Tensor<T>, TensorErrors> {
-        let mut res = self.clone();
-
-        for &axis in axes.iter() {
-            if axis >= self.rank() {
-                return Err(TensorErrors::AxisOutOfBounds {
-                    axis,
-                    rank: self.rank(),
-                });
-            }
-        }
-
-        res.enumerated_par_iter_mut().for_each(|(index, elem)| {
-            let mut new_index = index.clone();
-
-            for &axis in axes {
-                new_index[axis] = self.shape[axis] - index[axis] - 1;
-            }
-
-            *elem = self[&new_index].clone();
-        });
-
-        Ok(res)
-    }
-
-    /// Flips a tensor along all axes (using multiple threads).
-    pub fn flip_mt(&self) -> Tensor<T> {
-        self.flip_axes_mt(&(0..self.rank()).collect()).unwrap()
-    }
-
-    /// Transposes a tensor (using multiple threads).
-    /// This fails if `self.rank() != transpose.permutation().len()`.
-    pub fn transpose_mt(&self, transpose: &Transpose) -> Result<Tensor<T>, TensorErrors> {
-        if transpose.permutation.len() != self.shape().rank() {
-            return Err(TensorErrors::TransposeIncompatibleRank {
-                rank: self.rank(),
-                trank: transpose.permutation.len(),
-            });
-        }
-
-        if *transpose == Transpose::identity(self.rank()) {
-            return Ok(self.clone());
-        }
-
-        let new_shape = transpose.new_shape(&self.shape())?;
-        let mut new_tensor = self.clone().reshape(&new_shape)?;
-
-        new_tensor
-            .enumerated_par_iter_mut()
-            .for_each(|(index, elem)| {
-                *elem = self[&transpose.old_index(&index).unwrap()].clone();
-            });
-
-        Ok(new_tensor)
     }
 
     /// Pools a `Tensor<T>` into a `Tensor<O>` using a custom pooling function with the index.
