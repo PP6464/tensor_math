@@ -27,7 +27,11 @@ impl<T> Tensor<T> {
         T: Clone,
     {
         let elements = vec![value; shape.element_count()];
-        Tensor::new(shape, elements).unwrap()
+        Tensor {
+            strides: Strides::from_shape(&shape),
+            shape,
+            elements,
+        }
     }
 
     /// Generate a tensor of the specified shape filled with random values.
@@ -781,7 +785,8 @@ impl<T> Tensor<T> {
         }
 
         let resultant_shape: Shape = resultant_shape.into();
-        let mut new_elements = Vec::with_capacity(self.shape.element_count() + other.shape.element_count());
+        let mut new_elements =
+            Vec::with_capacity(self.shape.element_count() + other.shape.element_count());
 
         let mut self_iter = self.elements.into_iter();
         let mut other_iter = other.elements.into_iter();
@@ -804,7 +809,8 @@ impl<T> Tensor<T> {
         resultant_shape[axis] += other.shape[axis];
 
         let resultant_shape: Shape = resultant_shape.into();
-        let mut new_elements = Vec::with_capacity(self.shape.element_count() + other.shape.element_count());
+        let mut new_elements =
+            Vec::with_capacity(self.shape.element_count() + other.shape.element_count());
 
         let mut self_iter = self.elements.into_iter();
         let mut other_iter = other.elements.into_iter();
@@ -820,22 +826,52 @@ impl<T> Tensor<T> {
             elements: new_elements,
         }
     }
+
+    /// Bounds the values between `min` and `max`.
+    pub fn clip(self, min: T, max: T) -> Tensor<T>
+    where
+        T: Clone + PartialOrd,
+    {
+        self.map(|val| {
+            if val < min {
+                min.clone()
+            } else if val > max {
+                max.clone()
+            } else {
+                val
+            }
+        })
+    }
+
+    /// Bounds the values between `min` and `max`
+    pub fn par_clip(self, min: T, max: T) -> Tensor<T>
+    where
+        T: Clone + Send + Sync + PartialOrd,
+    {
+        self.par_map(|val| {
+            if val < min {
+                min.clone()
+            } else if val > max {
+                max.clone()
+            } else {
+                val
+            }
+        })
+    }
 }
 
-impl<T: Clone> Tensor<T> {
-
+impl<T> Tensor<T> {
     /// Pools a `Tensor<T>` into a `Tensor<O>` using a custom pooling function.
-    /// The custom function will take a `Tensor<T>` that corresponds to the slice
+    /// The custom function will take a `TensorSlice<T>` that corresponds to the slice
     /// that the kernel covers. If the kernel is hanging over the edge of the tensor,
     /// then only the bit of the tensor that fits is included.
     /// This fails if the kernel shape or stride shape contains 0, or if either of their ranks
     /// do not match the rank of the input tensor, or if the tensor is empty or has rank 0.
-    pub fn pool<O: Clone>(
+    pub fn pool<O>(
         &self,
-        pool_fn: impl Fn(Tensor<T>) -> O,
+        pool_fn: impl Fn(TensorSlice<T>) -> O,
         kernel_shape: &Shape,
         stride_shape: &Shape,
-        init: O,
     ) -> Result<Tensor<O>, TensorErrors> {
         if self.rank() == 0 {
             return Err(TensorErrors::RankZero { op: "Pooling" });
@@ -863,7 +899,7 @@ impl<T: Clone> Tensor<T> {
             return Err(TensorErrors::ShapeContainsZero);
         }
 
-        let res_shape = &self
+        let res_shape: Shape = self
             .shape()
             .0
             .iter()
@@ -872,9 +908,15 @@ impl<T: Clone> Tensor<T> {
             .map(|(x, y)| x.div_ceil(y))
             .collect();
 
-        let mut result = Tensor::<O>::from_value(res_shape, init);
+        let mut res = Vec::with_capacity(res_shape.element_count());
+        unsafe { res.set_len(res_shape.element_count()); }
+        let mut res = Tensor {
+            strides: Strides::from_shape(&res_shape),
+            shape: res_shape,
+            elements: res,
+        };
 
-        for (pos, val) in result.enumerated_iter_mut() {
+        for (pos, val) in res.enumerated_iter_mut() {
             let start_pos = pos
                 .iter()
                 .zip(stride_shape.0.iter())
@@ -901,10 +943,12 @@ impl<T: Clone> Tensor<T> {
                 .map(|(x, y)| *y..*x)
                 .collect::<Vec<_>>();
 
-            *val = pool_fn(self.slice(&indices)?.into_tensor());
+            unsafe {
+                *val = pool_fn(self.slice_unchecked(&indices));
+            }
         }
 
-        Ok(result)
+        Ok(res)
     }
 
     /// Pools a `Tensor<T>` into a `Tensor<O>` using a custom pooling function with the index.
@@ -915,10 +959,9 @@ impl<T: Clone> Tensor<T> {
     /// do not match the rank of the input tensor, or if the tensor is empty or has rank 0.
     pub fn pool_indexed<O: Clone>(
         &self,
-        pool_fn: impl Fn(Vec<usize>, Tensor<T>) -> O,
+        pool_fn: impl Fn(Vec<usize>, TensorSlice<T>) -> O,
         kernel_shape: &Shape,
         stride_shape: &Shape,
-        init: O,
     ) -> Result<Tensor<O>, TensorErrors> {
         if self.rank() == 0 {
             return Err(TensorErrors::RankZero { op: "Pooling" });
@@ -946,7 +989,7 @@ impl<T: Clone> Tensor<T> {
             return Err(TensorErrors::ShapeContainsZero);
         }
 
-        let res_shape = &self
+        let res_shape: Shape = self
             .shape()
             .0
             .iter()
@@ -955,9 +998,15 @@ impl<T: Clone> Tensor<T> {
             .map(|(x, y)| x.div_ceil(y))
             .collect();
 
-        let mut result = Tensor::<O>::from_value(res_shape, init);
+        let mut res = Vec::with_capacity(res_shape.element_count());
+        unsafe { res.set_len(res_shape.element_count()); }
+        let mut res = Tensor {
+            strides: Strides::from_shape(&res_shape),
+            shape: res_shape,
+            elements: res,
+        };
 
-        for (pos, val) in result.enumerated_iter_mut() {
+        for (pos, val) in res.enumerated_iter_mut() {
             let start_pos = pos
                 .iter()
                 .zip(stride_shape.0.iter())
@@ -984,102 +1033,18 @@ impl<T: Clone> Tensor<T> {
                 .map(|(x, y)| *y..*x)
                 .collect::<Vec<_>>();
 
-            *val = pool_fn(start_pos, self.slice(&indices)?.into_tensor());
+            unsafe {
+                *val = pool_fn(start_pos, self.slice_unchecked(&indices));
+            }
         }
 
-        Ok(result)
+        Ok(res)
     }
 }
 
 impl<T: Clone + Send + Sync> Tensor<T> {
-    /// Concatenates a tensor with another tensor along the specified dimension (using multiple threads).
-    /// This fails if `self.shape()[i] != other.shape()[i]` for all `i` that is not `axis`,
-    /// or if the ranks do not match.
-    pub fn concat_mt(&self, other: &Tensor<T>, axis: usize) -> Result<Tensor<T>, TensorErrors> {
-        if self.rank() != other.rank() {
-            return Err(TensorErrors::RanksDoNotMatch(self.rank(), other.rank()));
-        }
-
-        if axis >= self.rank() {
-            return Err(TensorErrors::AxisOutOfBounds {
-                axis,
-                rank: self.rank(),
-            });
-        }
-
-        let mut resultant_shape: Vec<usize> = Vec::with_capacity(self.rank());
-
-        // Ensure shapes match on every dim that is not the dim along which to concatenate
-        for i in 0..self.rank() {
-            if i == axis {
-                resultant_shape.push(self.shape[i] + other.shape[i]);
-                continue;
-            }
-
-            if self.shape[i] != other.shape[i] {
-                return Err(TensorErrors::IncompatibleShapes {
-                    shape_1: self.shape.clone(),
-                    shape_2: other.shape.clone(),
-                    op: "concat",
-                });
-            }
-
-            resultant_shape.push(self.shape[i]);
-        }
-
-        let resultant_shape: Shape = resultant_shape.into();
-
-        if self.shape.0.iter().any(|&x| x == 0) {
-            return other.clone().reshape(&resultant_shape);
-        } else if other.shape.0.iter().any(|&x| x == 0) {
-            return self.clone().reshape(&resultant_shape);
-        }
-
-        if axis == 0 {
-            // If the dimension is 0 we can just merge the elements one after another
-            let mut res_elems = self.elements.clone();
-            res_elems.extend(other.elements.clone());
-            return Ok(Tensor::new(&resultant_shape, res_elems)?);
-        }
-
-        let mut buf = Vec::with_capacity(resultant_shape.element_count());
-        let uninit: &mut [MaybeUninit<T>] = buf.spare_capacity_mut();
-
-        let self_chunk_size = self.strides[axis - 1];
-        let other_chunk_size = other.strides[axis - 1];
-        let combined_chunk_size = self_chunk_size + other_chunk_size;
-
-        uninit
-            .par_chunks_mut(combined_chunk_size)
-            .enumerate()
-            .for_each(|(i, chunk)| {
-                let self_offset = i * self_chunk_size;
-                let other_offset = i * other_chunk_size;
-
-                chunk[..self_chunk_size]
-                    .iter_mut()
-                    .enumerate()
-                    .for_each(|(i, v)| {
-                        v.write(self.elements[self_offset + i].clone());
-                    });
-
-                chunk[self_chunk_size..]
-                    .iter_mut()
-                    .enumerate()
-                    .for_each(|(i, v)| {
-                        v.write(other.elements[other_offset + i].clone());
-                    });
-            });
-
-        unsafe {
-            buf.set_len(resultant_shape.element_count());
-        }
-
-        Tensor::new(&resultant_shape, buf)
-    }
-
     /// Pools a `Tensor<T>` into a `Tensor<O>` using a custom pooling function with the index.
-    /// The custom function will take a `Tensor<T>` that corresponds to the slice
+    /// The custom function will take a `TensorSlice<T>` that corresponds to the slice
     /// that the kernel covers. If the kernel is hanging over the edge of the tensor,
     /// then only the bit of the tensor that fits is included.
     /// As this is multithreaded, a reference to the pooling function is expected.
@@ -1087,10 +1052,9 @@ impl<T: Clone + Send + Sync> Tensor<T> {
     /// do not match the rank of the input tensor, or if the tensor is empty or has rank 0.
     pub fn pool_indexed_mt<O: Clone + Send + Sync>(
         &self,
-        pool_fn: &(impl Fn(Vec<usize>, Tensor<T>) -> O + Sync),
+        pool_fn: &(impl Fn(Vec<usize>, TensorSlice<T>) -> O + Sync),
         kernel_shape: &Shape,
         stride_shape: &Shape,
-        init: O,
     ) -> Result<Tensor<O>, TensorErrors> {
         if self.rank() == 0 {
             return Err(TensorErrors::RankZero { op: "Pooling" });
@@ -1118,7 +1082,7 @@ impl<T: Clone + Send + Sync> Tensor<T> {
             return Err(TensorErrors::ShapeContainsZero);
         }
 
-        let res_shape = &self
+        let res_shape: Shape = self
             .shape()
             .0
             .iter()
@@ -1127,9 +1091,15 @@ impl<T: Clone + Send + Sync> Tensor<T> {
             .map(|(x, y)| x.div_ceil(y))
             .collect();
 
-        let mut result = Tensor::<O>::from_value(res_shape, init);
+        let mut res = Vec::with_capacity(res_shape.element_count());
+        unsafe { res.set_len(res_shape.element_count()); }
+        let mut res = Tensor {
+            strides: Strides::from_shape(&res_shape),
+            shape: res_shape,
+            elements: res,
+        };
 
-        result.enumerated_par_iter_mut().for_each(|(index, elem)| {
+        res.enumerated_par_iter_mut().for_each(|(index, elem)| {
             let self_pos = index.clone().into_tensor() * stride_shape.clone().0.into_tensor();
             let self_end_pos = (&self_pos + &kernel_shape.clone().0.into_tensor())
                 .iter()
@@ -1149,14 +1119,16 @@ impl<T: Clone + Send + Sync> Tensor<T> {
                 .map(|(x, y)| *x..*y)
                 .collect::<Vec<_>>();
 
-            *elem = pool_fn(index, self.slice(&indices).unwrap().into_tensor());
+            unsafe {
+                *elem = pool_fn(index, self.slice_unchecked(&indices));
+            }
         });
 
-        Ok(result)
+        Ok(res)
     }
 
     /// Pools a `Tensor<T>` into a `Tensor<O>` using a custom pooling function.
-    /// The custom function will take a `Tensor<T>` that corresponds to the slice
+    /// The custom function will take a `TensorSlice<T>` that corresponds to the slice
     /// that the kernel covers. If the kernel is hanging over the edge of the tensor,
     /// then only the bit of the tensor that fits is included.
     /// As this is multithreaded, a reference to the pooling function is expected.
@@ -1164,10 +1136,9 @@ impl<T: Clone + Send + Sync> Tensor<T> {
     /// do not match the rank of the input tensor, or if the tensor is empty or has rank 0.
     pub fn pool_mt<O: Clone + Send + Sync>(
         &self,
-        pool_fn: &(impl Fn(Tensor<T>) -> O + Sync),
+        pool_fn: &(impl Fn(TensorSlice<T>) -> O + Sync),
         kernel_shape: &Shape,
         stride_shape: &Shape,
-        init: O,
     ) -> Result<Tensor<O>, TensorErrors> {
         if self.rank() == 0 {
             return Err(TensorErrors::RankZero { op: "Pooling" });
@@ -1195,7 +1166,7 @@ impl<T: Clone + Send + Sync> Tensor<T> {
             return Err(TensorErrors::ShapeContainsZero);
         }
 
-        let res_shape = &self
+        let res_shape: Shape = self
             .shape()
             .0
             .iter()
@@ -1204,9 +1175,15 @@ impl<T: Clone + Send + Sync> Tensor<T> {
             .map(|(x, y)| x.div_ceil(y))
             .collect();
 
-        let mut result = Tensor::<O>::from_value(res_shape, init);
+        let mut res = Vec::with_capacity(res_shape.element_count());
+        unsafe { res.set_len(res_shape.element_count()); }
+        let mut res = Tensor {
+            strides: Strides::from_shape(&res_shape),
+            shape: res_shape,
+            elements: res,
+        };
 
-        result.enumerated_par_iter_mut().for_each(|(index, elem)| {
+        res.enumerated_par_iter_mut().for_each(|(index, elem)| {
             let self_pos = index.clone().into_tensor() * stride_shape.clone().0.into_tensor();
             let self_end_pos = (&self_pos + &kernel_shape.clone().0.into_tensor())
                 .iter()
@@ -1226,93 +1203,38 @@ impl<T: Clone + Send + Sync> Tensor<T> {
                 .map(|(x, y)| *x..*y)
                 .collect::<Vec<_>>();
 
-            *elem = pool_fn(self.slice(&indices).unwrap().into_tensor());
+            unsafe {
+                *elem = pool_fn(self.slice_unchecked(&indices));
+            }
         });
 
-        Ok(result)
-    }
-}
-
-impl<T: PartialOrd + Clone> Tensor<T> {
-    /// Bounds the values between `min` and `max`.
-    pub fn clip(&self, min: T, max: T) -> Tensor<T> {
-        Tensor::new(
-            self.shape(),
-            self.iter()
-                .cloned()
-                .map(|x| {
-                    if x < min {
-                        min.clone()
-                    } else if x > max {
-                        max.clone()
-                    } else {
-                        x
-                    }
-                })
-                .collect(),
-        )
-        .unwrap()
-    }
-}
-
-impl<T: PartialOrd + Clone + Send + Sync> Tensor<T> {
-    /// Bounds the values between `min` and `max`
-    pub fn par_clip(&self, min: T, max: T) -> Tensor<T> {
-        Tensor::new(
-            self.shape(),
-            self.par_iter()
-                .cloned()
-                .map(|x| {
-                    if x < min {
-                        min.clone()
-                    } else if x > max {
-                        max.clone()
-                    } else {
-                        x
-                    }
-                })
-                .collect(),
-        )
-        .unwrap()
+        Ok(res)
     }
 }
 
 /// Default pooling function to sum the values.
-pub fn pool_sum<T: Add<Output = T> + Clone>(t: Tensor<T>) -> T {
-    t.iter().cloned().reduce(T::add).unwrap()
+pub fn pool_sum<T: Add<Output = T> + Clone>(t: TensorSlice<T>) -> Option<T> {
+    t.iter().cloned().reduce(T::add)
 }
 
 /// Default pooling function to find the maximum value.
-pub fn pool_max<T: PartialOrd + Clone>(t: Tensor<T>) -> T {
-    let mut max = t.first().unwrap().clone();
-
-    for i in t.iter() {
-        if *i > max {
-            max = i.clone();
-        }
-    }
-
-    max
+pub fn pool_max<T: PartialOrd + Clone>(t: TensorSlice<T>) -> Option<T> {
+    t.iter().reduce(|a, b| if a > b { a } else { b }).cloned()
 }
 
 /// Default pooling function to find the minimum value.
-pub fn pool_min<T: PartialOrd + Clone>(t: Tensor<T>) -> T {
-    let mut min = t.first().unwrap().clone();
-
-    for i in t.iter() {
-        if *i < min {
-            min = i.clone();
-        }
-    }
-
-    min
+pub fn pool_min<T: PartialOrd + Clone>(t: TensorSlice<T>) -> Option<T> {
+    t.iter().reduce(|a, b| if a < b { a } else { b }).cloned()
 }
 
 /// Default pooling function to find the average.
 /// The total number of elements is the total number of elements in the input, so this may
 /// vary if the kernel is hanging over the edge of the tensor.
-pub fn pool_avg<T: Add<Output = T> + Div<f64, Output = T> + Clone>(t: Tensor<T>) -> T {
-    let elems = t.shape().element_count().to_f64().unwrap();
+pub fn pool_avg<T: Add<Output = T> + Div<f64, Output = T> + Clone>(t: TensorSlice<T>) -> Option<T> {
+    let elems = t.shape().element_count().to_f64();
     let sum = pool_sum(t);
-    sum / elems
+    match (sum, elems) {
+        (Some(s), Some(e)) => Some(s / e),
+        _ => None,
+    }
 }

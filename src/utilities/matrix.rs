@@ -2,18 +2,18 @@ use crate::definitions::errors::TensorErrors;
 use crate::definitions::matrix::Matrix;
 use crate::definitions::matrix_slice::MatrixSlice;
 use crate::definitions::matrix_slice_mut::MatrixSliceMut;
-use crate::definitions::traits::IntoMatrix;
 use num::{One, ToPrimitive, Zero};
 use rand::distr::{Distribution, StandardUniform};
 use rand::RngExt;
-use rayon::iter::{IndexedParallelIterator, ParallelExtend};
 use rayon::iter::{
-    IntoParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator,
+    IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator,
+    IntoParallelRefMutIterator, ParallelIterator,
 };
-use rayon::slice::{ParallelSlice, ParallelSliceMut};
+use rayon::slice::ParallelSliceMut;
 use std::cmp::min;
 use std::mem::MaybeUninit;
 use std::ops::{Add, Div, Range};
+
 /*
 --------------------------------------------
 * Matrix utility constructors
@@ -679,25 +679,16 @@ impl<T> Matrix<T> {
             elements: new_elements,
         }
     }
-}
 
-/*
---------------------------------------------
-* Pooling and concatenation for matrices
---------------------------------------------
-*/
-
-impl<T: Clone> Matrix<T> {
     /// Pools a `Matrix<T>` into a `Matrix<O>` using a custom pooling function.
-    /// The custom function will take a `Matrix<T>` that corresponds to the slice that the kernel covers.
+    /// The custom function will take a `MatrixSlice<T>` that corresponds to the slice that the kernel covers.
     /// If the kernel is hanging over the edge of the matrix, then only the bit of the matrix that fits is included.
     /// This will fail if either the kernel or stride shape contains 0, or if the matrix is empty.
-    pub fn pool<O: Clone>(
+    pub fn pool<O>(
         &self,
-        pool_fn: impl Fn(Matrix<T>) -> O,
+        pool_fn: impl Fn(MatrixSlice<T>) -> O,
         kernel_shape: (usize, usize),
         stride_shape: (usize, usize),
-        init: O,
     ) -> Result<Matrix<O>, TensorErrors> {
         if kernel_shape.0 == 0 || kernel_shape.1 == 0 || stride_shape.0 == 0 || stride_shape.1 == 0
         {
@@ -712,7 +703,13 @@ impl<T: Clone> Matrix<T> {
             self.rows.div_ceil(stride_shape.0),
             self.cols.div_ceil(stride_shape.1),
         );
-        let mut res = Matrix::<O>::from_value(res_shape.0, res_shape.1, init);
+        let mut res = Vec::with_capacity(res_shape.0 * res_shape.1);
+        unsafe { res.set_len(res_shape.0 * res_shape.1); }
+        let mut res = Matrix {
+            rows: res_shape.0,
+            cols: res_shape.1,
+            elements: res,
+        };
 
         for (pos, val) in res.enumerated_iter_mut() {
             let start_pos = (pos.0 * stride_shape.0, pos.1 * stride_shape.1);
@@ -722,7 +719,7 @@ impl<T: Clone> Matrix<T> {
             );
 
             let indices = (start_pos.0..end_pos.0, start_pos.1..end_pos.1);
-            let value = pool_fn(self.slice(indices.0, indices.1)?.into_matrix());
+            let value = unsafe { pool_fn(self.slice_unchecked(indices.0, indices.1)) };
 
             *val = value;
         }
@@ -731,15 +728,14 @@ impl<T: Clone> Matrix<T> {
     }
 
     /// Pools a `Matrix<T>` into a `Matrix<O>` using a custom pooling function with the index.
-    /// The custom function will take a `Matrix<T>` that corresponds to the slice that the kernel covers.
+    /// The custom function will take a `MatrixSlice<T>` that corresponds to the slice that the kernel covers.
     /// If the kernel is hanging over the edge of the matrix, then only the bit of the matrix that fits is included.
     /// This will fail if either the kernel or stride shape contains 0, or if the matrix is empty.
-    pub fn pool_indexed<O: Clone>(
+    pub fn pool_indexed<O>(
         &self,
-        pool_fn: impl Fn((usize, usize), Matrix<T>) -> O,
+        pool_fn: impl Fn((usize, usize), MatrixSlice<T>) -> O,
         kernel_shape: (usize, usize),
         stride_shape: (usize, usize),
-        init: O,
     ) -> Result<Matrix<O>, TensorErrors> {
         if kernel_shape.0 == 0 || kernel_shape.1 == 0 || stride_shape.0 == 0 || stride_shape.1 == 0
         {
@@ -754,7 +750,13 @@ impl<T: Clone> Matrix<T> {
             self.rows.div_ceil(stride_shape.0),
             self.cols.div_ceil(stride_shape.1),
         );
-        let mut res = Matrix::<O>::from_value(res_shape.0, res_shape.1, init);
+        let mut res = Vec::with_capacity(res_shape.0 * res_shape.1);
+        unsafe { res.set_len(res_shape.0 * res_shape.1); }
+        let mut res = Matrix {
+            rows: res_shape.0,
+            cols: res_shape.1,
+            elements: res,
+        };
 
         for (pos, val) in res.enumerated_iter_mut() {
             let start_pos = (pos.0 * stride_shape.0, pos.1 * stride_shape.1);
@@ -764,28 +766,25 @@ impl<T: Clone> Matrix<T> {
             );
 
             let indices = (start_pos.0..end_pos.0, start_pos.1..end_pos.1);
-            let value = pool_fn(start_pos, self.slice(indices.0, indices.1)?.into_matrix());
+            let value = unsafe { pool_fn(start_pos, self.slice_unchecked(indices.0, indices.1)) };
 
             *val = value;
         }
 
         Ok(res)
     }
-}
 
-impl<T: Clone + Send + Sync> Matrix<T> {
     /// Pools a `Matrix<T>` into a `Matrix<O>` using a custom pooling function.
-    /// The custom function will take a `Matrix<T>` that corresponds to the slice that the kernel covers.
+    /// The custom function will take a `MatrixSlice<T>` that corresponds to the slice that the kernel covers.
     /// If the kernel is hanging over the edge of the matrix, then only the bit of the matrix that fits is included.
     /// As this is multithreaded, a reference to the pooling function is expected.
     /// This will fail if either the kernel or stride shape contains 0, or if the matrix is empty.
-    pub fn pool_mt<O: Clone + Send + Sync>(
+    pub fn pool_mt<O: Send + Sync>(
         &self,
-        pool_fn: &(impl Fn(Matrix<T>) -> O + Sync),
+        pool_fn: &(impl Fn(MatrixSlice<T>) -> O + Sync),
         kernel_shape: (usize, usize),
         stride_shape: (usize, usize),
-        init: O,
-    ) -> Result<Matrix<O>, TensorErrors> {
+    ) -> Result<Matrix<O>, TensorErrors> where T: Send + Sync {
         if kernel_shape.0 == 0 || kernel_shape.1 == 0 || stride_shape.0 == 0 || stride_shape.1 == 0
         {
             return Err(TensorErrors::ShapeContainsZero);
@@ -800,9 +799,15 @@ impl<T: Clone + Send + Sync> Matrix<T> {
             self.cols.div_ceil(stride_shape.1),
         );
 
-        let mut result = Matrix::<O>::from_value(res_shape.0, res_shape.1, init);
+        let mut res = Vec::with_capacity(res_shape.0 * res_shape.1);
+        unsafe { res.set_len(res_shape.0 * res_shape.1); }
+        let mut res = Matrix {
+            rows: res_shape.0,
+            cols: res_shape.1,
+            elements: res,
+        };
 
-        result.enumerated_par_iter_mut().for_each(|(index, elem)| {
+        res.enumerated_par_iter_mut().for_each(|(index, elem)| unsafe {
             let self_pos = (index.0 * stride_shape.0, index.1 * stride_shape.1);
             let self_end_pos = (
                 min(self_pos.0 + kernel_shape.0, self.rows),
@@ -810,27 +815,24 @@ impl<T: Clone + Send + Sync> Matrix<T> {
             );
 
             *elem = pool_fn(
-                self.slice(self_pos.0..self_end_pos.0, self_pos.1..self_end_pos.1)
-                    .unwrap()
-                    .into_matrix(),
+                self.slice_unchecked(self_pos.0..self_end_pos.0, self_pos.1..self_end_pos.1),
             );
         });
 
-        Ok(result)
+        Ok(res)
     }
 
     /// Pools a `Matrix<T>` into a `Matrix<O>` using a custom pooling function with the index.
-    /// The custom function will take a `Matrix<T>` that corresponds to the slice that the kernel covers.
+    /// The custom function will take a `MatrixSlice<T>` that corresponds to the slice that the kernel covers.
     /// If the kernel is hanging over the edge of the matrix, then only the bit of the matrix that fits is included.
     /// As this is multithreaded, a reference to the pooling function is expected.
     /// This will fail if either the kernel or stride shape contains 0, or if the matrix is empty.
     pub fn pool_indexed_mt<O: Clone + Send + Sync>(
         &self,
-        pool_fn: &(impl Fn((usize, usize), Matrix<T>) -> O + Sync),
+        pool_fn: &(impl Fn((usize, usize), MatrixSlice<T>) -> O + Sync),
         kernel_shape: (usize, usize),
         stride_shape: (usize, usize),
-        init: O,
-    ) -> Result<Matrix<O>, TensorErrors> {
+    ) -> Result<Matrix<O>, TensorErrors> where T: Send + Sync {
         if kernel_shape.0 == 0 || kernel_shape.1 == 0 || stride_shape.0 == 0 || stride_shape.1 == 0
         {
             return Err(TensorErrors::ShapeContainsZero);
@@ -845,9 +847,15 @@ impl<T: Clone + Send + Sync> Matrix<T> {
             self.cols.div_ceil(stride_shape.1),
         );
 
-        let mut result = Matrix::<O>::from_value(res_shape.0, res_shape.1, init);
+        let mut res = Vec::with_capacity(res_shape.0 * res_shape.1);
+        unsafe { res.set_len(res_shape.0 * res_shape.1); }
+        let mut res = Matrix {
+            rows: res_shape.0,
+            cols: res_shape.1,
+            elements: res,
+        };
 
-        result.enumerated_par_iter_mut().for_each(|(index, elem)| {
+        res.enumerated_par_iter_mut().for_each(|(index, elem)| unsafe {
             let self_pos = (index.0 * stride_shape.0, index.1 * stride_shape.1);
             let self_end_pos = (
                 min(self_pos.0 + kernel_shape.0, self.rows),
@@ -856,19 +864,15 @@ impl<T: Clone + Send + Sync> Matrix<T> {
 
             *elem = pool_fn(
                 index,
-                self.slice(self_pos.0..self_end_pos.0, self_pos.1..self_end_pos.1)
-                    .unwrap()
-                    .into_matrix(),
+                self.slice_unchecked(self_pos.0..self_end_pos.0, self_pos.1..self_end_pos.1),
             );
         });
 
-        Ok(result)
+        Ok(res)
     }
-}
 
-impl<T: PartialOrd + Clone> Matrix<T> {
-    /// Clips the values in the matrix between `[min, max]`
-    pub fn clip(self, min: T, max: T) -> Matrix<T> {
+    /// Clips the values in the matrix between `[min, max]`.
+    pub fn clip(self, min: T, max: T) -> Matrix<T> where T: PartialOrd + Clone {
         self.map(|val| {
             if val <= min {
                 min.clone()
@@ -879,11 +883,9 @@ impl<T: PartialOrd + Clone> Matrix<T> {
             }
         })
     }
-}
 
-impl<T: PartialOrd + Clone + Send + Sync> Matrix<T> {
-    /// Clips the values in the matrix between `[min, max]`
-    pub fn par_clip(self, min: T, max: T) -> Matrix<T> {
+    /// Clips the values in the matrix between `[min, max]`.
+    pub fn par_clip(self, min: T, max: T) -> Matrix<T> where T: PartialOrd + Clone + Send + Sync {
         self.par_map(|val| {
             if val <= min {
                 min.clone()
@@ -897,42 +899,28 @@ impl<T: PartialOrd + Clone + Send + Sync> Matrix<T> {
 }
 
 /// Default pooling function to sum the values.
-pub fn pool_sum_mat<T: Add<Output = T> + Clone>(m: Matrix<T>) -> T {
-    m.iter().cloned().reduce(T::add).unwrap()
+pub fn pool_sum_mat<T: Add<Output = T> + Clone>(m: MatrixSlice<T>) -> Option<T> {
+    m.iter().cloned().reduce(T::add)
 }
 
 /// Default pooling function to find the minimum.
-pub fn pool_min_mat<T: PartialOrd + Clone>(m: Matrix<T>) -> T {
-    let mut min = m.first().unwrap().clone();
-
-    for i in m.iter() {
-        if *i < min {
-            min = i.clone();
-        }
-    }
-
-    min
+pub fn pool_min_mat<T: PartialOrd + Clone>(m: MatrixSlice<T>) -> Option<T> {
+    m.iter().reduce(|a, b| if a < b { a } else { b }).cloned()
 }
 
 /// Default pooling function to find the maximum.
-pub fn pool_max_mat<T: PartialOrd + Clone>(m: Matrix<T>) -> T {
-    let mut max = m.first().unwrap().clone();
-
-    for i in m.iter() {
-        if *i > max {
-            max = i.clone();
-        }
-    }
-
-    max
+pub fn pool_max_mat<T: PartialOrd + Clone>(m: MatrixSlice<T>) -> Option<T> {
+    m.iter().reduce(|a, b| if a > b { a } else { b }).cloned()
 }
 
 /// Default pooling function to find the average.
 /// The total number of elements is the total number of elements in the input
 /// so this may vary if the kernel is hanging over the edge of the tensor.
-pub fn pool_avg_mat<T: Add<Output = T> + Div<f64, Output = T> + Clone>(m: Matrix<T>) -> T {
-    let sum = pool_sum_mat(m.clone());
-    let elems = m.shape().element_count().to_f64().unwrap();
-
-    sum / elems
+pub fn pool_avg_mat<T: Add<Output = T> + Div<f64, Output = T> + Clone>(m: MatrixSlice<T>) -> Option<T> {
+    let count = m.shape().element_count().to_f64();
+    let sum = pool_sum_mat(m);
+    match (sum, count) {
+        (Some(s), Some(c)) => Some(s / c),
+        _ => None,
+    }
 }
