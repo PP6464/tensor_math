@@ -405,6 +405,15 @@ impl<T> Matrix<T> {
         }
     }
 
+    /// Returns a mutable slice covering the entire matrix.
+    pub fn as_matrix_slice_mut(&mut self) -> MatrixSliceMut<T> {
+        MatrixSliceMut {
+            start: (0, 0),
+            end: (self.rows, self.cols),
+            orig: self,
+        }
+    }
+
     /// Flips the contents of the rows of a matrix.
     pub fn flip_rows(mut self) -> Matrix<T> {
         let cols = self.cols;
@@ -704,7 +713,9 @@ impl<T> Matrix<T> {
             self.cols.div_ceil(stride_shape.1),
         );
         let mut res = Vec::with_capacity(res_shape.0 * res_shape.1);
-        unsafe { res.set_len(res_shape.0 * res_shape.1); }
+        unsafe {
+            res.set_len(res_shape.0 * res_shape.1);
+        }
         let mut res = Matrix {
             rows: res_shape.0,
             cols: res_shape.1,
@@ -751,7 +762,9 @@ impl<T> Matrix<T> {
             self.cols.div_ceil(stride_shape.1),
         );
         let mut res = Vec::with_capacity(res_shape.0 * res_shape.1);
-        unsafe { res.set_len(res_shape.0 * res_shape.1); }
+        unsafe {
+            res.set_len(res_shape.0 * res_shape.1);
+        }
         let mut res = Matrix {
             rows: res_shape.0,
             cols: res_shape.1,
@@ -784,7 +797,10 @@ impl<T> Matrix<T> {
         pool_fn: &(impl Fn(MatrixSlice<T>) -> O + Sync),
         kernel_shape: (usize, usize),
         stride_shape: (usize, usize),
-    ) -> Result<Matrix<O>, TensorErrors> where T: Send + Sync {
+    ) -> Result<Matrix<O>, TensorErrors>
+    where
+        T: Send + Sync,
+    {
         if kernel_shape.0 == 0 || kernel_shape.1 == 0 || stride_shape.0 == 0 || stride_shape.1 == 0
         {
             return Err(TensorErrors::ShapeContainsZero);
@@ -800,24 +816,27 @@ impl<T> Matrix<T> {
         );
 
         let mut res = Vec::with_capacity(res_shape.0 * res_shape.1);
-        unsafe { res.set_len(res_shape.0 * res_shape.1); }
+        unsafe {
+            res.set_len(res_shape.0 * res_shape.1);
+        }
         let mut res = Matrix {
             rows: res_shape.0,
             cols: res_shape.1,
             elements: res,
         };
 
-        res.enumerated_par_iter_mut().for_each(|(index, elem)| unsafe {
-            let self_pos = (index.0 * stride_shape.0, index.1 * stride_shape.1);
-            let self_end_pos = (
-                min(self_pos.0 + kernel_shape.0, self.rows),
-                min(self_pos.1 + kernel_shape.1, self.cols),
-            );
+        res.enumerated_par_iter_mut()
+            .for_each(|(index, elem)| unsafe {
+                let self_pos = (index.0 * stride_shape.0, index.1 * stride_shape.1);
+                let self_end_pos = (
+                    min(self_pos.0 + kernel_shape.0, self.rows),
+                    min(self_pos.1 + kernel_shape.1, self.cols),
+                );
 
-            *elem = pool_fn(
-                self.slice_unchecked(self_pos.0..self_end_pos.0, self_pos.1..self_end_pos.1),
-            );
-        });
+                *elem = pool_fn(
+                    self.slice_unchecked(self_pos.0..self_end_pos.0, self_pos.1..self_end_pos.1),
+                );
+            });
 
         Ok(res)
     }
@@ -832,7 +851,10 @@ impl<T> Matrix<T> {
         pool_fn: &(impl Fn((usize, usize), MatrixSlice<T>) -> O + Sync),
         kernel_shape: (usize, usize),
         stride_shape: (usize, usize),
-    ) -> Result<Matrix<O>, TensorErrors> where T: Send + Sync {
+    ) -> Result<Matrix<O>, TensorErrors>
+    where
+        T: Send + Sync,
+    {
         if kernel_shape.0 == 0 || kernel_shape.1 == 0 || stride_shape.0 == 0 || stride_shape.1 == 0
         {
             return Err(TensorErrors::ShapeContainsZero);
@@ -848,31 +870,37 @@ impl<T> Matrix<T> {
         );
 
         let mut res = Vec::with_capacity(res_shape.0 * res_shape.1);
-        unsafe { res.set_len(res_shape.0 * res_shape.1); }
+        unsafe {
+            res.set_len(res_shape.0 * res_shape.1);
+        }
         let mut res = Matrix {
             rows: res_shape.0,
             cols: res_shape.1,
             elements: res,
         };
 
-        res.enumerated_par_iter_mut().for_each(|(index, elem)| unsafe {
-            let self_pos = (index.0 * stride_shape.0, index.1 * stride_shape.1);
-            let self_end_pos = (
-                min(self_pos.0 + kernel_shape.0, self.rows),
-                min(self_pos.1 + kernel_shape.1, self.cols),
-            );
+        res.enumerated_par_iter_mut()
+            .for_each(|(index, elem)| unsafe {
+                let self_pos = (index.0 * stride_shape.0, index.1 * stride_shape.1);
+                let self_end_pos = (
+                    min(self_pos.0 + kernel_shape.0, self.rows),
+                    min(self_pos.1 + kernel_shape.1, self.cols),
+                );
 
-            *elem = pool_fn(
-                index,
-                self.slice_unchecked(self_pos.0..self_end_pos.0, self_pos.1..self_end_pos.1),
-            );
-        });
+                *elem = pool_fn(
+                    index,
+                    self.slice_unchecked(self_pos.0..self_end_pos.0, self_pos.1..self_end_pos.1),
+                );
+            });
 
         Ok(res)
     }
 
     /// Clips the values in the matrix between `[min, max]`.
-    pub fn clip(self, min: T, max: T) -> Matrix<T> where T: PartialOrd + Clone {
+    pub fn clip(self, min: T, max: T) -> Matrix<T>
+    where
+        T: PartialOrd + Clone,
+    {
         self.map(|val| {
             if val <= min {
                 min.clone()
@@ -885,7 +913,10 @@ impl<T> Matrix<T> {
     }
 
     /// Clips the values in the matrix between `[min, max]`.
-    pub fn par_clip(self, min: T, max: T) -> Matrix<T> where T: PartialOrd + Clone + Send + Sync {
+    pub fn par_clip(self, min: T, max: T) -> Matrix<T>
+    where
+        T: PartialOrd + Clone + Send + Sync,
+    {
         self.par_map(|val| {
             if val <= min {
                 min.clone()
@@ -916,7 +947,9 @@ pub fn pool_max_mat<T: PartialOrd + Clone>(m: MatrixSlice<T>) -> Option<T> {
 /// Default pooling function to find the average.
 /// The total number of elements is the total number of elements in the input
 /// so this may vary if the kernel is hanging over the edge of the tensor.
-pub fn pool_avg_mat<T: Add<Output = T> + Div<f64, Output = T> + Clone>(m: MatrixSlice<T>) -> Option<T> {
+pub fn pool_avg_mat<T: Add<Output = T> + Div<f64, Output = T> + Clone>(
+    m: MatrixSlice<T>,
+) -> Option<T> {
     let count = m.shape().element_count().to_f64();
     let sum = pool_sum_mat(m);
     match (sum, count) {
