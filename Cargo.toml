@@ -10,7 +10,6 @@ num = "0.4.3"
 criterion = "0.8.2"
 float-cmp = "0.10.0"
 rayon = "1.12.0"
-itertools = "0.13.0"
 
 [profile.release]
 debug = true
