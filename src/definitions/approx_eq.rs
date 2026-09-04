@@ -14,7 +14,7 @@ impl ApproxEq for Tensor<f64> {
         let margin = margin.into();
 
         self.enumerated_iter()
-            .all(|(i, x)| approx_eq!(f64, x, other[&i], margin.clone()))
+            .all(|(i, &x)| approx_eq!(f64, x, other[&i], margin.clone()))
     }
 }
 
@@ -22,7 +22,14 @@ impl ApproxEq for Matrix<f64> {
     type Margin = F64Margin;
 
     fn approx_eq<M: Into<Self::Margin>>(self, other: Self, margin: M) -> bool {
-        self.tensor.approx_eq(other.tensor, margin)
+        if self.rows != other.rows || self.cols != other.cols {
+            return false;
+        }
+
+        self.elements
+            .into_iter()
+            .zip(other.elements.into_iter())
+            .all(|(x, y)| approx_eq!(f64, x, y, margin.clone()))
     }
 }
 
@@ -46,6 +53,16 @@ impl ApproxEq for Matrix<Complex64> {
     type Margin = F64Margin;
 
     fn approx_eq<M: Into<Self::Margin>>(self, other: Self, margin: M) -> bool {
-        self.tensor.approx_eq(other.tensor, margin)
+        if self.rows != other.rows || self.cols != other.cols {
+            return false;
+        }
+
+        self.elements
+            .into_iter()
+            .zip(other.elements.into_iter())
+            .all(|(x, y)| {
+                approx_eq!(f64, x.re(), y.re(), margin.clone())
+                    && approx_eq!(f64, x.im(), y.im(), margin.clone())
+            })
     }
 }
