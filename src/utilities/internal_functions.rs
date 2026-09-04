@@ -17,19 +17,24 @@ pub fn dot_vectors<T: Add<Output = T> + Mul<Output = T> + Zero + Clone>(
 
     let chunks = vec1.len() / 4;
 
-    for i in 0..chunks {
-        let base = i * 4;
-        acc[0] = acc[0].clone() + vec1[base].clone() * vec2[base].clone();
-        acc[1] = acc[1].clone() + vec1[base + 1].clone() * vec2[base + 1].clone();
-        acc[2] = acc[2].clone() + vec1[base + 2].clone() * vec2[base + 2].clone();
-        acc[3] = acc[3].clone() + vec1[base + 3].clone() * vec2[base + 3].clone();
-    }
+    unsafe {
+        for i in 0..chunks {
+            let base = i * 4;
+            *acc.get_unchecked_mut(0) = acc.get_unchecked(0).clone() + vec1.get_unchecked(base).clone() * vec2.get_unchecked(base).clone();
+            *acc.get_unchecked_mut(1) = acc.get_unchecked(1).clone() + vec1.get_unchecked(base + 1).clone() * vec2.get_unchecked(base + 1).clone();
+            *acc.get_unchecked_mut(2) = acc.get_unchecked(2).clone() + vec1.get_unchecked(base + 2).clone() * vec2.get_unchecked(base + 2).clone();
+            *acc.get_unchecked_mut(3) = acc.get_unchecked(3).clone() + vec1.get_unchecked(base + 3).clone() * vec2.get_unchecked(base + 3).clone();
+        }
 
-    let mut total = acc[0].clone() + acc[1].clone() + acc[2].clone() + acc[3].clone();
-    for i in (chunks * 4)..vec1.len() {
-        total = total + vec1[i].clone() * vec2[i].clone();
+        let mut total = acc.get_unchecked(0).clone()
+            + acc.get_unchecked(1).clone()
+            + acc.get_unchecked(2).clone()
+            + acc.get_unchecked(3).clone();
+        for i in (chunks * 4)..vec1.len() {
+            total = total + vec1.get_unchecked(i).clone() * vec2.get_unchecked(i).clone();
+        }
+        total
     }
-    total
 }
 
 /// This computes the FFT of a vector of Complex64 values
