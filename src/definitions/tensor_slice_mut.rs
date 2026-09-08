@@ -110,7 +110,7 @@ impl<T> TensorSliceMut<'_, T> {
     }
 
     /// Returns an iterator over the elements of the tensor slice.
-    pub fn iter(&self) -> impl Iterator<Item = &T> {
+    pub fn iter(&self) -> impl Iterator<Item = &T> + ExactSizeIterator + DoubleEndedIterator {
         let shape = self.shape();
         (0..shape.element_count())
             .map(move |i| unsafe { self.get_unchecked(&shape.tensor_index_unchecked(i)) })
@@ -130,7 +130,7 @@ impl<T> TensorSliceMut<'_, T> {
     }
 
     /// Returns a mutable iterator over the elements of the tensor slice.
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> + ExactSizeIterator + DoubleEndedIterator {
         struct SliceIterMut<'a, T> {
             base: *mut T,            // Pointer to the start of the original tensor's elements
             flat_index: usize,       // Current flat index in the slice
@@ -157,6 +157,34 @@ impl<T> TensorSliceMut<'_, T> {
                             &self
                                 .slice_shape
                                 .tensor_index_unchecked(self.flat_index - 1)
+                                .iter()
+                                .zip(self.slice_start.iter())
+                                .map(|(a, b)| a + b)
+                                .collect::<Vec<_>>(),
+                        ),
+                    )
+                })
+            }
+
+            fn size_hint(&self) -> (usize, Option<usize>) {
+                (self.len - self.flat_index, Some(self.len - self.flat_index))
+            }
+        }
+        impl<'a, T: 'a> ExactSizeIterator for SliceIterMut<'a, T> {}
+        impl<'a, T: 'a> DoubleEndedIterator for SliceIterMut<'a, T> {
+            fn next_back(&mut self) -> Option<Self::Item> {
+                if self.flat_index >= self.len {
+                    return None;
+                }
+
+                self.len -= 1;
+
+                Some(unsafe {
+                    &mut *self.base.add(
+                        self.orig_shape.address_unchecked(
+                            &self
+                                .slice_shape
+                                .tensor_index_unchecked(self.len)
                                 .iter()
                                 .zip(self.slice_start.iter())
                                 .map(|(a, b)| a + b)

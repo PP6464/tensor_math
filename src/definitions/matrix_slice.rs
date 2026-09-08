@@ -64,7 +64,7 @@ impl<T> MatrixSlice<'_, T> {
     }
 
     /// Returns an iterator over the elements of the matrix slice.
-    pub fn iter(&self) -> impl Iterator<Item = &T> {
+    pub fn iter(&self) -> impl Iterator<Item = &T> + ExactSizeIterator + DoubleEndedIterator {
         (0..self.rows() * self.cols())
             .into_iter()
             .map(move |i| unsafe { self.get_unchecked((i / self.cols(), i % self.cols())) })

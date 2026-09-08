@@ -77,7 +77,7 @@ impl<T> TensorSlice<'_, T> {
     }
 
     /// Returns an iterator over the elements of the tensor slice.
-    pub fn iter(&self) -> impl Iterator<Item = &T> {
+    pub fn iter(&self) -> impl Iterator<Item = &T> + ExactSizeIterator + DoubleEndedIterator {
         let shape = self.shape();
         (0..shape.element_count())
             .map(move |i| unsafe { self.get_unchecked(&shape.tensor_index_unchecked(i)) })

@@ -86,7 +86,7 @@ impl<T> MatrixSliceMut<'_, T> {
     }
 
     /// Returns an iterator over the elements of the matrix slice.
-    pub fn iter(&self) -> impl Iterator<Item = &T> {
+    pub fn iter(&self) -> impl Iterator<Item = &T> + ExactSizeIterator + DoubleEndedIterator {
         (0..self.rows() * self.cols())
             .into_iter()
             .map(move |i| unsafe { self.get_unchecked((i / self.cols(), i % self.cols())) })
@@ -103,7 +103,7 @@ impl<T> MatrixSliceMut<'_, T> {
     }
 
     /// Returns an iterator over mutable references to the elements of the matrix slice.
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> + ExactSizeIterator + DoubleEndedIterator {
         struct SliceIterMut<'a, T> {
             base: *mut T,
             flat_index: usize,
@@ -118,6 +118,19 @@ impl<T> MatrixSliceMut<'_, T> {
                 (self.flat_index < self.len).then_some(unsafe {
                     self.flat_index += 1;
                     self.base.add(self.flat_index - 1).as_mut()?
+                })
+            }
+            
+            fn size_hint(&self) -> (usize, Option<usize>) {
+                (self.len - self.flat_index, Some(self.len - self.flat_index))
+            }
+        }
+        impl<'a, T: 'a> ExactSizeIterator for SliceIterMut<'a, T> {}
+        impl<'a, T: 'a> DoubleEndedIterator for SliceIterMut<'a, T> {
+            fn next_back(&mut self) -> Option<Self::Item> {
+                (self.len > self.flat_index).then_some(unsafe {
+                    self.len -= 1;
+                    self.base.add(self.len).as_mut()?
                 })
             }
         }
