@@ -1,4 +1,3 @@
-pub mod approx_eq;
 pub mod contract_mul;
 pub mod corr_conv;
 pub mod det_inv;
