@@ -6,6 +6,7 @@ use rayon::iter::ParallelIterator;
 use rayon::prelude::ParallelSliceMut;
 use std::f64::consts::PI;
 use std::ops::{Add, Mul};
+use rayon::slice::ParallelSlice;
 
 /// This computes the dot product of two vectors of any type `T` that implements `Add` and `Mul`
 pub fn dot_vectors<T: Add<Output = T> + Mul<Output = T> + Zero + Clone>(
@@ -35,6 +36,17 @@ pub fn dot_vectors<T: Add<Output = T> + Mul<Output = T> + Zero + Clone>(
         }
         total
     }
+}
+
+/// This computes the dot product of two vectors using many threads.
+pub fn dot_vectors_mt<T: Add<Output = T> + Mul<Output = T> + Zero + Clone + Send + Sync>(
+    vec1: &[T],
+    vec2: &[T],
+) -> T {
+    vec1.par_chunks(4096)
+        .zip(vec2.par_chunks(4096))
+        .map(|(chunk1, chunk2)| dot_vectors(chunk1, chunk2))
+        .reduce(|| T::zero(), |a, b| a + b)
 }
 
 /// This computes the FFT of a vector of Complex64 values
