@@ -38,20 +38,10 @@ fn sum_slice<T: Add<Output = T> + Clone + Zero>(slice: &[T]) -> T {
 }
 
 fn sum_slice_mt<T: Add<Output = T> + Clone + Zero + Send + Sync>(slice: &[T]) -> T {
-    let top_sum = slice
-        .par_chunks_exact(4096)
+    slice
+        .par_chunks(4096)
         .map(|chunk| sum_slice(chunk))
-        .reduce(|| T::zero(), |acc, x| acc + x);
-
-    if slice.len() % 4096 == 0 {
-        top_sum
-    } else {
-        let remainder = slice.len() % 4096;
-
-        let remainder_sum = sum_slice(&slice[slice.len() - remainder..]);
-
-        top_sum + remainder_sum
-    }
+        .reduce(|| T::zero(), |acc, x| acc + x)
 }
 
 impl<T: Add<Output = T> + Clone + Zero> Tensor<T> {
