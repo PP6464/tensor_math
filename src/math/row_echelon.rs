@@ -4,13 +4,13 @@ use num::complex::{Complex64, ComplexFloat};
 use rayon::prelude::*;
 
 impl Matrix<f64> {
-    /// Gives whether the matrix is in row echelon form or not
+    /// Gives whether the matrix is in row echelon form or not.
     pub fn is_row_echelon(&self) -> bool {
         let mut all_zero_rows = false;
         let mut prev_pivot_col: i32 = -1;
 
         for i in 0..self.rows {
-            let current_row = self.slice(i..i + 1, 0..self.cols).unwrap();
+            let current_row = unsafe { self.slice_unchecked(i..i + 1, 0..self.cols) };
 
             if all_zero_rows && !current_row.iter().all(|x| approx_eq!(f64, *x, 0.0)) {
                 return false; // There is a row below a row of all 0 that is not itself all 0
@@ -21,10 +21,9 @@ impl Matrix<f64> {
                 continue;
             }
 
-            let (current_pivot_col, _) = current_row
+            let current_pivot_col = current_row
                 .iter()
-                .enumerate()
-                .find(|(_, &x)| !approx_eq!(f64, x, 0.0))
+                .position(|&x| !approx_eq!(f64, x, 0.0))
                 .unwrap();
 
             if (current_pivot_col as i32) <= prev_pivot_col {
@@ -46,9 +45,8 @@ impl Matrix<f64> {
 
             // Note everything below must be 0
             if pivot.0 < self.rows - 1 {
-                let below_slice = self
-                    .slice(pivot.0 + 1..self.rows, pivot.1..pivot.1 + 1)
-                    .unwrap();
+                let below_slice =
+                    unsafe { self.slice_unchecked(pivot.0 + 1..self.rows, pivot.1..pivot.1 + 1) };
 
                 if below_slice.iter().any(|x| !approx_eq!(f64, *x, 0.0)) {
                     return false;
@@ -58,30 +56,21 @@ impl Matrix<f64> {
             if approx_eq!(f64, pivot_val, 0.0) {
                 // If this is the last element in the row then there are no suitable other pivots
                 if pivot.1 == self.cols - 1 {
-                    // If this is the last row then return true because we are done checking everything else
-                    if pivot.0 == self.rows - 1 {
-                        return true;
-                    }
-
                     // This row is all 0 otherwise, so just check everything below is all 0 as well
-                    return self
-                        .slice(pivot.0 + 1..self.rows, 0..self.cols)
-                        .unwrap()
+                    return unsafe { self.slice_unchecked(pivot.0 + 1..self.rows, 0..self.cols) }
                         .iter()
                         .all(|x| approx_eq!(f64, *x, 0.0));
                 }
 
                 // Check for all 0, otherwise just move to the first non-zero element
-                let right_slice = self
-                    .slice(pivot.0..pivot.0 + 1, pivot.1 + 1..self.cols)
-                    .unwrap();
-                let option_pivot = right_slice
-                    .iter()
-                    .enumerate()
-                    .find(|(_, &x)| !approx_eq!(f64, x, 0.0));
+                let right_slice = unsafe {
+                    self
+                        .slice_unchecked(pivot.0..pivot.0 + 1, pivot.1 + 1..self.cols)
+                };
+                let option_pivot = right_slice.iter().position(|&x| !approx_eq!(f64, x, 0.0));
 
                 match option_pivot {
-                    Some((index, _)) => {
+                    Some(index) => {
                         pivot = (pivot.0, pivot.1 + 1 + index);
                         continue;
                     }
@@ -91,9 +80,10 @@ impl Matrix<f64> {
                             return true;
                         }
 
-                        return self
-                            .slice(pivot.0 + 1..self.rows, 0..self.cols)
-                            .unwrap()
+                        return unsafe {
+                            self
+                                .slice_unchecked(pivot.0 + 1..self.rows, 0..self.cols)
+                        }
                             .iter()
                             .all(|x| approx_eq!(f64, *x, 0.0));
                     }
@@ -102,7 +92,7 @@ impl Matrix<f64> {
 
             // Note everything to the left should be 0
             if pivot.1 > 0 {
-                let left_slice = self.slice(pivot.0..pivot.0 + 1, 0..pivot.1).unwrap();
+                let left_slice = unsafe { self.slice_unchecked(pivot.0..pivot.0 + 1, 0..pivot.1) };
 
                 if left_slice.iter().any(|x| !approx_eq!(f64, *x, 0.0)) {
                     return false;
@@ -111,10 +101,9 @@ impl Matrix<f64> {
 
             // Similarly everything above must be 0
             if pivot.0 > 0 {
-                let above_slice = self.slice(0..pivot.0, pivot.1..pivot.1 + 1);
+                let above_slice = unsafe { self.slice_unchecked(0..pivot.0, pivot.1..pivot.1 + 1) };
 
                 if above_slice
-                    .unwrap()
                     .iter()
                     .any(|x| !approx_eq!(f64, *x, 0.0))
                 {
@@ -149,9 +138,7 @@ impl Matrix<f64> {
 
                 // Check if any of the other rows below have a non-zero value
                 // at this pivot column and if so then use that row's value instead
-                let slice_below = res
-                    .slice(pivot.0 + 1..res.rows, pivot.1..pivot.1 + 1)
-                    .unwrap();
+                let slice_below = unsafe { res.slice_unchecked(pivot.0 + 1..res.rows, pivot.1..pivot.1 + 1) };
 
                 let (index, max_abs) = slice_below
                     .iter()
@@ -358,7 +345,7 @@ impl Matrix<Complex64> {
         let mut prev_pivot_col: i32 = -1;
 
         for i in 0..self.rows {
-            let current_row = self.slice(i..i + 1, 0..self.cols).unwrap();
+            let current_row = unsafe { self.slice_unchecked(i..i + 1, 0..self.cols) };
 
             if all_zero_rows && !current_row.iter().all(|x| approx_eq!(f64, (*x).abs(), 0.0)) {
                 return false; // There is a row below a row of all 0 that is not itself all 0
@@ -369,13 +356,12 @@ impl Matrix<Complex64> {
                 continue;
             }
 
-            let (current_pivot_col, _) = current_row
+            let current_pivot_col = current_row
                 .iter()
-                .enumerate()
-                .find(|(_, &x)| !approx_eq!(f64, x.abs(), 0.0))
+                .position(|&x| !approx_eq!(f64, x.abs(), 0.0))
                 .unwrap();
 
-            if (current_pivot_col as i32) <= prev_pivot_col {
+            if current_pivot_col <= prev_pivot_col as usize {
                 return false;
             }
 
@@ -394,9 +380,7 @@ impl Matrix<Complex64> {
 
             // Note everything below must be 0
             if pivot.0 < self.rows - 1 {
-                let below_slice = self
-                    .slice(pivot.0 + 1..self.rows, pivot.1..pivot.1 + 1)
-                    .unwrap();
+                let below_slice = unsafe { self.slice_unchecked(pivot.0 + 1..self.rows, pivot.1..pivot.1 + 1) };
 
                 if below_slice
                     .iter()
@@ -415,17 +399,16 @@ impl Matrix<Complex64> {
                     }
 
                     // This row is all 0 otherwise, so just check everything below is all 0 as well
-                    return self
-                        .slice(pivot.0 + 1..self.rows, 0..self.cols)
-                        .unwrap()
-                        .iter()
-                        .all(|x| approx_eq!(f64, (*x).abs(), 0.0));
+                    unsafe {
+                        return self
+                            .slice_unchecked(pivot.0 + 1..self.rows, 0..self.cols)
+                            .iter()
+                            .all(|x| approx_eq!(f64, (*x).abs(), 0.0));
+                    }
                 }
 
                 // Check for all 0, otherwise just move to the first non-zero element
-                let right_slice = self
-                    .slice(pivot.0..pivot.0 + 1, pivot.1 + 1..self.cols)
-                    .unwrap();
+                let right_slice = unsafe { self.slice_unchecked(pivot.0..pivot.0 + 1, pivot.1 + 1..self.cols) };
                 let option_pivot = right_slice
                     .iter()
                     .enumerate()
@@ -442,18 +425,19 @@ impl Matrix<Complex64> {
                             return true;
                         }
 
-                        return self
-                            .slice(pivot.0 + 1..self.rows, 0..self.cols)
-                            .unwrap()
-                            .iter()
-                            .all(|x| approx_eq!(f64, (*x).abs(), 0.0));
+                        unsafe {
+                            return self
+                                .slice_unchecked(pivot.0 + 1..self.rows, 0..self.cols)
+                                .iter()
+                                .all(|x| approx_eq!(f64, (*x).abs(), 0.0));
+                        }
                     }
                 }
             }
 
             // Note everything to the left should be 0
             if pivot.1 > 0 {
-                let left_slice = self.slice(pivot.0..pivot.0 + 1, 0..pivot.1).unwrap();
+                let left_slice = unsafe { self.slice_unchecked(pivot.0..pivot.0 + 1, 0..pivot.1) };
 
                 if left_slice.iter().any(|x| !approx_eq!(f64, (*x).abs(), 0.0)) {
                     return false;
@@ -462,7 +446,7 @@ impl Matrix<Complex64> {
 
             // Similarly everything above must be 0
             if pivot.0 > 0 {
-                let above_slice = self.slice(0..pivot.0, pivot.1..pivot.1 + 1).unwrap();
+                let above_slice = unsafe { self.slice_unchecked(0..pivot.0, pivot.1..pivot.1 + 1) };
 
                 if above_slice
                     .iter()
