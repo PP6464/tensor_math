@@ -40,7 +40,7 @@ impl<T> Matrix<T> {
         StandardUniform: Distribution<T>,
     {
         let mut elements = Vec::with_capacity(rows * cols);
-        let mut buf = elements.spare_capacity_mut();
+        let buf = elements.spare_capacity_mut();
         let mut rng = rand::rng();
 
         buf.iter_mut().for_each(|e| {
@@ -594,7 +594,7 @@ impl<T> Matrix<T> {
         self.elements
             .into_par_iter()
             .enumerate()
-            .for_each(|(index, e)| unsafe {
+            .for_each(|(index, e)| {
                 let i = index / self.cols;
                 let j = index % self.cols;
                 let new_index = j * self.rows + i;
