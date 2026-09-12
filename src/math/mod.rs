@@ -13,3 +13,5 @@ pub mod polynomials;
 pub mod row_echelon;
 pub mod sum;
 pub mod transformation_rank;
+pub mod outer_product;
+pub mod mat_vec_mul;
