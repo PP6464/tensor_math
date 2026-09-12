@@ -5,11 +5,11 @@ use rayon::iter::IntoParallelRefMutIterator;
 use rayon::iter::ParallelIterator;
 use rayon::prelude::ParallelSliceMut;
 use std::f64::consts::PI;
-use std::ops::{Add, Mul};
+use std::ops::{AddAssign, Mul};
 use rayon::slice::ParallelSlice;
 
 /// This computes the dot product of two vectors of any type `T` that implements `Add` and `Mul`
-pub fn dot_vectors<T: Add<Output = T> + Mul<Output = T> + Zero + Clone>(
+pub fn dot_vectors<T: AddAssign + Mul<Output = T> + Zero + Clone>(
     vec1: &[T],
     vec2: &[T],
 ) -> T {
@@ -21,10 +21,10 @@ pub fn dot_vectors<T: Add<Output = T> + Mul<Output = T> + Zero + Clone>(
     unsafe {
         for i in 0..chunks {
             let base = i * 4;
-            *acc.get_unchecked_mut(0) = acc.get_unchecked(0).clone() + vec1.get_unchecked(base).clone() * vec2.get_unchecked(base).clone();
-            *acc.get_unchecked_mut(1) = acc.get_unchecked(1).clone() + vec1.get_unchecked(base + 1).clone() * vec2.get_unchecked(base + 1).clone();
-            *acc.get_unchecked_mut(2) = acc.get_unchecked(2).clone() + vec1.get_unchecked(base + 2).clone() * vec2.get_unchecked(base + 2).clone();
-            *acc.get_unchecked_mut(3) = acc.get_unchecked(3).clone() + vec1.get_unchecked(base + 3).clone() * vec2.get_unchecked(base + 3).clone();
+            *acc.get_unchecked_mut(0) += vec1.get_unchecked(base).clone() * vec2.get_unchecked(base).clone();
+            *acc.get_unchecked_mut(1) += vec1.get_unchecked(base + 1).clone() * vec2.get_unchecked(base + 1).clone();
+            *acc.get_unchecked_mut(2) += vec1.get_unchecked(base + 2).clone() * vec2.get_unchecked(base + 2).clone();
+            *acc.get_unchecked_mut(3) += vec1.get_unchecked(base + 3).clone() * vec2.get_unchecked(base + 3).clone();
         }
 
         let mut total = acc.get_unchecked(0).clone()
@@ -39,7 +39,7 @@ pub fn dot_vectors<T: Add<Output = T> + Mul<Output = T> + Zero + Clone>(
 }
 
 /// This computes the dot product of two vectors using many threads.
-pub fn dot_vectors_mt<T: Add<Output = T> + Mul<Output = T> + Zero + Clone + Send + Sync>(
+pub fn dot_vectors_mt<T: AddAssign + Mul<Output = T> + Zero + Clone + Send + Sync>(
     vec1: &[T],
     vec2: &[T],
 ) -> T {

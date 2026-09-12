@@ -1,31 +1,24 @@
+use std::ops::{Add, AddAssign};
 use crate::definitions::errors::TensorErrors;
 use crate::definitions::matrix::Matrix;
 use crate::definitions::tensor::Tensor;
 use num::Zero;
 use rayon::iter::ParallelIterator;
 use rayon::prelude::ParallelSlice;
-use std::ops::Add;
 
-fn sum_slice<T: Add<Output = T> + Clone + Zero>(slice: &[T]) -> T {
+fn sum_slice<T: AddAssign + Add<Output = T> + Clone + Zero>(slice: &[T]) -> T {
     // Use four accumulators to help auto vectorisation
     let mut acc = [T::zero(), T::zero(), T::zero(), T::zero()];
 
     unsafe {
         for chunk in slice.chunks_exact(4) {
-            *acc.get_unchecked_mut(0) =
-                acc.get_unchecked(0).clone() + chunk.get_unchecked(0).clone();
-            *acc.get_unchecked_mut(1) =
-                acc.get_unchecked(1).clone() + chunk.get_unchecked(1).clone();
-            *acc.get_unchecked_mut(2) =
-                acc.get_unchecked(2).clone() + chunk.get_unchecked(2).clone();
-            *acc.get_unchecked_mut(3) =
-                acc.get_unchecked(3).clone() + chunk.get_unchecked(3).clone();
+            *acc.get_unchecked_mut(0) += chunk.get_unchecked(0).clone();
+            *acc.get_unchecked_mut(1) += chunk.get_unchecked(1).clone();
+            *acc.get_unchecked_mut(2) += chunk.get_unchecked(2).clone();
+            *acc.get_unchecked_mut(3) += chunk.get_unchecked(3).clone();
         }
 
-        let mut sum = acc.get_unchecked(0).clone()
-            + acc.get_unchecked(1).clone()
-            + acc.get_unchecked(2).clone()
-            + acc.get_unchecked(3).clone();
+        let mut sum = acc.into_iter().reduce(T::add).map_or_else(T::zero, std::convert::identity);
 
         let remainder = slice.len() % 4;
 
@@ -37,28 +30,28 @@ fn sum_slice<T: Add<Output = T> + Clone + Zero>(slice: &[T]) -> T {
     }
 }
 
-fn sum_slice_mt<T: Add<Output = T> + Clone + Zero + Send + Sync>(slice: &[T]) -> T {
+fn sum_slice_mt<T: AddAssign + Add<Output = T> + Clone + Zero + Send + Sync>(slice: &[T]) -> T {
     slice
         .par_chunks(4096)
         .map(|chunk| sum_slice(chunk))
         .reduce(|| T::zero(), |acc, x| acc + x)
 }
 
-impl<T: Add<Output = T> + Clone + Zero> Tensor<T> {
+impl<T: AddAssign + Add<Output = T> + Clone + Zero> Tensor<T> {
     /// Compute the sum of a tensor
     pub fn sum(&self) -> T {
         sum_slice(&self.elements)
     }
 }
 
-impl<T: Add<Output = T> + Clone + Zero + Send + Sync> Tensor<T> {
+impl<T: AddAssign + Add<Output = T> + Clone + Zero + Send + Sync> Tensor<T> {
     /// Compute the sum of a tensor
     pub fn sum_mt(&self) -> T {
         sum_slice_mt(&self.elements)
     }
 }
 
-impl<T: Add<Output = T> + Clone + Zero> Matrix<T> {
+impl<T: AddAssign + Add<Output = T> + Clone + Zero> Matrix<T> {
     /// Compute the sum of a matrix
     pub fn sum(&self) -> T {
         sum_slice(&self.elements)
@@ -79,7 +72,7 @@ impl<T: Add<Output = T> + Clone + Zero> Matrix<T> {
     }
 }
 
-impl<T: Add<Output = T> + Clone + Zero + Send + Sync> Matrix<T> {
+impl<T: AddAssign + Add<Output = T> + Clone + Zero + Send + Sync> Matrix<T> {
     /// Compute the sum of a matrix
     pub fn sum_mt(&self) -> T {
         sum_slice_mt(&self.elements)
