@@ -6,10 +6,16 @@ use crate::definitions::traits::IntoTensor;
 use crate::shape;
 use crate::utilities::internal_functions::dot_vectors;
 use num::Zero;
-use rayon::iter::IndexedParallelIterator;
+use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator};
 use rayon::iter::ParallelIterator;
 use rayon::slice::{ParallelSlice, ParallelSliceMut};
 use std::ops::{AddAssign, Mul};
+
+/*
+--------------------------------------------
+* ?Tensor contract multiplication
+--------------------------------------------
+*/
 
 impl<T> Tensor<T> {
     /// Perform tensor-contraction multiplication,
@@ -237,6 +243,12 @@ impl<T> Tensor<T> {
     }
 }
 
+/*
+--------------------------------------------
+* Matrix multiplication
+--------------------------------------------
+*/
+
 impl<T> Matrix<T> {
     /// Does matrix multiplication with another matrix.
     /// This fails if the matrices are not multiplicatively compatible.
@@ -315,8 +327,8 @@ impl<T> Matrix<T> {
             .zip(buf.par_chunks_mut(self.rows))
             .for_each(|(row, outs)| {
                 other_transpose
-                    .chunks(other_transpose.cols)
-                    .zip(outs)
+                    .par_chunks(other_transpose.cols)
+                    .zip(outs.par_iter_mut())
                     .for_each(|(col, out)| {
                         out.write(dot_vectors(row, col));
                     });
@@ -342,8 +354,8 @@ impl<T> Matrix<T> {
             .zip(buf.par_chunks_mut(self.rows))
             .for_each(|(row, outs)| {
                 other_transpose
-                    .chunks(other_transpose.cols)
-                    .zip(outs)
+                    .par_chunks(other_transpose.cols)
+                    .zip(outs.par_iter_mut())
                     .for_each(|(col, out)| {
                         out.write(dot_vectors(row, col));
                     });
