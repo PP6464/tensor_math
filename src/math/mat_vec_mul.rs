@@ -71,7 +71,7 @@ impl<T> Matrix<T> {
     }
 
     /// Computes the product of this matrix with a vector without bounds checking.
-    pub(crate) unsafe fn mat_vec_mul_mt_unchecked(self, v: &[T]) -> Vec<T>
+    pub(crate) unsafe fn mat_vec_mul_unchecked_mt(self, v: &[T]) -> Vec<T>
     where
         T: Clone + Mul<Output = T> + AddAssign + Add<Output = T> + Zero + Send + Sync,
     {

@@ -120,7 +120,7 @@ impl<T> Matrix<T> {
     }
 
     /// Does a rank 1 addition update with the outer product of v1 and v2 without validity checking.
-    pub(crate) unsafe fn rank1_update_add_mt_unchecked(&mut self, v1: &[T], v2: &[T])
+    pub(crate) unsafe fn rank1_update_add_unchecked_mt(&mut self, v1: &[T], v2: &[T])
     where
         T: Mul<Output = T> + Clone + AddAssign + Send + Sync,
     {
@@ -190,7 +190,7 @@ impl<T> Matrix<T> {
     }
 
     /// Does a rank 1 subtraction update with the outer product of v1 and v2 without validity checking.
-    pub(crate) unsafe fn rank1_update_sub_mt_unchecked(&mut self, v1: &[T], v2: &[T])
+    pub(crate) unsafe fn rank1_update_sub_unchecked_mt(&mut self, v1: &[T], v2: &[T])
     where
         T: Mul<Output = T> + Clone + SubAssign + Send + Sync,
     {
