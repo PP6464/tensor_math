@@ -3,238 +3,356 @@ use crate::definitions::matrix::Matrix;
 use crate::definitions::shape::Shape;
 use crate::definitions::tensor::Tensor;
 use crate::definitions::traits::IntoTensor;
-use crate::definitions::transpose::Transpose;
+use crate::shape;
 use crate::utilities::internal_functions::dot_vectors;
 use num::Zero;
 use rayon::iter::IndexedParallelIterator;
 use rayon::iter::ParallelIterator;
-use rayon::prelude::ParallelSlice;
-use std::ops::{Add, Mul};
+use rayon::slice::{ParallelSlice, ParallelSliceMut};
+use std::ops::{AddAssign, Mul};
 
-impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Tensor<T> {
+impl<T> Tensor<T> {
     /// Perform tensor-contraction multiplication,
     /// which is a more general form of matrix multiplication.
     /// E.g: A tensor of shape (a,b,c) multiplied in this way by a tensor of shape (c, d, e, f)
     /// will produce a tensor of shape (a, b, d, e, f) by the following formula:
     /// result[&[i, j, k, l, m\]\] = sum(x=0, x=c) { first[&[i, j, x\]\] * second[&[x, k, l, m\]\] }.
     /// This fails if the tensors have shapes that are not compatible.
-    pub fn contract_mul(&self, other: &Tensor<T>) -> Result<Tensor<T>, TensorErrors> {
-        if self.rank() == 0 {
-            return Ok(other.map_refs(|x| self.elements[0].clone() * x.clone()));
-        }
+    pub fn contract_mul(mut self, mut other: Tensor<T>) -> Result<Tensor<T>, TensorErrors>
+    where
+        T: AddAssign + Mul<Output = T> + Clone + Zero,
+    {
+        let self_shape = self.shape().0;
+        let self_rank = self.rank();
+        let other_shape = other.shape().0;
+        let other_rank = other.rank();
 
-        if other.rank() == 0 {
-            return Ok(self * other.elements[0].clone());
-        }
-
-        if self.shape.0.last().unwrap() != other.shape.0.first().unwrap() {
-            return Err(TensorErrors::ShapesIncompatible);
-        }
-
-        let mut resultant_shape_vec = self
-            .shape
-            .0
-            .iter()
-            .take(self.rank() - 1)
-            .cloned()
-            .collect::<Vec<usize>>();
-
-        resultant_shape_vec.extend(
-            other
-                .shape
-                .0
-                .iter()
-                .rev()
-                .take(other.rank() - 1)
-                .rev()
-                .cloned(),
-        );
-        let resultant_shape: Shape = resultant_shape_vec.into();
-
-        if self.is_empty() || other.is_empty() {
-            return Ok(Tensor::zeros(&resultant_shape));
-        }
-
-        let mut resultant_elements: Vec<T> = Vec::with_capacity(resultant_shape.element_count());
-
-        for i in 0..resultant_shape.element_count() {
-            let index = resultant_shape.tensor_index(i)?;
-            let (self_chunk, other_chunk) = index.split_at(self.rank() - 1);
-            let mut self_elements: Vec<T> = Vec::with_capacity(*self.shape.0.last().unwrap());
-            let mut other_elements: Vec<T> = Vec::with_capacity(*other.shape.0.first().unwrap());
-
-            for j in 0..*self.shape.0.last().unwrap() {
-                let mut self_index = self_chunk.to_vec();
-                self_index.push(j);
-
-                self_elements.push(self[&self_index].clone());
-
-                let mut other_index = other_chunk.to_vec();
-                other_index.insert(0, j);
-                other_elements.push(other[&other_index].clone());
+        unsafe {
+            if self_rank == 0 {
+                let e = self.elements.get_unchecked(0);
+                return Ok(other.map(|x| e.clone() * x));
             }
 
-            resultant_elements.push(dot_vectors(&self_elements, &other_elements));
+            if other_rank == 0 {
+                let e = other.elements.get_unchecked(0);
+                return Ok(self * e);
+            }
+
+            self = self.reshape_unchecked(shape![
+                self_shape[..self_rank - 1].iter().product(),
+                self_shape[self_rank - 1]
+            ]);
+            let self_mat = Matrix {
+                rows: self.shape[0],
+                cols: self.shape[1],
+                elements: self.elements,
+            };
+            other =
+                other.reshape_unchecked(shape![other_shape[0], other_shape[1..].iter().product()]);
+            let other_mat = Matrix {
+                rows: other.shape[0],
+                cols: other.shape[1],
+                elements: other.elements,
+            };
+
+            let result_mat = self_mat.mat_mul(other_mat)?;
+            let result_shape = [
+                self_shape[..self_rank - 1].to_vec(),
+                other_shape[1..].to_vec(),
+            ]
+            .concat();
+
+            Ok(result_mat
+                .into_tensor()
+                .reshape_unchecked(Shape::new(result_shape)))
+        }
+    }
+
+    /// Perform tensor-contraction multiplication,
+    /// which is a more general form of matrix multiplication.
+    /// E.g: A tensor of shape (a,b,c) multiplied in this way by a tensor of shape (c, d, e, f)
+    /// will produce a tensor of shape (a, b, d, e, f) by the following formula:
+    /// result[&[i, j, k, l, m\]\] = sum(x=0, x=c) { first[&[i, j, x\]\] * second[&[x, k, l, m\]\] }.
+    /// This does not check for validity.
+    pub(crate) unsafe fn contract_mul_unchecked(mut self, mut other: Tensor<T>) -> Tensor<T>
+    where
+        T: AddAssign + Mul<Output = T> + Clone + Zero,
+    {
+        let self_shape = self.shape().0;
+        let self_rank = self.rank();
+        let other_shape = other.shape().0;
+        let other_rank = other.rank();
+
+
+        if self_rank == 0 {
+            let e = self.elements.get_unchecked(0);
+            return other.map(|x| e.clone() * x);
         }
 
-        resultant_elements.into_tensor().reshape(&resultant_shape)
-    }
-
-    /// Computes the dot product of two tensors, i.e. the element-wise product, then the sum of the result.
-    /// This fails if the tensors do not have the same shape.
-    pub fn dot(&self, other: &Tensor<T>) -> Result<T, TensorErrors> {
-        if self.shape != other.shape {
-            return Err(TensorErrors::ShapesIncompatible);
+        if other_rank == 0 {
+            let e = other.elements.get_unchecked(0);
+            return self * e;
         }
 
-        Ok(dot_vectors(self.elements(), &other.elements()))
+        self = self.reshape_unchecked(shape![
+            self_shape[..self_rank - 1].iter().product(),
+            self_shape[self_rank - 1]
+        ]);
+        let self_mat = Matrix {
+            rows: self.shape[0],
+            cols: self.shape[1],
+            elements: self.elements,
+        };
+        other =
+            other.reshape_unchecked(shape![other_shape[0], other_shape[1..].iter().product()]);
+        let other_mat = Matrix {
+            rows: other.shape[0],
+            cols: other.shape[1],
+            elements: other.elements,
+        };
+
+        let result_mat = self_mat.mat_mul_unchecked(other_mat);
+        let result_shape = [
+            self_shape[..self_rank - 1].to_vec(),
+            other_shape[1..].to_vec(),
+        ]
+            .concat();
+
+        result_mat
+            .into_tensor()
+            .reshape_unchecked(Shape::new(result_shape))
+
     }
-}
 
-impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero> Matrix<T> {
-    /// Does matrix multiplication with another matrix.
-    /// This fails if the matrices are not multiplicatively compatible.
-    pub fn contract_mul(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
-        self.tensor.contract_mul(&other.tensor)?.try_into()
-    }
-
-    /// Does matrix multiplication with another matrix.
-    /// This fails if the matrices are not multiplicatively compatible.
-    pub fn mat_mul(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
-        self.contract_mul(other)
-    }
-
-    /// Computes the dot product of the two matrices, i.e. the elementwise product, then the sum of the result.
-    /// This fails if the matrices do not have the same shape.
-    pub fn dot(&self, other: &Matrix<T>) -> Result<T, TensorErrors> {
-        if self.shape != other.shape {
-            return Err(TensorErrors::ShapesIncompatible);
-        }
-
-        Ok(dot_vectors(self.elements(), &other.elements()))
-    }
-}
-
-impl<T: Clone + Add<Output = T> + Mul<Output = T> + Zero + Send + Sync> Tensor<T> {
     /// Perform tensor-contraction multiplication (using multiple threads),
     /// which is a more general form of matrix multiplication.
     /// E.g: A tensor of shape (a,b,c) multiplied in this way by a tensor of shape (c, d, e, f)
     /// will produce a tensor of shape (a, b, d, e, f) by the following formula:
     /// result[&[i, j, k, l, m\]\] = sum(x=0, x=c) { first[&[i, j, x\]\] * second[&[x, k, l, m\]\] }.
     /// This fails if the tensors have shapes that are not compatible.
-    pub fn contract_mul_mt(&self, other: &Tensor<T>) -> Result<Tensor<T>, TensorErrors> {
-        if self.rank() == 0 {
-            return Ok(other.map_refs(|x| self.elements[0].clone() * x.clone()));
+    pub fn contract_mul_mt(mut self, mut other: Tensor<T>) -> Result<Tensor<T>, TensorErrors>
+    where
+        T: AddAssign + Mul<Output = T> + Clone + Zero + Send + Sync,
+    {
+        let self_shape = self.shape().0;
+        let self_rank = self.rank();
+        let other_shape = other.shape().0;
+        let other_rank = other.rank();
+
+        unsafe {
+            if self_rank == 0 {
+                let e = self.elements.get_unchecked(0);
+                return Ok(other.map(|x| e.clone() * x));
+            }
+
+            if other_rank == 0 {
+                let e = other.elements.get_unchecked(0);
+                return Ok(self * e);
+            }
+
+            self = self.reshape_unchecked(shape![
+                self_shape[..self_rank - 1].iter().product(),
+                self_shape[self_rank - 1]
+            ]);
+            let self_mat = Matrix {
+                rows: self.shape[0],
+                cols: self.shape[1],
+                elements: self.elements,
+            };
+            other =
+                other.reshape_unchecked(shape![other_shape[0], other_shape[1..].iter().product()]);
+            let other_mat = Matrix {
+                rows: other.shape[0],
+                cols: other.shape[1],
+                elements: other.elements,
+            };
+
+            let result_mat = self_mat.mat_mul_mt(other_mat)?;
+            let result_shape = [
+                self_shape[..self_rank - 1].to_vec(),
+                other_shape[1..].to_vec(),
+            ]
+                .concat();
+
+            Ok(result_mat
+                .into_tensor()
+                .reshape_unchecked(Shape::new(result_shape)))
         }
-
-        if other.rank() == 0 {
-            return Ok(self * other.elements[0].clone());
-        }
-
-        if self.shape.0.last().unwrap() != other.shape.0.first().unwrap() {
-            return Err(TensorErrors::ShapesIncompatible);
-        }
-
-        let mut resultant_shape_vec = self
-            .shape
-            .0
-            .iter()
-            .take(self.rank() - 1)
-            .cloned()
-            .collect::<Vec<usize>>();
-
-        resultant_shape_vec.extend(other.shape.0.iter().skip(1).cloned());
-        let res_shape: Shape = resultant_shape_vec.into();
-
-        if self.is_empty() || other.is_empty() {
-            return Ok(Tensor::zeros(&res_shape));
-        }
-
-        let other_transpose = other
-            .transpose_mt(&Transpose::identity(other.rank()).swap_axes(0, other.rank() - 1)?)?;
-
-        self.par_chunks(self.shape()[self.rank() - 1])
-            .flat_map(|s| {
-                other_transpose
-                    .par_chunks(other.shape()[0])
-                    .map(|o| dot_vectors(s, o))
-            })
-            .collect::<Tensor<_>>()
-            .reshape(&res_shape)
-
-        // let mut res_elems = Vec::with_capacity(res_shape.element_count());
-        // let buf = res_elems.spare_capacity_mut();
-        //
-        // buf.par_iter_mut().enumerate().for_each(|(i, val)| {
-        //     let pos = res_shape.tensor_index(i).unwrap();
-        //     let (self_part, other_part) = pos.split_at(self.rank() - 1);
-        //
-        //     let mut self_indices = self_part.iter().map(|&x| x..x + 1).collect::<Vec<_>>();
-        //     self_indices.push(0..self.shape.0.last().unwrap().clone());
-        //
-        //     let mut other_indices = other_part.iter().map(|&x| x..x + 1).collect::<Vec<_>>();
-        //     other_indices.insert(0, 0..other.shape.0.first().unwrap().clone());
-        //
-        //     let self_elems = self
-        //         .slice(&self_indices)
-        //         .unwrap()
-        //         .reshape(&shape![self.shape.0.last().unwrap().clone()])
-        //         .unwrap();
-        //     let other_elems = other
-        //         .slice(&other_indices)
-        //         .unwrap()
-        //         .reshape(&shape![other.shape.0.first().unwrap().clone()])
-        //         .unwrap();
-        //
-        //     val.write(self_elems.dot(&other_elems).unwrap());
-        // });
-        //
-        // unsafe {
-        //     res_elems.set_len(res_shape.element_count());
-        // }
-        //
-        // res_elems.into_tensor().reshape(&res_shape)
     }
 
-    /// Computes the dot product of two tensors, i.e. the element-wise product, then the sum of the result.
-    /// This fails if the tensors do not have the same shape.
-    pub fn dot_mt(&self, other: &Tensor<T>) -> Result<T, TensorErrors> {
-        if self.shape != other.shape {
-            return Err(TensorErrors::ShapesIncompatible);
+    /// Perform tensor-contraction multiplication,
+    /// which is a more general form of matrix multiplication.
+    /// E.g: A tensor of shape (a,b,c) multiplied in this way by a tensor of shape (c, d, e, f)
+    /// will produce a tensor of shape (a, b, d, e, f) by the following formula:
+    /// result[&[i, j, k, l, m\]\] = sum(x=0, x=c) { first[&[i, j, x\]\] * second[&[x, k, l, m\]\] }.
+    /// This does not check for validity.
+    pub(crate) unsafe fn contract_mul_unchecked_mt(mut self, mut other: Tensor<T>) -> Tensor<T>
+    where
+        T: AddAssign + Mul<Output = T> + Clone + Zero + Send + Sync,
+    {
+        let self_shape = self.shape().0;
+        let self_rank = self.rank();
+        let other_shape = other.shape().0;
+        let other_rank = other.rank();
+
+
+        if self_rank == 0 {
+            let e = self.elements.get_unchecked(0);
+            return other.map(|x| e.clone() * x);
         }
 
-        Ok(self
-            .par_chunks(4096)
-            .zip(other.par_chunks(4096))
-            .map(|(x, y)| dot_vectors(x, y))
-            .reduce(T::zero, T::add))
+        if other_rank == 0 {
+            let e = other.elements.get_unchecked(0);
+            return self * e;
+        }
+
+        self = self.reshape_unchecked(shape![
+            self_shape[..self_rank - 1].iter().product(),
+            self_shape[self_rank - 1]
+        ]);
+        let self_mat = Matrix {
+            rows: self.shape[0],
+            cols: self.shape[1],
+            elements: self.elements,
+        };
+        other =
+            other.reshape_unchecked(shape![other_shape[0], other_shape[1..].iter().product()]);
+        let other_mat = Matrix {
+            rows: other.shape[0],
+            cols: other.shape[1],
+            elements: other.elements,
+        };
+
+        let result_mat = self_mat.mat_mul_unchecked_mt(other_mat);
+        let result_shape = [
+            self_shape[..self_rank - 1].to_vec(),
+            other_shape[1..].to_vec(),
+        ]
+            .concat();
+
+        result_mat
+            .into_tensor()
+            .reshape_unchecked(Shape::new(result_shape))
+
     }
 }
 
-impl<T: Clone + Add<Output = T> + Mul<Output = T> + Send + Sync + Zero> Matrix<T> {
-    /// Does matrix multiplication on multiple threads.
-    /// This fails if the matrices are not multiplicatively compatible
-    pub fn contract_mul_mt(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
-        self.tensor.contract_mul_mt(&other.tensor)?.try_into()
-    }
-
-    /// Does matrix multiplication on multiple threads.
-    /// This fails if the matrices are not multiplicatively compatible
-    pub fn mat_mul_mt(&self, other: &Matrix<T>) -> Result<Matrix<T>, TensorErrors> {
-        self.contract_mul_mt(other)
-    }
-
-    /// Computes the dot product of two matrices, i.e. the element-wise product, then the sum of the result.
-    /// This fails if the matrices do not have the same shape.
-    pub fn dot_mt(&self, other: &Matrix<T>) -> Result<T, TensorErrors> {
-        if self.shape != other.shape {
-            return Err(TensorErrors::ShapesIncompatible);
+impl<T> Matrix<T> {
+    /// Does matrix multiplication with another matrix.
+    /// This fails if the matrices are not multiplicatively compatible.
+    pub fn mat_mul(self, other: Matrix<T>) -> Result<Matrix<T>, TensorErrors>
+    where
+        T: AddAssign + Mul<Output = T> + Clone + Zero,
+    {
+        if self.cols != other.rows {
+            return Err(TensorErrors::IncompatibleShapes {
+                shape_1: self.shape(),
+                shape_2: other.shape(),
+                op: "mat_mul",
+            });
         }
 
-        Ok(self
-            .par_chunks(4096)
-            .zip(other.par_chunks(4096))
-            .map(|(x, y)| dot_vectors(x, y))
-            .reduce(T::zero, T::add))
+        let mut elements = Vec::with_capacity(self.rows * other.cols);
+        let other_transpose = other.transpose();
+
+        self.chunks(self.cols).for_each(|row| {
+            other_transpose
+                .chunks(other_transpose.cols)
+                .for_each(|col| {
+                    elements.push(dot_vectors(row, col));
+                });
+        });
+
+        Ok(Matrix {
+            rows: self.rows,
+            cols: other_transpose.rows,
+            elements,
+        })
+    }
+
+    /// Does matrix multiplication with another matrix without validity checking.
+    pub(crate) unsafe fn mat_mul_unchecked(self, other: Matrix<T>) -> Matrix<T>
+    where
+        T: AddAssign + Mul<Output = T> + Clone + Zero,
+    {
+        let mut elements = Vec::with_capacity(self.rows * other.cols);
+        let other_transpose = other.transpose();
+
+        self.chunks(self.cols).for_each(|row| {
+            other_transpose
+                .chunks(other_transpose.cols)
+                .for_each(|col| {
+                    elements.push(dot_vectors(row, col));
+                });
+        });
+
+        Matrix {
+            rows: self.rows,
+            cols: other_transpose.rows,
+            elements,
+        }
+    }
+
+    /// Does matrix multiplication on multiple threads.
+    /// This fails if the matrices are not multiplicatively compatible.
+    pub fn mat_mul_mt(self, other: Matrix<T>) -> Result<Matrix<T>, TensorErrors>
+    where
+        T: AddAssign + Mul<Output = T> + Clone + Zero + Send + Sync,
+    {
+        if self.cols != other.rows {
+            return Err(TensorErrors::IncompatibleShapes {
+                shape_1: self.shape(),
+                shape_2: other.shape(),
+                op: "mat_mul",
+            });
+        }
+
+        let mut elements = Vec::with_capacity(self.rows * other.cols);
+        let buf = elements.spare_capacity_mut();
+        let other_transpose = other.transpose_mt();
+
+        self.par_chunks(self.cols)
+            .zip(buf.par_chunks_mut(self.rows))
+            .for_each(|(row, outs)| {
+                other_transpose
+                    .chunks(other_transpose.cols)
+                    .zip(outs)
+                    .for_each(|(col, out)| {
+                        out.write(dot_vectors(row, col));
+                    });
+            });
+
+        Ok(Matrix {
+            rows: self.rows,
+            cols: other_transpose.rows,
+            elements,
+        })
+    }
+
+    /// Does matrix multiplication on multiple threads without validity checking.
+    pub fn mat_mul_unchecked_mt(self, other: Matrix<T>) -> Matrix<T>
+    where
+        T: AddAssign + Mul<Output = T> + Clone + Zero + Send + Sync,
+    {
+        let mut elements = Vec::with_capacity(self.rows * other.cols);
+        let buf = elements.spare_capacity_mut();
+        let other_transpose = other.transpose_mt();
+
+        self.par_chunks(self.cols)
+            .zip(buf.par_chunks_mut(self.rows))
+            .for_each(|(row, outs)| {
+                other_transpose
+                    .chunks(other_transpose.cols)
+                    .zip(outs)
+                    .for_each(|(col, out)| {
+                        out.write(dot_vectors(row, col));
+                    });
+            });
+
+        Matrix {
+            rows: self.rows,
+            cols: other_transpose.rows,
+            elements,
+        }
     }
 }
