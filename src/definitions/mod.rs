@@ -16,3 +16,4 @@ pub mod tensor_slice;
 pub mod tensor_slice_mut;
 pub mod traits;
 pub mod transpose;
+pub mod approx_eq;

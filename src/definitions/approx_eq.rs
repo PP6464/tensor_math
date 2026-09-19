@@ -26,10 +26,12 @@ impl ApproxEq for Matrix<f64> {
             return false;
         }
 
+        let m = margin.into();
+
         self.elements
             .into_iter()
             .zip(other.elements.into_iter())
-            .all(|(x, y)| approx_eq!(f64, x, y, margin.clone()))
+            .all(|(x, y)| approx_eq!(f64, x, y, m))
     }
 }
 
@@ -57,12 +59,14 @@ impl ApproxEq for Matrix<Complex64> {
             return false;
         }
 
+        let m = margin.into();
+
         self.elements
             .into_iter()
             .zip(other.elements.into_iter())
             .all(|(x, y)| {
-                approx_eq!(f64, x.re(), y.re(), margin.clone())
-                    && approx_eq!(f64, x.im(), y.im(), margin.clone())
+                approx_eq!(f64, x.re(), y.re(), m)
+                    && approx_eq!(f64, x.im(), y.im(), m)
             })
     }
 }
