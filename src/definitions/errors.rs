@@ -62,4 +62,6 @@ pub enum TensorErrors {
     TensorEmpty { op: &'static str },
     #[error("Eigendecomposition did not converge")]
     EigenDecompositionDidNotConverge,
+    #[error("Row {row} out of bounds for operation {op}")]
+    RowOutOfBounds { row: usize, op: &'static str },
 }

@@ -4,9 +4,8 @@ use crate::definitions::strides::Strides;
 use crate::definitions::tensor::Tensor;
 use crate::definitions::traits::{IntoMatrix, IntoTensor};
 use crate::{mat_addr, shape};
-use rayon::iter::IndexedParallelIterator;
-use rayon::iter::{FromParallelIterator, IntoParallelIterator};
 use rayon::iter::ParallelIterator;
+use rayon::iter::{FromParallelIterator, IntoParallelIterator};
 use std::ops::{Deref, DerefMut, Index, IndexMut};
 use std::vec::IntoIter;
 /*
@@ -112,6 +111,39 @@ impl<T> Matrix<T> {
         T: Send + Sync,
     {
         self.elements.into_par_iter()
+    }
+
+    /// Swaps two rows in the matrix.
+    pub fn swap_rows(&mut self, row1: usize, row2: usize) -> Result<(), TensorErrors> {
+        let min = row1.min(row2);
+        let max = row1.max(row2);
+        let cols = self.cols;
+
+        if min >= self.rows || max >= self.rows {
+            return Err(TensorErrors::RowOutOfBounds {
+                row: max,
+                op: "swap_rows",
+            });
+        }
+
+        unsafe {
+            let (left, right) = self.split_at_mut_unchecked(max * cols);
+            left.get_unchecked_mut(min * cols..min * cols + cols)
+                .swap_with_slice(right.get_unchecked_mut(..cols));
+        }
+
+        Ok(())
+    }
+
+    /// Swaps two rows in the matrix without bounds checking.
+    pub(crate) unsafe fn swap_rows_unchecked(&mut self, row1: usize, row2: usize) {
+        let min = row1.min(row2);
+        let max = row1.max(row2);
+        let cols = self.cols;
+
+        let (left, right) = self.split_at_mut_unchecked(max * cols);
+        left.get_unchecked_mut(min * cols..min * cols + cols)
+            .swap_with_slice(right.get_unchecked_mut(..cols));
     }
 }
 
