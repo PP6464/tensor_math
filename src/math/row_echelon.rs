@@ -1,7 +1,6 @@
 use crate::definitions::matrix::Matrix;
 use float_cmp::approx_eq;
 use num::complex::{Complex64, ComplexFloat};
-use rayon::prelude::*;
 
 impl Matrix<f64> {
     /// Gives whether the matrix is in row echelon form or not.
@@ -36,7 +35,7 @@ impl Matrix<f64> {
         true
     }
 
-    /// Gives whether the matrix is in reduced row echelon form or not
+    /// Gives whether the matrix is in reduced row echelon form or not.
     pub fn is_reduced_row_echelon(&self) -> bool {
         let mut pivot = (0, 0);
 
@@ -63,10 +62,8 @@ impl Matrix<f64> {
                 }
 
                 // Check for all 0, otherwise just move to the first non-zero element
-                let right_slice = unsafe {
-                    self
-                        .slice_unchecked(pivot.0..pivot.0 + 1, pivot.1 + 1..self.cols)
-                };
+                let right_slice =
+                    unsafe { self.slice_unchecked(pivot.0..pivot.0 + 1, pivot.1 + 1..self.cols) };
                 let option_pivot = right_slice.iter().position(|&x| !approx_eq!(f64, x, 0.0));
 
                 match option_pivot {
@@ -81,11 +78,10 @@ impl Matrix<f64> {
                         }
 
                         return unsafe {
-                            self
-                                .slice_unchecked(pivot.0 + 1..self.rows, 0..self.cols)
+                            self.slice_unchecked(pivot.0 + 1..self.rows, 0..self.cols)
                         }
-                            .iter()
-                            .all(|x| approx_eq!(f64, *x, 0.0));
+                        .iter()
+                        .all(|x| approx_eq!(f64, *x, 0.0));
                     }
                 }
             }
@@ -103,10 +99,7 @@ impl Matrix<f64> {
             if pivot.0 > 0 {
                 let above_slice = unsafe { self.slice_unchecked(0..pivot.0, pivot.1..pivot.1 + 1) };
 
-                if above_slice
-                    .iter()
-                    .any(|x| !approx_eq!(f64, *x, 0.0))
-                {
+                if above_slice.iter().any(|x| !approx_eq!(f64, *x, 0.0)) {
                     return false;
                 }
             }
@@ -119,227 +112,105 @@ impl Matrix<f64> {
     }
 
     /// Computes the REF form of a matrix.
-    /// This does not require that the leading entries of the rows are normalised.
-    pub(crate) fn tracked_row_echelon(&self) -> (Matrix<f64>, i32) {
-        let mut res = self.clone();
+    /// As this is REF the leading entries will not be normalised.
+    pub(crate) fn tracked_row_echelon(mut self) -> (Matrix<f64>, i32, Vec<(usize, usize)>) {
         let mut det_scale = 1;
         let mut pivot = (0usize, 0usize);
+        let mut pivots = Vec::with_capacity(self.rows);
 
-        if res.rows == 0 {
-            return (res, det_scale);
-        }
-
-        while pivot.0 < res.rows - 1 && pivot.1 < res.cols {
-            // Identify if we can use this position as a pivot value
-            let pivot_val = res[pivot];
-
-            if approx_eq!(f64, pivot_val, 0.0) {
-                // The pivot value is 0
-
-                // Check if any of the other rows below have a non-zero value
-                // at this pivot column and if so then use that row's value instead
-                let slice_below = unsafe { res.slice_unchecked(pivot.0 + 1..res.rows, pivot.1..pivot.1 + 1) };
-
-                let (index, max_abs) = slice_below
+        while pivot.0 < self.rows - 1 && pivot.1 < self.cols {
+            // Find the largest usable pivot
+            let (row, &value) =
+                unsafe { self.slice_unchecked(pivot.0..self.rows, pivot.1..pivot.1 + 1) }
                     .iter()
                     .enumerate()
-                    .rev()
                     .max_by(|(_, &x), (_, &y)| x.abs().total_cmp(&y.abs()))
                     .unwrap();
 
-                if approx_eq!(f64, max_abs.abs(), 0.0) {
-                    // There is no suitable pivot on this row
-                    pivot = (pivot.0, pivot.1 + 1);
-                    continue;
-                }
-
-                // There is a suitable pivot on this column in another row, so need to swap those rows
-                let chosen_copy = res
-                    .slice(index + pivot.0 + 1..index + pivot.0 + 2, pivot.1..res.cols)
-                    .unwrap();
-                let current_copy = res.slice(pivot.0..pivot.0 + 1, pivot.1..res.cols).unwrap();
-
-                res.slice_mut(pivot.0..pivot.0 + 1, pivot.1..res.cols)
-                    .unwrap()
-                    .set_all(&chosen_copy)
-                    .unwrap();
-                res.slice_mut(index + pivot.0 + 1..index + pivot.0 + 2, pivot.1..res.cols)
-                    .unwrap()
-                    .set_all(&current_copy)
-                    .unwrap();
-
-                // Now multiply determinant scale factor by -1 because we swapped rows
-                det_scale *= -1;
-
-                // Now we can resume with normal Gauss-Jordan elimination
+            // If the entire column is 0 we skip to the next column
+            if approx_eq!(f64, value, 0.0) {
+                pivot.1 += 1;
                 continue;
-            } else {
-                // Eliminate all rows below in parallel. Each row is updated
-                // independently using the pivot row as a read-only multiplier,
-                // so disjoint-row `par_chunks_mut` is race-free.
-                let cols = res.cols;
-                let pivot_col = pivot.1;
+            }
 
-                // Snapshot the pivot row's right-hand portion. This is a
-                // read-only copy shared across the parallel iteration.
-                let pivot_row_start = pivot.0 * cols + pivot_col;
-                let pivot_row: Vec<f64> = res.elements.as_slice()
-                    [pivot_row_start..pivot_row_start + (cols - pivot_col)]
-                    .to_vec();
+            // Swap the pivot row with the current row if necessary
+            if row != pivot.0 {
+                unsafe {
+                    self.swap_rows_unchecked(pivot.0, row);
+                }
+                det_scale *= -1;
+            }
 
-                res.elements
-                    .as_mut_slice()
-                    .par_chunks_mut(cols)
-                    .enumerate()
-                    .skip(pivot.0 + 1)
-                    .for_each(|(_, row_chunk)| {
-                        let val_for_row = row_chunk[pivot_col];
-                        let factor = val_for_row / pivot_val;
-                        for j in pivot_col..cols {
-                            row_chunk[j] -= pivot_row[j - pivot_col] * factor;
-                        }
-                    });
+            pivots.push(pivot);
 
-                // We slide the pivot one down and to the right in the normal case
-                pivot = (pivot.0 + 1, pivot.1 + 1);
+            // Eliminate rows below
+            // We can do this as a rank1_update_sub.
+            unsafe {
+                let vec1 = self
+                    .slice_unchecked(pivot.0 + 1..self.rows, pivot.1..pivot.1 + 1)
+                    .iter()
+                    .map(|&x| x / value)
+                    .collect::<Vec<_>>();
+                let vec2 = self
+                    .slice_unchecked(pivot.0..pivot.0 + 1, pivot.1..self.cols)
+                    .iter()
+                    .copied()
+                    .collect::<Vec<_>>();
+
+                self.slice_unchecked_mut(pivot.0 + 1..self.rows, pivot.1..self.cols)
+                    .rank1_update_sub_unchecked_mt(&vec1, &vec2);
             }
         }
 
-        (res, det_scale)
+        (self, det_scale, pivots)
     }
 
     /// Computes the row echelon form of a matrix.
-    /// This does not require that the leading entries of the rows are normalised.
-    pub fn row_echelon(&self) -> Matrix<f64> {
+    /// As this is REF the leading entries will not be normalised.
+    pub fn row_echelon(self) -> Matrix<f64> {
         self.tracked_row_echelon().0
     }
 
-    /// Computes the reduced row echelon form of a matrix
-    pub fn reduced_row_echelon(&self) -> Matrix<f64> {
-        let mut res = self.clone();
+    /// Computes the reduced row echelon form of a matrix.
+    pub fn reduced_row_echelon(self) -> Matrix<f64> {
+        let (mut ref_form, _, pivots) = self.tracked_row_echelon();
+        let cols = ref_form.cols;
 
-        let mut pivot = (0usize, 0usize);
+        // Go backwards through the pivots: normalise row and eliminate above
+        for &pivot in pivots.iter().rev() {
+            let val = ref_form[pivot];
 
-        while pivot.0 < res.rows && pivot.1 < res.cols {
-            // Identify if we can use this position as a pivot value
-            let pivot_val = res[pivot];
-
-            if approx_eq!(f64, pivot_val, 0.0) {
-                // The pivot value is 0
-
-                // If this is the last row then there are no other rows to swap with,
-                // so we must see directly where the first usable pivot is in the last row.
-                // If such a pivot does not exist then we stop here.
-                if pivot.0 == res.rows - 1 {
-                    if pivot.1 == res.cols - 1 {
-                        // There is nothing to check
-                        break;
-                    }
-
-                    let rest_of_row = res.slice(pivot.0..res.rows, pivot.1 + 1..res.cols).unwrap();
-
-                    let (index, max_abs) = rest_of_row
-                        .iter()
-                        .enumerate()
-                        .rev()
-                        .max_by(|(_, &x), (_, &y)| x.abs().total_cmp(&y.abs()))
-                        .unwrap();
-
-                    if !approx_eq!(f64, *max_abs, 0.0) {
-                        // There is a suitable pivot so change the position of the pivot to it
-                        pivot = (pivot.0, pivot.1 + 1 + index);
-                        continue;
-                    }
-
-                    // Otherwise we are done here
-                    break;
-                }
-
-                // Check if any of the other rows below have a non-zero value
-                // at this pivot column and if so then use that row's value instead
-                let slice_below = res
-                    .slice(pivot.0 + 1..res.rows, pivot.1..pivot.1 + 1)
-                    .unwrap();
-
-                let (index, max_abs) = slice_below
-                    .iter()
-                    .enumerate()
-                    .max_by(|(_, &x), (_, &y)| x.abs().total_cmp(&y.abs()))
-                    .unwrap();
-
-                if approx_eq!(f64, max_abs.abs(), 0.0) {
-                    // There is no suitable pivot on this row
-                    pivot = (pivot.0, pivot.1 + 1);
-                    continue;
-                }
-
-                // There is a suitable pivot on this column in another row, so need to swap those rows
-                let chosen_copy = res
-                    .slice(index + pivot.0 + 1..index + pivot.0 + 2, pivot.1..res.cols)
-                    .unwrap();
-                let current_copy = res.slice(pivot.0..pivot.0 + 1, pivot.1..res.cols).unwrap();
-
-                res.slice_mut(pivot.0..pivot.0 + 1, pivot.1..res.cols)
-                    .unwrap()
-                    .set_all(&chosen_copy)
-                    .unwrap();
-                res.slice_mut(index + pivot.0 + 1..index + pivot.0 + 2, pivot.1..res.cols)
-                    .unwrap()
-                    .set_all(&current_copy)
-                    .unwrap();
-
-                // Now we can resume with normal Gauss-Jordan elimination
-                continue;
-            } else {
-                // Normalise the row
-                let norm_row =
-                    res.slice(pivot.0..pivot.0 + 1, pivot.1..res.cols).unwrap() / pivot_val;
-                res.slice_mut(pivot.0..pivot.0 + 1, pivot.1..res.cols)
-                    .unwrap()
-                    .set_all(&norm_row)
-                    .unwrap();
+            // Normalise row
+            unsafe {
+                ref_form
+                    .slice_unchecked_mut(pivot.0..pivot.0 + 1, pivot.1..cols)
+                    .iter_mut()
+                    .for_each(|x| *x /= val);
             }
 
-            // Eliminate all other rows in parallel. Each row is independent —
-            // the pivot row is read-only and the others only touch themselves —
-            // so disjoint-row `par_chunks_mut` is race-free.
-            let cols = res.cols;
-            let pivot_col = pivot.1;
-            let pivot_row_idx = pivot.0;
+            // Eliminate above
+            let row = unsafe { ref_form.slice_unchecked(pivot.0..pivot.0 + 1, pivot.1..cols) }
+                .iter()
+                .copied()
+                .collect::<Vec<_>>();
+            let col = unsafe { ref_form.slice_unchecked(0..pivot.0, pivot.1..pivot.1 + 1) }
+                .iter()
+                .copied()
+                .collect::<Vec<_>>();
 
-            // Snapshot the (possibly just-normalised) pivot row's right-hand
-            // portion so the parallel iteration can read it without conflicting
-            // with the in-place row updates.
-            let pivot_row_start = pivot_row_idx * cols + pivot_col;
-            let pivot_row: Vec<f64> = res.elements.as_slice()
-                [pivot_row_start..pivot_row_start + (cols - pivot_col)]
-                .to_vec();
-
-            res.elements
-                .as_mut_slice()
-                .par_chunks_mut(cols)
-                .enumerate()
-                .for_each(|(i, row_chunk)| {
-                    if i == pivot_row_idx {
-                        return;
-                    }
-
-                    let val_for_row = row_chunk[pivot_col];
-                    for j in pivot_col..cols {
-                        row_chunk[j] -= pivot_row[j - pivot_col] * val_for_row;
-                    }
-                });
-
-            // We slide the pivot one down and to the right as we are in the normal case
-            pivot = (pivot.0 + 1, pivot.1 + 1);
+            unsafe {
+                ref_form
+                    .slice_unchecked_mut(0..pivot.0, pivot.1..cols)
+                    .rank1_update_sub_unchecked_mt(&col, &row);
+            }
         }
 
-        res
+        ref_form
     }
 }
 
 impl Matrix<Complex64> {
-    /// Gives whether the matrix is in row echelon form or not
+    /// Gives whether the matrix is in row echelon form or not.
     pub fn is_row_echelon(&self) -> bool {
         let mut all_zero_rows = false;
         let mut prev_pivot_col: i32 = -1;
@@ -371,7 +242,7 @@ impl Matrix<Complex64> {
         true
     }
 
-    /// Gives whether the matrix is in reduced row echelon form or not
+    /// Gives whether the matrix is in reduced row echelon form or not.
     pub fn is_reduced_row_echelon(&self) -> bool {
         let mut pivot = (0, 0);
 
@@ -380,7 +251,8 @@ impl Matrix<Complex64> {
 
             // Note everything below must be 0
             if pivot.0 < self.rows - 1 {
-                let below_slice = unsafe { self.slice_unchecked(pivot.0 + 1..self.rows, pivot.1..pivot.1 + 1) };
+                let below_slice =
+                    unsafe { self.slice_unchecked(pivot.0 + 1..self.rows, pivot.1..pivot.1 + 1) };
 
                 if below_slice
                     .iter()
@@ -408,7 +280,8 @@ impl Matrix<Complex64> {
                 }
 
                 // Check for all 0, otherwise just move to the first non-zero element
-                let right_slice = unsafe { self.slice_unchecked(pivot.0..pivot.0 + 1, pivot.1 + 1..self.cols) };
+                let right_slice =
+                    unsafe { self.slice_unchecked(pivot.0..pivot.0 + 1, pivot.1 + 1..self.cols) };
                 let option_pivot = right_slice
                     .iter()
                     .enumerate()
@@ -464,226 +337,99 @@ impl Matrix<Complex64> {
     }
 
     /// Computes the row echelon form of a matrix.
-    /// This does not require that the leading entries are normalised.
-    /// This returns a tuple of the result and 1 if an even number of rows
-    /// have been swapped or -1 if an odd number of rows have been swapped
-    pub(crate) fn tracked_row_echelon(&self) -> (Matrix<Complex64>, i32) {
-        let mut res = self.clone();
+    /// As this is REF the leading entries will not be normalised.
+    pub(crate) fn tracked_row_echelon(mut self) -> (Matrix<Complex64>, i32, Vec<(usize, usize)>) {
         let mut det_scale = 1;
-
         let mut pivot = (0usize, 0usize);
+        let mut pivots = Vec::with_capacity(self.rows);
 
-        if res.rows == 0 {
-            return (res, det_scale);
-        }
-
-        while pivot.0 < res.rows - 1 && pivot.1 < res.cols {
-            // Identify if we can use this position as a pivot value
-            let pivot_val = res[pivot];
-
-            if approx_eq!(f64, pivot_val.abs(), 0.0) {
-                // The pivot value is 0
-
-                // Check if any of the other rows below have a non-zero value
-                // at this pivot column and if so then use that row's value instead
-                let slice_below = res
-                    .slice(pivot.0 + 1..res.rows, pivot.1..pivot.1 + 1)
-                    .unwrap();
-
-                let (index, max_abs) = slice_below
+        while pivot.0 < self.rows - 1 && pivot.1 < self.cols {
+            // Find the largest usable pivot
+            let (row, &value) =
+                unsafe { self.slice_unchecked(pivot.0..self.rows, pivot.1..pivot.1 + 1) }
                     .iter()
                     .enumerate()
-                    .rev()
                     .max_by(|(_, &x), (_, &y)| x.abs().total_cmp(&y.abs()))
                     .unwrap();
 
-                if approx_eq!(f64, max_abs.abs(), 0.0) {
-                    // There is no suitable pivot on this row
-                    pivot = (pivot.0, pivot.1 + 1);
-                    continue;
-                }
-
-                // There is a suitable pivot on this column in another row, so need to swap those rows
-                let chosen_copy = res
-                    .slice(index + pivot.0 + 1..index + pivot.0 + 2, pivot.1..res.cols)
-                    .unwrap();
-                let current_copy = res.slice(pivot.0..pivot.0 + 1, pivot.1..res.cols).unwrap();
-
-                res.slice_mut(pivot.0..pivot.0 + 1, pivot.1..res.cols)
-                    .unwrap()
-                    .set_all(&chosen_copy)
-                    .unwrap();
-                res.slice_mut(index + pivot.0 + 1..index + pivot.0 + 2, pivot.1..res.cols)
-                    .unwrap()
-                    .set_all(&current_copy)
-                    .unwrap();
-
-                // Multiply the determinant scale factor by -1 because we swapped a row
-                det_scale *= -1;
-
-                // Now we can resume with normal Gauss-Jordan elimination
+            // If the entire column is 0 we skip to the next column
+            if approx_eq!(f64, value.norm_sqr(), 0.0) {
+                pivot.1 += 1;
                 continue;
-            } else {
-                // Eliminate all rows below in parallel. Each row is updated
-                // independently using the pivot row as a read-only multiplier,
-                // so disjoint-row `par_chunks_mut` is race-free.
-                let cols = res.cols;
-                let pivot_col = pivot.1;
+            }
 
-                // Snapshot the pivot row's right-hand portion. This is a
-                // read-only copy shared across the parallel iteration.
-                let pivot_row_start = pivot.0 * cols + pivot_col;
-                let pivot_row: Vec<Complex64> = res.elements.as_slice()
-                    [pivot_row_start..pivot_row_start + (cols - pivot_col)]
-                    .to_vec();
+            // Swap the pivot row with the current row if necessary
+            if row != pivot.0 {
+                unsafe {
+                    self.swap_rows_unchecked(pivot.0, row);
+                }
+                det_scale *= -1;
+            }
 
-                res.elements
-                    .as_mut_slice()
-                    .par_chunks_mut(cols)
-                    .enumerate()
-                    .skip(pivot.0 + 1)
-                    .for_each(|(_, row_chunk)| {
-                        let val_for_row = row_chunk[pivot_col];
-                        let factor = val_for_row / pivot_val;
-                        for j in pivot_col..cols {
-                            row_chunk[j] -= pivot_row[j - pivot_col] * factor;
-                        }
-                    });
+            pivots.push(pivot);
 
-                // We slide the pivot one down and to the right in the normal case
-                pivot = (pivot.0 + 1, pivot.1 + 1);
+            // Eliminate rows below
+            // We can do this as a rank1_update_sub.
+            unsafe {
+                let vec1 = self
+                    .slice_unchecked(pivot.0 + 1..self.rows, pivot.1..pivot.1 + 1)
+                    .iter()
+                    .map(|&x| x / value)
+                    .collect::<Vec<_>>();
+                let vec2 = self
+                    .slice_unchecked(pivot.0..pivot.0 + 1, pivot.1..self.cols)
+                    .iter()
+                    .copied()
+                    .collect::<Vec<_>>();
+
+                self.slice_unchecked_mut(pivot.0 + 1..self.rows, pivot.1..self.cols)
+                    .rank1_update_sub_unchecked_mt(&vec1, &vec2);
             }
         }
 
-        (res, det_scale)
+        (self, det_scale, pivots)
     }
 
     /// Computes the row echelon form of a matrix.
-    /// This does not require that the leading entries are normalised.
-    pub fn row_echelon(&self) -> Matrix<Complex64> {
+    /// As this is REF the leading entries will not be normalised.
+    pub fn row_echelon(self) -> Matrix<Complex64> {
         self.tracked_row_echelon().0
     }
 
     /// Computes the reduced row echelon form of a matrix
-    pub fn reduced_row_echelon(&self) -> Matrix<Complex64> {
-        let mut res = self.clone();
+    pub fn reduced_row_echelon(self) -> Matrix<Complex64> {
+        let (mut ref_form, _, pivots) = self.tracked_row_echelon();
+        let cols = ref_form.cols;
 
-        let mut pivot = (0usize, 0usize);
+        // Go backwards through the pivots: normalise row and eliminate above
+        for &pivot in pivots.iter().rev() {
+            let val = ref_form[pivot];
 
-        while pivot.0 < res.rows && pivot.1 < res.cols {
-            // Identify if we can use this position as a pivot value
-            let pivot_val = res[pivot];
-
-            if approx_eq!(f64, pivot_val.abs(), 0.0) {
-                // The pivot value is 0
-
-                // If this is the last row then there are no other rows to swap with,
-                // so we must see directly where the first usable pivot is in the last row.
-                // If such a pivot does not exist then we stop here.
-                if pivot.0 == res.rows - 1 {
-                    if pivot.1 == res.cols - 1 {
-                        // There is nothing to check
-                        break;
-                    }
-
-                    let rest_of_row = res.slice(pivot.0..res.rows, pivot.1 + 1..res.cols).unwrap();
-
-                    let (index, max_abs) = rest_of_row
-                        .iter()
-                        .enumerate()
-                        .rev()
-                        .max_by(|(_, &x), (_, &y)| x.abs().total_cmp(&y.abs()))
-                        .unwrap();
-
-                    if !approx_eq!(f64, max_abs.abs(), 0.0) {
-                        // There is a suitable pivot so change the position of the pivot to it
-                        pivot = (pivot.0, pivot.1 + 1 + index);
-                        continue;
-                    }
-
-                    // Otherwise we are done here
-                    break;
-                }
-
-                // Check if any of the other rows below have a non-zero value
-                // at this pivot column and if so then use that row's value instead
-                let slice_below = res
-                    .slice(pivot.0 + 1..res.rows, pivot.1..pivot.1 + 1)
-                    .unwrap();
-
-                let (index, max_abs) = slice_below
-                    .iter()
-                    .enumerate()
-                    .max_by(|(_, &x), (_, &y)| x.abs().total_cmp(&y.abs()))
-                    .unwrap();
-
-                if approx_eq!(f64, max_abs.abs(), 0.0) {
-                    // There is no suitable pivot on this row
-                    pivot = (pivot.0, pivot.1 + 1);
-                    continue;
-                }
-
-                // There is a suitable pivot on this column in another row, so need to swap those rows
-                let chosen_copy = res
-                    .slice(index + pivot.0 + 1..index + pivot.0 + 2, pivot.1..res.cols)
-                    .unwrap();
-                let current_copy = res.slice(pivot.0..pivot.0 + 1, pivot.1..res.cols).unwrap();
-
-                res.slice_mut(pivot.0..pivot.0 + 1, pivot.1..res.cols)
-                    .unwrap()
-                    .set_all(&chosen_copy)
-                    .unwrap();
-                res.slice_mut(index + pivot.0 + 1..index + pivot.0 + 2, pivot.1..res.cols)
-                    .unwrap()
-                    .set_all(&current_copy)
-                    .unwrap();
-
-                // Now we can resume with normal Gauss-Jordan elimination
-                continue;
-            } else {
-                // Normalise the row
-                let norm_row =
-                    res.slice(pivot.0..pivot.0 + 1, pivot.1..res.cols).unwrap() / pivot_val;
-                res.slice_mut(pivot.0..pivot.0 + 1, pivot.1..res.cols)
-                    .unwrap()
-                    .set_all(&norm_row)
-                    .unwrap();
+            // Normalise row
+            unsafe {
+                ref_form
+                    .slice_unchecked_mut(pivot.0..pivot.0 + 1, pivot.1..cols)
+                    .iter_mut()
+                    .for_each(|x| *x /= val);
             }
 
-            // Eliminate all other rows in parallel. Each row is independent —
-            // the pivot row is read-only and the others only touch themselves —
-            // so disjoint-row `par_chunks_mut` is race-free.
-            let cols = res.cols;
-            let pivot_col = pivot.1;
-            let pivot_row_idx = pivot.0;
+            // Eliminate above
+            let row = unsafe { ref_form.slice_unchecked(pivot.0..pivot.0 + 1, pivot.1..cols) }
+                .iter()
+                .copied()
+                .collect::<Vec<_>>();
+            let col = unsafe { ref_form.slice_unchecked(0..pivot.0, pivot.1..pivot.1 + 1) }
+                .iter()
+                .copied()
+                .collect::<Vec<_>>();
 
-            // Snapshot the (possibly just-normalised) pivot row's right-hand
-            // portion so the parallel iteration can read it without conflicting
-            // with the in-place row updates.
-            let pivot_row_start = pivot_row_idx * cols + pivot_col;
-            let pivot_row: Vec<Complex64> = res.elements.as_slice()
-                [pivot_row_start..pivot_row_start + (cols - pivot_col)]
-                .to_vec();
-
-            res.elements
-                .as_mut_slice()
-                .par_chunks_mut(cols)
-                .enumerate()
-                .for_each(|(i, row_chunk)| {
-                    if i == pivot_row_idx {
-                        return;
-                    }
-
-                    let val_for_row = row_chunk[pivot_col];
-                    for j in pivot_col..cols {
-                        row_chunk[j] -= pivot_row[j - pivot_col] * val_for_row;
-                    }
-                });
-
-            // We slide the pivot one down and to the right as we are in the normal case
-            pivot = (pivot.0 + 1, pivot.1 + 1);
+            unsafe {
+                ref_form
+                    .slice_unchecked_mut(0..pivot.0, pivot.1..cols)
+                    .rank1_update_sub_unchecked_mt(&col, &row);
+            }
         }
 
-        res
+        ref_form
     }
 }
