@@ -58,7 +58,7 @@ impl Shape {
 
     /// This gives the address for a corresponding shape index.
     /// This fails if the index is out of bounds.
-    pub fn address(&self, index: Vec<usize>) -> Result<usize, TensorErrors> {
+    pub fn address(&self, index: &[usize]) -> Result<usize, TensorErrors> {
         if index.len() != self.rank() {
             return Err(TensorErrors::IndicesInvalidForRank(
                 index.len(),
@@ -80,7 +80,7 @@ impl Shape {
     }
 
     /// This gives the address for a corresponding shape index and trusts validity
-    pub(crate) unsafe fn address_unchecked(&self, index: &Vec<usize>) -> usize {
+    pub(crate) unsafe fn address_unchecked(&self, index: &[usize]) -> usize {
         dot_vectors(&Strides::from_shape(self).0, index)
     }
 
