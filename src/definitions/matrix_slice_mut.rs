@@ -1,3 +1,4 @@
+use crate::definitions::errors::TensorErrors;
 use crate::definitions::matrix::Matrix;
 use crate::definitions::shape::Shape;
 use crate::shape;
@@ -5,7 +6,6 @@ use rayon::iter::plumbing::{bridge, Consumer, Producer, ProducerCallback, Uninde
 use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
-
 /*
 --------------------------------------------
 * Mutable matrix slice definition
@@ -103,7 +103,9 @@ impl<T> MatrixSliceMut<'_, T> {
     }
 
     /// Returns an iterator over mutable references to the elements of the matrix slice.
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> + ExactSizeIterator + DoubleEndedIterator {
+    pub fn iter_mut(
+        &mut self,
+    ) -> impl Iterator<Item = &mut T> + ExactSizeIterator + DoubleEndedIterator {
         struct SliceIterMut<'a, T> {
             base: *mut T,
             flat_index: usize,
@@ -120,7 +122,7 @@ impl<T> MatrixSliceMut<'_, T> {
                     self.base.add(self.flat_index - 1).as_mut()?
                 })
             }
-            
+
             fn size_hint(&self) -> (usize, Option<usize>) {
                 (self.len - self.flat_index, Some(self.len - self.flat_index))
             }
@@ -322,6 +324,18 @@ impl<T> MatrixSliceMut<'_, T> {
         T: Send + Sync,
     {
         self.par_iter_mut().chunks(n)
+    }
+
+    /// Swaps the elements at the indices.
+    pub fn swap(
+        &mut self,
+        index1: (usize, usize),
+        index2: (usize, usize),
+    ) -> Result<(), TensorErrors> {
+        self.orig.swap(
+            (index1.0 + self.start.0, index1.1 + self.start.1),
+            (index2.0 + self.start.0, index2.1 + self.start.1),
+        )
     }
 }
 

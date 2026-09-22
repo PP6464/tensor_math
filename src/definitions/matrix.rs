@@ -145,6 +145,45 @@ impl<T> Matrix<T> {
         left.get_unchecked_mut(min * cols..min * cols + cols)
             .swap_with_slice(right.get_unchecked_mut(..cols));
     }
+
+    /// Swap the values at the indices.
+    pub fn swap(&mut self, index1: (usize, usize), index2: (usize, usize)) -> Result<(), TensorErrors> {
+        if index1.0 >= self.rows {
+            return Err(TensorErrors::IndexOutOfBounds {
+                index: index1.0,
+                axis: 0,
+                length: self.rows,
+            });
+        }
+
+        if index1.1 >= self.cols {
+            return Err(TensorErrors::IndexOutOfBounds {
+                index: index1.1,
+                axis: 1,
+                length: self.cols,
+            });
+        }
+
+        if index2.0 >= self.rows {
+            return Err(TensorErrors::IndexOutOfBounds {
+                index: index2.0,
+                axis: 0,
+                length: self.rows,
+            });
+        }
+
+        if index2.1 >= self.cols {
+            return Err(TensorErrors::IndexOutOfBounds {
+                index: index2.1,
+                axis: 1,
+                length: self.cols,
+            });
+        }
+
+        self.elements.swap(mat_addr!(index1, self.cols), mat_addr!(index2, self.cols));
+
+        Ok(())
+    }
 }
 
 /*

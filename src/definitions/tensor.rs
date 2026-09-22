@@ -6,10 +6,7 @@ use crate::definitions::traits::{IntoTensor, TryIntoMatrix};
 use crate::shape;
 use crate::utilities::internal_functions::dot_vectors;
 use rayon::iter::IndexedParallelIterator;
-use rayon::iter::{
-    FromParallelIterator, IntoParallelIterator
-    , ParallelIterator,
-};
+use rayon::iter::{FromParallelIterator, IntoParallelIterator, ParallelIterator};
 use std::ops::{Deref, DerefMut, Index, IndexMut};
 use std::vec::IntoIter;
 /*
@@ -113,6 +110,45 @@ impl<T> Tensor<T> {
         T: Send + Sync,
     {
         self.elements.into_par_iter()
+    }
+
+    /// Swaps the elements at the indices.
+    pub fn swap(&mut self, index1: &[usize], index2: &[usize]) -> Result<(), TensorErrors> {
+        if index1.len() != self.rank() {
+            return Err(TensorErrors::IndicesInvalidForRank(
+                index1.len(),
+                self.rank(),
+            ));
+        }
+
+        if index2.len() != self.rank() {
+            return Err(TensorErrors::IndicesInvalidForRank(
+                index2.len(),
+                self.rank(),
+            ));
+        }
+        
+        for (si, (&i1, &i2)) in index1.iter().zip(index2.iter()).enumerate() {
+            if i1 >= self.shape[si] {
+                return Err(TensorErrors::IndexOutOfBounds {
+                    axis: si,
+                    length: self.shape[si],
+                    index: i1,
+                });
+            }
+            
+            if i2 >= self.shape[si] {
+                return Err(TensorErrors::IndexOutOfBounds {
+                    axis: si,
+                    length: self.shape[si],
+                    index: i2,
+                });
+            }
+        }
+
+        unsafe { self.elements.swap(self.shape.address_unchecked(index1), self.shape.address_unchecked(index2)); }
+        
+        Ok(())
     }
 }
 

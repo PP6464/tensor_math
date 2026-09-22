@@ -3,6 +3,7 @@
 * Mutable tensor slice definition
 --------------------------------------------
 */
+use crate::definitions::errors::TensorErrors;
 use crate::definitions::shape::Shape;
 use crate::definitions::strides::Strides;
 use crate::definitions::tensor::Tensor;
@@ -130,7 +131,9 @@ impl<T> TensorSliceMut<'_, T> {
     }
 
     /// Returns a mutable iterator over the elements of the tensor slice.
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> + ExactSizeIterator + DoubleEndedIterator {
+    pub fn iter_mut(
+        &mut self,
+    ) -> impl Iterator<Item = &mut T> + ExactSizeIterator + DoubleEndedIterator {
         struct SliceIterMut<'a, T> {
             base: *mut T,            // Pointer to the start of the original tensor's elements
             flat_index: usize,       // Current flat index in the slice
@@ -386,6 +389,22 @@ impl<T> TensorSliceMut<'_, T> {
         T: Send + Sync,
     {
         self.par_iter_mut().chunks(n)
+    }
+
+    /// Swaps the elements at the specified indices.
+    pub fn swap(&mut self, index1: &[usize], index2: &[usize]) -> Result<(), TensorErrors> {
+        self.orig.swap(
+            &index1
+                .iter()
+                .zip(self.start.iter())
+                .map(|(x, y)| x + y)
+                .collect::<Vec<_>>(),
+            &index2
+                .iter()
+                .zip(self.start.iter())
+                .map(|(x, y)| x + y)
+                .collect::<Vec<_>>(),
+        )
     }
 }
 
