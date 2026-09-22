@@ -6,7 +6,7 @@ use rayon::iter::ParallelIterator;
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator};
 use rayon::slice::ParallelSliceMut;
 use std::ops::{AddAssign, Mul, SubAssign};
-
+use crate::definitions::matrix_slice_mut::MatrixSliceMut;
 /*
 --------------------------------------------
 * Outer product functions
@@ -198,6 +198,148 @@ impl<T> Matrix<T> {
             .enumerate()
             .for_each(|(r, out_row)| {
                 out_row.iter_mut().enumerate().for_each(|(c, out)| {
+                    *out -= v1[r].clone() * v2[c].clone();
+                });
+            });
+    }
+}
+
+impl<T> MatrixSliceMut<'_, T> {
+    /// Does a rank 1 addition update with the outer product of v1 and v2.
+    /// This fails if the outer product of v1 and v2 would not match the shape of `self`.
+    pub fn rank1_update_add(&mut self, v1: &[T], v2: &[T]) -> Result<(), TensorErrors>
+    where
+        T: Mul<Output = T> + Clone + AddAssign,
+    {
+        if self.rows() != v1.len() || self.cols() != v2.len() {
+            return Err(TensorErrors::IncompatibleShapes {
+                shape_1: self.shape(),
+                shape_2: shape![v1.len(), v2.len()],
+                op: "rank1_update",
+            });
+        }
+
+        self.enumerated_iter_mut().for_each(|((r, c), out)| {
+            *out += v1[r].clone() * v2[c].clone();
+        });
+
+        Ok(())
+    }
+
+    /// Does a rank 1 addition update with the outer product of v1 and v2 without validity checking.
+    pub(crate) unsafe fn rank1_update_add_unchecked(&mut self, v1: &[T], v2: &[T])
+    where
+        T: Mul<Output = T> + Clone + AddAssign,
+    {
+        self.enumerated_iter_mut().for_each(|((r, c), out)| {
+            *out += v1[r].clone() * v2[c].clone();
+        });
+    }
+
+    /// Does a rank 1 addition update with the outer product of v1 and v2.
+    /// This fails if the outer product of v1 and v2 would not match the shape of `self`.
+    pub fn rank1_update_add_mt(&mut self, v1: &[T], v2: &[T]) -> Result<(), TensorErrors>
+    where
+        T: Mul<Output = T> + Clone + AddAssign + Send + Sync,
+    {
+        if self.rows() != v1.len() || self.cols() != v2.len() {
+            return Err(TensorErrors::IncompatibleShapes {
+                shape_1: self.shape(),
+                shape_2: shape![v1.len(), v2.len()],
+                op: "rank1_update",
+            });
+        }
+
+        self.par_chunks_mut(v2.len())
+            .enumerate()
+            .for_each(|(r, out_row)| {
+                out_row.into_iter().enumerate().for_each(|(c, out)| {
+                    *out += v1[r].clone() * v2[c].clone();
+                });
+            });
+
+        Ok(())
+    }
+
+    /// Does a rank 1 addition update with the outer product of v1 and v2 without validity checking.
+    pub(crate) unsafe fn rank1_update_add_unchecked_mt(&mut self, v1: &[T], v2: &[T])
+    where
+        T: Mul<Output = T> + Clone + AddAssign + Send + Sync,
+    {
+        self.par_chunks_mut(v2.len())
+            .enumerate()
+            .for_each(|(r, out_row)| {
+                out_row.into_iter().enumerate().for_each(|(c, out)| {
+                    *out += v1[r].clone() * v2[c].clone();
+                });
+            });
+    }
+
+    /// Does a rank 1 subtraction update with the outer product of v1 and v2.
+    /// This fails if the outer product of v1 and v2 would not match the shape of `self`.
+    pub fn rank1_update_sub(&mut self, v1: &[T], v2: &[T]) -> Result<(), TensorErrors>
+    where
+        T: Mul<Output = T> + Clone + SubAssign,
+    {
+        if self.rows() != v1.len() || self.cols() != v2.len() {
+            return Err(TensorErrors::IncompatibleShapes {
+                shape_1: self.shape(),
+                shape_2: shape![v1.len(), v2.len()],
+                op: "rank1_update",
+            });
+        }
+
+        self.enumerated_iter_mut().for_each(|((r, c), out)| {
+            *out -= v1[r].clone() * v2[c].clone();
+        });
+
+        Ok(())
+    }
+
+    /// Does a rank 1 subtraction update with the outer product of v1 and v2 without validity checking.
+    pub(crate) unsafe fn rank1_update_sub_unchecked(&mut self, v1: &[T], v2: &[T])
+    where
+        T: Mul<Output = T> + Clone + SubAssign,
+    {
+        self.enumerated_iter_mut().for_each(|((r, c), out)| {
+            *out -= v1[r].clone() * v2[c].clone();
+        });
+    }
+
+    /// Does a rank 1 subtraction update with the outer product of v1 and v2.
+    /// This fails if the outer product of v1 and v2 would not match the shape of `self`.
+    pub fn rank1_update_sub_mt(&mut self, v1: &[T], v2: &[T]) -> Result<(), TensorErrors>
+    where
+        T: Mul<Output = T> + Clone + SubAssign + Send + Sync,
+    {
+        if self.rows() != v1.len() || self.cols() != v2.len() {
+            return Err(TensorErrors::IncompatibleShapes {
+                shape_1: self.shape(),
+                shape_2: shape![v1.len(), v2.len()],
+                op: "rank1_update",
+            });
+        }
+
+        self.par_chunks_mut(v2.len())
+            .enumerate()
+            .for_each(|(r, out_row)| {
+                out_row.into_iter().enumerate().for_each(|(c, out)| {
+                    *out -= v1[r].clone() * v2[c].clone();
+                });
+            });
+
+        Ok(())
+    }
+
+    /// Does a rank 1 subtraction update with the outer product of v1 and v2 without validity checking.
+    pub(crate) unsafe fn rank1_update_sub_unchecked_mt(&mut self, v1: &[T], v2: &[T])
+    where
+        T: Mul<Output = T> + Clone + SubAssign + Send + Sync,
+    {
+        self.par_chunks_mut(v2.len())
+            .enumerate()
+            .for_each(|(r, out_row)| {
+                out_row.into_iter().enumerate().for_each(|(c, out)| {
                     *out -= v1[r].clone() * v2[c].clone();
                 });
             });
