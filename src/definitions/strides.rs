@@ -3,11 +3,11 @@ use std::ops::Index;
 
 /// Cache the strides required to index the tensor.
 /// addr = dot_vectors(index_vector, strides)
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 #[cfg(feature = "internal")]
 pub struct Strides(pub Vec<usize>);
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 #[cfg(not(feature = "internal"))]
 pub(crate) struct Strides(pub(crate) Vec<usize>);
 impl Strides {

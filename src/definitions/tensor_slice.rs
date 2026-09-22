@@ -10,7 +10,7 @@ use std::ops::Index;
 --------------------------------------------
 */
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub struct TensorSlice<'a, T> {
     pub(crate) orig: &'a Tensor<T>,
     pub(crate) start: Vec<usize>,

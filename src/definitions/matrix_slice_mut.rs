@@ -12,7 +12,7 @@ use std::ops::{Index, IndexMut};
 --------------------------------------------
 */
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Hash)]
 pub struct MatrixSliceMut<'a, T> {
     pub(crate) orig: &'a mut Matrix<T>,
     pub(crate) start: (usize, usize),

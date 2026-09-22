@@ -10,7 +10,7 @@ use std::ops::{Index, IndexMut};
 --------------------------------------------
 */
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Shape(pub(crate) Vec<usize>);
 
 impl Shape {

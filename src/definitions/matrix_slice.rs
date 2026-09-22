@@ -10,7 +10,7 @@ use std::ops::Index;
 --------------------------------------------
 */
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub struct MatrixSlice<'a, T> {
     pub(crate) orig: &'a Matrix<T>,
     pub(crate) start: (usize, usize),

@@ -15,7 +15,7 @@ use std::vec::IntoIter;
 --------------------------------------------
 */
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Tensor<T> {
     pub(crate) shape: Shape,
     pub(crate) strides: Strides,

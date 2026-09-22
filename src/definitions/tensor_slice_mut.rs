@@ -12,7 +12,7 @@ use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterato
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Hash)]
 pub struct TensorSliceMut<'a, T> {
     pub(crate) orig: &'a mut Tensor<T>,
     pub(crate) start: Vec<usize>,

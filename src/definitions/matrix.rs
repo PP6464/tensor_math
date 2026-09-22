@@ -15,7 +15,7 @@ use std::vec::IntoIter;
 */
 
 /// This struct represents a matrix, i.e. a rank 2 tensor.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Matrix<T> {
     pub(crate) elements: Vec<T>,
     pub(crate) rows: usize,
