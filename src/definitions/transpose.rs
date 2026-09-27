@@ -1,7 +1,7 @@
 use crate::definitions::errors::TensorErrors;
 use crate::definitions::shape::Shape;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct Transpose {
     pub(crate) permutation: Vec<usize>,
     pub(crate) two_cycles: Vec<(usize, usize)>,
