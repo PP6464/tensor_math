@@ -531,16 +531,16 @@ impl Tensor<Complex64> {
     /// Returns the conjugate transpose of a `Tensor<Complex64>`. This uses the multithreaded
     /// implementation of `transpose`.
     pub fn conj_transpose_mt(
-        &self,
-        transpose: &Transpose,
+        self,
+        transpose: Transpose,
     ) -> Result<Tensor<Complex64>, TensorErrors> {
-        Ok(self.transpose_mt(&transpose)?.par_map(|x| x.conj()))
+        Ok(self.transpose_mt(transpose)?.par_map(|x| x.conj()))
     }
 
     /// Returns the conjugate transpose of a `Tensor<Complex64>`. This uses the single-threaded
     /// implementation of `transpose`.
-    pub fn conj_transpose(&self, transpose: &Transpose) -> Result<Tensor<Complex64>, TensorErrors> {
-        Ok(self.transpose(&transpose)?.par_map(|x| x.conj()))
+    pub fn conj_transpose(self, transpose: Transpose) -> Result<Tensor<Complex64>, TensorErrors> {
+        Ok(self.transpose(transpose)?.par_map(|x| x.conj()))
     }
 
     /// Computes the sum of the square of the absolute values, then square roots the result
@@ -710,13 +710,13 @@ impl Matrix<Complex64> {
 
     /// Returns the conjugate transpose of a `Matrix<Complex64>`. This uses the multithreaded
     /// implementation of `transpose`.
-    pub fn conj_transpose_mt(&self) -> Matrix<Complex64> {
+    pub fn conj_transpose_mt(self) -> Matrix<Complex64> {
         self.transpose_mt().par_map(|x| x.conj())
     }
 
     /// Returns the conjugate transpose of a `Matrix<Complex64>`. This uses the single-threaded
     /// implementation of `transpose`.
-    pub fn conj_transpose(&self) -> Matrix<Complex64> {
+    pub fn conj_transpose(self) -> Matrix<Complex64> {
         self.transpose().par_map(|x| x.conj())
     }
 
