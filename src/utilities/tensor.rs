@@ -524,7 +524,7 @@ impl<T> Tensor<T> {
 
     /// Flips the tensor along the specified axes.
     /// This fails if any of the axes are out of bounds.
-    pub fn flip_axes(mut self, axes: HashSet<usize>) -> Result<Tensor<T>, TensorErrors> {
+    pub fn flip_axes(mut self, axes: &HashSet<usize>) -> Result<Tensor<T>, TensorErrors> {
         for &axis in axes.iter() {
             self = self.flip_axis(axis)?;
         }
@@ -533,7 +533,7 @@ impl<T> Tensor<T> {
     }
 
     /// Flips the tensor along the specified axes without bounds checking the axes.
-    pub(crate) unsafe fn flip_axes_unchecked(mut self, axes: HashSet<usize>) -> Tensor<T> {
+    pub(crate) unsafe fn flip_axes_unchecked(mut self, axes: &HashSet<usize>) -> Tensor<T> {
         for &axis in axes.iter() {
             unsafe {
                 self = self.flip_axis_unchecked(axis);
@@ -545,7 +545,7 @@ impl<T> Tensor<T> {
 
     /// Flips the tensor along the specified axes.
     /// This fails if any of the axes are out of bounds.
-    pub fn flip_axes_mt(mut self, axes: HashSet<usize>) -> Result<Tensor<T>, TensorErrors>
+    pub fn flip_axes_mt(mut self, axes: &HashSet<usize>) -> Result<Tensor<T>, TensorErrors>
     where
         T: Send + Sync,
     {
@@ -565,7 +565,7 @@ impl<T> Tensor<T> {
     }
 
     /// Flips the tensor along the specified axes without bounds checking the axes.
-    pub(crate) unsafe fn flip_axes_unchecked_mt(mut self, axes: HashSet<usize>) -> Tensor<T>
+    pub(crate) unsafe fn flip_axes_unchecked_mt(mut self, axes: &HashSet<usize>) -> Tensor<T>
     where
         T: Send + Sync,
     {
@@ -581,7 +581,7 @@ impl<T> Tensor<T> {
     /// Flips the tensor along all axes.
     pub fn flip(self) -> Tensor<T> {
         let rank = self.rank();
-        unsafe { self.flip_axes_unchecked((0..rank).collect()) }
+        unsafe { self.flip_axes_unchecked(&(0..rank).collect()) }
     }
 
     /// Flips the tensor along all axes.
@@ -590,7 +590,7 @@ impl<T> Tensor<T> {
         T: Send + Sync,
     {
         let rank = self.rank();
-        unsafe { self.flip_axes_unchecked_mt((0..rank).collect()) }
+        unsafe { self.flip_axes_unchecked_mt(&(0..rank).collect()) }
     }
 
     /// Transposes a tensor and returns the result.
