@@ -81,6 +81,16 @@ impl Transpose {
         })
     }
 
+    /// Swaps two axes without bounds checking.
+    pub(crate) unsafe fn swap_axes_unchecked(mut self, axis1: usize, axis2: usize) -> Self {
+        self.permutation.swap(axis1, axis2);
+
+        Transpose {
+            two_cycles: two_cycles_from_permutation(&self.permutation), // This allows for simplifying the two-cycles after the swap.
+            permutation: self.permutation,
+        }
+    }
+
     /// Returns this transpose applied to `old_shape`.
     /// This fails if `old_shape.rank() != self.permutation().len()`.
     pub fn new_shape(&self, mut old_shape: Shape) -> Result<Shape, TensorErrors> {
