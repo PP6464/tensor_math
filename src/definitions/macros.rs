@@ -23,7 +23,7 @@ macro_rules! transpose {
 /// By applying the operation between it and each element of the tensor/matrix in turn
 macro_rules! impl_bin_op {
     ($op:ident, $op_fn:ident) => {
-        impl<T: $op<Output = T> + Clone> $op<Tensor<T>> for Tensor<T> {
+        impl<T: $op<Output = T>> $op<Tensor<T>> for Tensor<T> {
             type Output = Tensor<T>;
 
             fn $op_fn(self, rhs: Tensor<T>) -> Tensor<T> {
@@ -31,18 +31,24 @@ macro_rules! impl_bin_op {
                     self.shape(),
                     rhs.shape(),
                     "{}",
-                    TensorErrors::ShapesIncompatible
+                    TensorErrors::IncompatibleShapes { shape_1: self.shape(), shape_2: rhs.shape(), op: "elementwise_op", }
                 );
 
+                let strides = self.strides.clone();
+                let shape = self.shape.clone();
+
                 let elements = self
-                    .elements()
+                    .elements
                     .into_iter()
-                    .cloned()
-                    .zip(rhs.elements().into_iter().cloned())
+                    .zip(rhs.elements.into_iter())
                     .map(|(a, b)| a.$op_fn(b))
                     .collect();
 
-                Tensor::new(self.shape(), elements).unwrap()
+                Tensor {
+                    strides,
+                    shape,
+                    elements
+                }
             }
         }
         impl<T: $op<Output = T> + Clone> $op<Tensor<T>> for &Tensor<T> {
@@ -53,18 +59,25 @@ macro_rules! impl_bin_op {
                     self.shape(),
                     rhs.shape(),
                     "{}",
-                    TensorErrors::ShapesIncompatible
+                    TensorErrors::IncompatibleShapes { shape_1: self.shape(), shape_2: rhs.shape(), op: "elementwise_op", }
                 );
 
+                let strides = self.strides.clone();
+                let shape = self.shape.clone();
+
                 let elements = self
-                    .elements()
-                    .into_iter()
+                    .elements
+                    .iter()
                     .cloned()
-                    .zip(rhs.elements().into_iter().cloned())
+                    .zip(rhs.elements.into_iter())
                     .map(|(a, b)| a.$op_fn(b))
                     .collect();
 
-                Tensor::new(self.shape(), elements).unwrap()
+                Tensor {
+                    strides,
+                    shape,
+                    elements
+                }
             }
         }
         impl<T: $op<Output = T> + Clone> $op<&Tensor<T>> for &Tensor<T> {
@@ -75,18 +88,22 @@ macro_rules! impl_bin_op {
                     self.shape(),
                     rhs.shape(),
                     "{}",
-                    TensorErrors::ShapesIncompatible
+                    TensorErrors::IncompatibleShapes { shape_1: self.shape(), shape_2: rhs.shape(), op: "elementwise_op", }
                 );
 
                 let elements = self
-                    .elements()
-                    .into_iter()
+                    .elements
+                    .iter()
                     .cloned()
-                    .zip(rhs.elements().into_iter().cloned())
+                    .zip(rhs.elements.iter().cloned())
                     .map(|(a, b)| a.$op_fn(b))
                     .collect();
 
-                Tensor::new(self.shape(), elements).unwrap()
+                Tensor {
+                    strides: self.strides.clone(),
+                    shape: self.shape.clone(),
+                    elements
+                }
             }
         }
         impl<T: $op<Output = T> + Clone> $op<&Tensor<T>> for Tensor<T> {
@@ -97,74 +114,52 @@ macro_rules! impl_bin_op {
                     self.shape(),
                     rhs.shape(),
                     "{}",
-                    TensorErrors::ShapesIncompatible
+                    TensorErrors::IncompatibleShapes { shape_1: self.shape(), shape_2: rhs.shape(), op: "elementwise_op", }
                 );
 
+                let strides = self.strides.clone();
+                let shape = self.shape.clone();
+
                 let elements = self
-                    .elements()
+                    .elements
                     .into_iter()
-                    .cloned()
-                    .zip(rhs.elements().into_iter().cloned())
+                    .zip(rhs.elements.iter().cloned())
                     .map(|(a, b)| a.$op_fn(b))
                     .collect();
 
-                Tensor::new(self.shape(), elements).unwrap()
+                Tensor {
+                    strides,
+                    shape,
+                    elements,
+                }
             }
         }
         impl<T: $op<Output = T> + Clone> $op<T> for &Tensor<T> {
             type Output = Tensor<T>;
 
             fn $op_fn(self, rhs: T) -> Tensor<T> {
-                let elements = self
-                    .elements()
-                    .into_iter()
-                    .cloned()
-                    .map(|a| a.$op_fn(rhs.clone()))
-                    .collect();
-
-                Tensor::new(self.shape(), elements).unwrap()
+                self.map_refs(|x| x.clone().$op_fn(rhs.clone()))
             }
         }
         impl<T: $op<Output = T> + Clone> $op<T> for Tensor<T> {
             type Output = Tensor<T>;
 
             fn $op_fn(self, rhs: T) -> Tensor<T> {
-                let elements = self
-                    .elements()
-                    .into_iter()
-                    .cloned()
-                    .map(|a| a.$op_fn(rhs.clone()))
-                    .collect();
-
-                Tensor::new(self.shape(), elements).unwrap()
+                self.map(|x| x.$op_fn(rhs.clone()))
             }
         }
         impl<T: $op<Output = T> + Clone> $op<&T> for Tensor<T> {
             type Output = Tensor<T>;
 
             fn $op_fn(self, rhs: &T) -> Tensor<T> {
-                let elements = self
-                    .elements()
-                    .into_iter()
-                    .cloned()
-                    .map(|a| a.$op_fn(rhs.clone()))
-                    .collect();
-
-                Tensor::new(self.shape(), elements).unwrap()
+                self.map(|x| x.$op_fn(rhs.clone()))
             }
         }
         impl<T: $op<Output = T> + Clone> $op<&T> for &Tensor<T> {
             type Output = Tensor<T>;
 
             fn $op_fn(self, rhs: &T) -> Tensor<T> {
-                let elements = self
-                    .elements()
-                    .into_iter()
-                    .cloned()
-                    .map(|a| a.$op_fn(rhs.clone()))
-                    .collect();
-
-                Tensor::new(self.shape(), elements).unwrap()
+                self.map_refs(|x| x.clone().$op_fn(rhs.clone()))
             }
         }
         impl<T: $op<Output = T> + Clone> $op<Matrix<T>> for Matrix<T> {
@@ -175,18 +170,23 @@ macro_rules! impl_bin_op {
                     self.shape(),
                     rhs.shape(),
                     "{}",
-                    TensorErrors::ShapesIncompatible
+                    TensorErrors::IncompatibleShapes { shape_1: self.shape(), shape_2: rhs.shape(), op: "elementwise_op", }
                 );
 
+                let (rows, cols) = (self.rows, self.cols);
+
                 let elements = self
-                    .elements()
+                    .elements
                     .into_iter()
-                    .cloned()
-                    .zip(rhs.elements().into_iter().cloned())
+                    .zip(rhs.elements.into_iter())
                     .map(|(a, b)| a.$op_fn(b))
                     .collect();
 
-                Matrix::new(self.rows, self.cols, elements).unwrap()
+                Matrix {
+                    rows,
+                    cols,
+                    elements
+                }
             }
         }
         impl<T: $op<Output = T> + Clone> $op<Matrix<T>> for &Matrix<T> {
@@ -197,18 +197,22 @@ macro_rules! impl_bin_op {
                     self.shape(),
                     rhs.shape(),
                     "{}",
-                    TensorErrors::ShapesIncompatible
+                    TensorErrors::IncompatibleShapes { shape_1: self.shape(), shape_2: rhs.shape(), op: "elementwise_op", }
                 );
 
                 let elements = self
-                    .elements()
-                    .into_iter()
+                    .elements
+                    .iter()
                     .cloned()
-                    .zip(rhs.elements().into_iter().cloned())
+                    .zip(rhs.elements.into_iter())
                     .map(|(a, b)| a.$op_fn(b))
                     .collect();
 
-                Matrix::new(self.rows, self.cols, elements).unwrap()
+                Matrix {
+                    rows: self.rows,
+                    cols: self.cols,
+                    elements
+                }
             }
         }
         impl<T: $op<Output = T> + Clone> $op<&Matrix<T>> for &Matrix<T> {
@@ -219,18 +223,22 @@ macro_rules! impl_bin_op {
                     self.shape(),
                     rhs.shape(),
                     "{}",
-                    TensorErrors::ShapesIncompatible
+                    TensorErrors::IncompatibleShapes { shape_1: self.shape(), shape_2: rhs.shape(), op: "elementwise_op", }
                 );
 
                 let elements = self
-                    .elements()
-                    .into_iter()
+                    .elements
+                    .iter()
                     .cloned()
-                    .zip(rhs.elements().into_iter().cloned())
+                    .zip(rhs.elements.iter().cloned())
                     .map(|(a, b)| a.$op_fn(b))
                     .collect();
 
-                Matrix::new(self.rows, self.cols, elements).unwrap()
+                Matrix {
+                    rows: self.rows,
+                    cols: self.cols,
+                    elements,
+                }
             }
         }
         impl<T: $op<Output = T> + Clone> $op<&Matrix<T>> for Matrix<T> {
@@ -241,74 +249,49 @@ macro_rules! impl_bin_op {
                     self.shape(),
                     rhs.shape(),
                     "{}",
-                    TensorErrors::ShapesIncompatible
+                    TensorErrors::IncompatibleShapes { shape_1: self.shape(), shape_2: rhs.shape(), op: "elementwise_op", }
                 );
 
                 let elements = self
-                    .elements()
+                    .elements
                     .into_iter()
-                    .cloned()
-                    .zip(rhs.elements().into_iter().cloned())
+                    .zip(rhs.elements.iter().cloned())
                     .map(|(a, b)| a.$op_fn(b))
                     .collect();
 
-                Matrix::new(self.rows, self.cols, elements).unwrap()
+                Matrix {
+                    rows: rhs.rows,
+                    cols: rhs.cols,
+                    elements,
+                }
             }
         }
         impl<T: $op<Output = T> + Clone> $op<T> for &Matrix<T> {
             type Output = Matrix<T>;
 
             fn $op_fn(self, rhs: T) -> Matrix<T> {
-                let elements = self
-                    .elements()
-                    .into_iter()
-                    .cloned()
-                    .map(|a| a.$op_fn(rhs.clone()))
-                    .collect();
-
-                Matrix::new(self.rows, self.cols, elements).unwrap()
+                self.map_refs(|x| x.clone().$op_fn(rhs.clone()))
             }
         }
         impl<T: $op<Output = T> + Clone> $op<T> for Matrix<T> {
             type Output = Matrix<T>;
 
             fn $op_fn(self, rhs: T) -> Matrix<T> {
-                let elements = self
-                    .elements()
-                    .into_iter()
-                    .cloned()
-                    .map(|a| a.$op_fn(rhs.clone()))
-                    .collect();
-
-                Matrix::new(self.rows, self.cols, elements).unwrap()
+                self.map(|x| x.$op_fn(rhs.clone()))
             }
         }
         impl<T: $op<Output = T> + Clone> $op<&T> for Matrix<T> {
             type Output = Matrix<T>;
 
             fn $op_fn(self, rhs: &T) -> Matrix<T> {
-                let elements = self
-                    .elements()
-                    .into_iter()
-                    .cloned()
-                    .map(|a| a.$op_fn(rhs.clone()))
-                    .collect();
-
-                Matrix::new(self.rows, self.cols, elements).unwrap()
+                self.map(|x| x.$op_fn(rhs.clone()))
             }
         }
         impl<T: $op<Output = T> + Clone> $op<&T> for &Matrix<T> {
             type Output = Matrix<T>;
 
             fn $op_fn(self, rhs: &T) -> Matrix<T> {
-                let elements = self
-                    .elements()
-                    .into_iter()
-                    .cloned()
-                    .map(|a| a.$op_fn(rhs.clone()))
-                    .collect();
-
-                Matrix::new(self.rows, self.cols, elements).unwrap()
+                self.map_refs(|x| x.clone().$op_fn(rhs.clone()))
             }
         }
     };
