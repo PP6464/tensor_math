@@ -174,40 +174,42 @@ impl Tensor<Complex64> {
         let mut self_padded = Self::zeros(new_shape.clone());
         let mut other_padded = Self::zeros(new_shape);
 
-        self_padded
-            .slice_unchecked_mut(
-                self.shape
-                    .0
-                    .iter()
-                    .map(|x| 0..*x)
-                    .collect::<Vec<_>>()
-                    .as_slice(),
-            )
-            .set_all(&self)?;
-        other_padded
-            .slice_unchecked_mut(
-                other
-                    .shape
-                    .0
-                    .iter()
-                    .map(|x| 0..*x)
-                    .collect::<Vec<_>>()
-                    .as_slice(),
-            )
-            .set_all(&other)?;
+        unsafe {
+            self_padded
+                .slice_unchecked_mut(
+                    self.shape
+                        .0
+                        .iter()
+                        .map(|x| 0..*x)
+                        .collect::<Vec<_>>()
+                        .as_slice(),
+                )
+                .set_all(&self)?;
+            other_padded
+                .slice_unchecked_mut(
+                    other
+                        .shape
+                        .0
+                        .iter()
+                        .map(|x| 0..*x)
+                        .collect::<Vec<_>>()
+                        .as_slice(),
+                )
+                .set_all(&other)?;
 
-        let self_fft = self_padded
-            .transpose_unchecked_mt(&perm)
-            .fft_axes(&(1..=k).map(|i| rank - i).collect())?;
+            let self_fft = self_padded
+                .transpose_unchecked_mt(&perm)
+                .fft_axes(&(1..=k).map(|i| rank - i).collect())?;
 
-        let other_fft = other_padded
-            .transpose_unchecked_mt(&perm)
-            .fft_axes(&(1..=k).map(|i| rank - i).collect())?;
+            let other_fft = other_padded
+                .transpose_unchecked_mt(&perm)
+                .fft_axes(&(1..=k).map(|i| rank - i).collect())?;
 
-        let res = self_fft * other_fft;
+            let res = self_fft * other_fft;
 
-        res.ifft_axes(&(1..=k).map(|i| rank - i).collect())?
-            .transpose_mt(&inv_perm)
+            res.ifft_axes(&(1..=k).map(|i| rank - i).collect())?
+                .transpose_mt(&inv_perm)
+        }
     }
 
     /// Computes the correlation of this and another tensor.
@@ -240,27 +242,29 @@ impl Tensor<Complex64> {
         let mut self_padded = Self::zeros(new_shape.clone());
         let mut other_padded = Self::zeros(new_shape);
 
-        self_padded
-            .slice_unchecked_mut(
-                self.shape
-                    .0
-                    .iter()
-                    .map(|x| 0..*x)
-                    .collect::<Vec<_>>()
-                    .as_slice(),
-            )
-            .set_all(&self)?;
-        other_padded
-            .slice_unchecked_mut(
-                other
-                    .shape
-                    .0
-                    .iter()
-                    .map(|x| 0..*x)
-                    .collect::<Vec<_>>()
-                    .as_slice(),
-            )
-            .set_all(&other)?;
+        unsafe {
+            self_padded
+                .slice_unchecked_mut(
+                    self.shape
+                        .0
+                        .iter()
+                        .map(|x| 0..*x)
+                        .collect::<Vec<_>>()
+                        .as_slice(),
+                )
+                .set_all(&self)?;
+            other_padded
+                .slice_unchecked_mut(
+                    other
+                        .shape
+                        .0
+                        .iter()
+                        .map(|x| 0..*x)
+                        .collect::<Vec<_>>()
+                        .as_slice(),
+                )
+                .set_all(&other)?;
+        }
 
         let self_fft = self_padded.fft()?;
 
