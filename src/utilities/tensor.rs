@@ -595,7 +595,7 @@ impl<T> Tensor<T> {
 
     /// Transposes a tensor and returns the result.
     /// This fails if `self.rank() != transpose.permutation().len()`.
-    pub fn transpose(self, transpose: Transpose) -> Result<Tensor<T>, TensorErrors> {
+    pub fn transpose(self, transpose: &Transpose) -> Result<Tensor<T>, TensorErrors> {
         if transpose.permutation.len() != self.shape().rank() {
             return Err(TensorErrors::TransposeIncompatibleRank {
                 rank: self.rank(),
@@ -630,7 +630,7 @@ impl<T> Tensor<T> {
     }
 
     /// Transposes a tensor without checking the rank of the transpose.
-    pub(crate) fn transpose_unchecked(self, transpose: Transpose) -> Tensor<T> {
+    pub(crate) fn transpose_unchecked(self, transpose: &Transpose) -> Tensor<T> {
         let mut new_elements = Vec::with_capacity(self.shape().element_count());
         let buf = new_elements.spare_capacity_mut();
 
@@ -659,7 +659,7 @@ impl<T> Tensor<T> {
 
     /// Transposes a tensor and returns the result.
     /// This fails if `self.rank() != transpose.permutation().len()`.
-    pub fn transpose_mt(self, transpose: Transpose) -> Result<Tensor<T>, TensorErrors>
+    pub fn transpose_mt(self, transpose: &Transpose) -> Result<Tensor<T>, TensorErrors>
     where
         T: Send + Sync,
     {
@@ -713,7 +713,7 @@ impl<T> Tensor<T> {
     }
 
     /// Transposes a tensor and returns the result, without checking the rank of the transpose.
-    pub(crate) fn transpose_unchecked_mt(self, transpose: Transpose) -> Tensor<T>
+    pub(crate) fn transpose_unchecked_mt(self, transpose: &Transpose) -> Tensor<T>
     where
         T: Send + Sync,
     {

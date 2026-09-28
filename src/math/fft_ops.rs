@@ -29,13 +29,13 @@ impl Tensor<Complex64> {
         let transpose =
             unsafe { Transpose::identity(self.rank()).swap_axes_unchecked(self.rank() - 1, axis) };
         unsafe {
-            self.transpose_unchecked_mt(transpose.clone())
+            self.transpose_unchecked_mt(&transpose)
                 .par_chunks(shape[axis])
                 .map(fft_vec)
                 .flatten()
                 .collect::<Tensor<_>>()
                 .reshape_unchecked(transpose.new_shape_unchecked(shape))
-                .transpose_mt(transpose.inverse())
+                .transpose_mt(&transpose)
         }
     }
 
@@ -82,13 +82,13 @@ impl Tensor<Complex64> {
             unsafe { Transpose::identity(self.rank()).swap_axes_unchecked(self.rank() - 1, axis) };
 
         unsafe {
-            self.transpose_unchecked_mt(transpose.clone())
+            self.transpose_unchecked_mt(&transpose)
                 .par_chunks(shape[axis])
                 .map(ifft_vec)
                 .flatten()
                 .collect::<Tensor<_>>()
                 .reshape_unchecked(transpose.new_shape_unchecked(shape))
-                .transpose_mt(transpose.inverse())
+                .transpose_mt(&transpose.inverse())
         }
     }
 
@@ -197,17 +197,17 @@ impl Tensor<Complex64> {
             .set_all(&other)?;
 
         let self_fft = self_padded
-            .transpose_unchecked_mt(perm.clone())
+            .transpose_unchecked_mt(&perm)
             .fft_axes(&(1..=k).map(|i| rank - i).collect())?;
 
         let other_fft = other_padded
-            .transpose_unchecked_mt(perm.clone())
+            .transpose_unchecked_mt(&perm)
             .fft_axes(&(1..=k).map(|i| rank - i).collect())?;
 
         let res = self_fft * other_fft;
 
         res.ifft_axes(&(1..=k).map(|i| rank - i).collect())?
-            .transpose_mt(inv_perm)
+            .transpose_mt(&inv_perm)
     }
 
     /// Computes the correlation of this and another tensor.
