@@ -9,7 +9,7 @@ use std::ops::{Add, Div, Mul, Neg, Sub};
 impl Matrix<f64> {
     /// Computes the determinant of the matrix.
     /// This fails if the matrix is not square.
-    pub fn det(&self) -> Result<f64, TensorErrors> {
+    pub fn det(self) -> Result<f64, TensorErrors> {
         if !self.is_square() {
             return Err(TensorErrors::NonSquareMatrix);
         }
@@ -18,7 +18,7 @@ impl Matrix<f64> {
         if ord == 0 {
             return Ok(1.0);
         }
-        let (ref_form, det_scale) = self.tracked_row_echelon();
+        let (ref_form, det_scale, _) = self.tracked_row_echelon();
         let mut res = 1f64;
 
         for i in 0..ord {
@@ -30,7 +30,7 @@ impl Matrix<f64> {
 
     /// Computes the inverse of a matrix.
     /// This fails if the matrix is not square or if the determinant is 0.
-    pub fn inv(&self) -> Result<Matrix<f64>, TensorErrors> {
+    pub fn inv(self) -> Result<Matrix<f64>, TensorErrors> {
         if !self.is_square() {
             return Err(TensorErrors::NonSquareMatrix);
         }
@@ -40,22 +40,22 @@ impl Matrix<f64> {
             return Ok(self.clone());
         }
 
-        let a_i_rref = self.concat_cols_mt(&identity(ord))?.reduced_row_echelon();
-        let left = a_i_rref.slice(0..ord, 0..ord)?;
-        let right = a_i_rref.slice(0..ord, ord..2 * ord)?;
+        let a_i_rref = unsafe { self.concat_cols_unchecked(identity(ord)) }.reduced_row_echelon();
+        let left = unsafe { a_i_rref.slice_unchecked(0..ord, 0..ord) };
+        let right = unsafe { a_i_rref.slice_unchecked(0..ord, ord..2 * ord) };
 
-        if !approx_eq!(Matrix<f64>, left, identity(ord)) {
+        if !approx_eq!(Matrix<f64>, left.clone_into_matrix(), identity(ord)) {
             return Err(TensorErrors::DeterminantZero);
         }
 
-        Ok(right)
+        Ok(right.clone_into_matrix())
     }
 }
 
 impl Matrix<Complex64> {
     /// Computes the determinant of a matrix.
     /// This fails if the matrix is not square.
-    pub fn det(&self) -> Result<Complex64, TensorErrors> {
+    pub fn det(self) -> Result<Complex64, TensorErrors> {
         if !self.is_square() {
             return Err(TensorErrors::NonSquareMatrix);
         }
@@ -65,7 +65,7 @@ impl Matrix<Complex64> {
             return Ok(Complex64::ONE);
         }
 
-        let (ref_form, det_scale) = self.tracked_row_echelon();
+        let (ref_form, det_scale, _) = self.tracked_row_echelon();
         let mut res = Complex64::ONE;
 
         for i in 0..ord {
@@ -77,7 +77,7 @@ impl Matrix<Complex64> {
 
     /// Computes the inverse of a matrix.
     /// This fails if the matrix is not square or if the determinant is 0.
-    pub fn inv(&self) -> Result<Matrix<Complex64>, TensorErrors> {
+    pub fn inv(self) -> Result<Matrix<Complex64>, TensorErrors> {
         if !self.is_square() {
             return Err(TensorErrors::NonSquareMatrix);
         }
@@ -87,15 +87,15 @@ impl Matrix<Complex64> {
             return Ok(self.clone());
         }
 
-        let a_i_rref = self.concat_cols_mt(&identity(ord))?.reduced_row_echelon();
+        let a_i_rref = unsafe { self.concat_cols_unchecked(identity(ord)) }.reduced_row_echelon();
         let left = a_i_rref.slice(0..ord, 0..ord)?;
         let right = a_i_rref.slice(0..ord, ord..2 * ord)?;
 
-        if !approx_eq!(Matrix<Complex64>, left, identity(ord)) {
+        if !approx_eq!(Matrix<Complex64>, left.clone_into_matrix(), identity(ord)) {
             return Err(TensorErrors::DeterminantZero);
         }
 
-        Ok(right)
+        Ok(right.clone_into_matrix())
     }
 }
 
@@ -110,7 +110,7 @@ pub fn det_slow<T: Add<Output = T> + Mul<Output = T> + Sub<Output = T> + Clone +
         return Err(TensorErrors::NonSquareMatrix);
     }
 
-    let ord = m.shape[0];
+    let ord = m.rows;
 
     if ord == 0 {
         return Ok(T::one());
@@ -128,36 +128,47 @@ pub fn det_slow<T: Add<Output = T> + Mul<Output = T> + Sub<Output = T> + Clone +
 
     let mut determinant = T::zero();
 
-    for i in 0..ord {
-        let is_minus = i % 2 != 0;
+    unsafe {
+        for i in 0..ord {
+            let is_minus = i % 2 != 0;
 
-        if i == 0 {
-            let slice = m.slice(1..ord, 1..ord)?;
-            determinant = determinant + m[&[0, i]].clone() * det_slow(&slice)?;
+            unsafe {
+                if i == 0 {
+                    let slice = m.slice_unchecked(1..ord, 1..ord).clone_into_matrix();
+                    determinant = determinant + m[&[0, i]].clone() * det_slow(&slice)?;
 
-            continue;
-        }
-
-        if i == ord - 1 {
-            let slice = m.slice(1..ord, 0..(ord - 1))?;
-
-            if is_minus {
-                determinant = determinant - m[&[0, i]].clone() * det_slow(&slice)?;
-            } else {
-                determinant = determinant + m[&[0, i]].clone() * det_slow(&slice)?;
+                    continue;
+                }
             }
 
-            continue;
-        }
+            unsafe {
+                if i == ord - 1 {
+                    let slice = m.slice_unchecked(1..ord, 0..(ord - 1)).clone_into_matrix();
 
-        let slice = m
-            .slice(1..ord, 0..i)?
-            .concat_cols(&m.slice(1..ord, i + 1..ord).unwrap())?;
+                    if is_minus {
+                        determinant = determinant - m[&[0, i]].clone() * det_slow(&slice)?;
+                    } else {
+                        determinant = determinant + m[&[0, i]].clone() * det_slow(&slice)?;
+                    }
 
-        if is_minus {
-            determinant = determinant - m[&[0, i]].clone() * det_slow(&slice)?
-        } else {
-            determinant = determinant + m[&[0, i]].clone() * det_slow(&slice)?
+                    continue;
+                }
+            }
+
+            unsafe {
+                let slice = m
+                    .slice_unchecked(1..ord, 0..i)
+                    .clone_into_matrix()
+                    .concat_cols_unchecked(
+                        m.slice_unchecked(1..ord, i + 1..ord).clone_into_matrix(),
+                    );
+
+                if is_minus {
+                    determinant = determinant - m[&[0, i]].clone() * det_slow(&slice)?
+                } else {
+                    determinant = determinant + m[&[0, i]].clone() * det_slow(&slice)?
+                }
+            }
         }
     }
 
@@ -185,7 +196,7 @@ where
         return Err(TensorErrors::NonSquareMatrix);
     }
 
-    let ord = m.shape[0];
+    let ord = m.rows;
 
     if ord == 0 {
         return Ok(m.clone());
@@ -206,41 +217,67 @@ where
         for j in 0..ord {
             let is_minus = (i + j) % 2 != 0;
 
-            let slice = match (i, j) {
-                (0, 0) => m.slice(1..ord, 1..ord),
-                _ if (i, j) == (ord - 1, ord - 1) => m.slice(0..i, 0..j),
-                _ if (i, j) == (0, ord - 1) => m.slice(1..ord, 0..j),
-                _ if (i, j) == (ord - 1, 0) => m.slice(0..i, 1..ord),
-                _ if i == 0 => Ok(m
-                    .slice(1..ord, 0..j)?
-                    .concat_cols(&m.slice(1..ord, j + 1..ord)?)?),
-                _ if i == ord - 1 => m
-                    .slice(0..i, 0..j)?
-                    .concat_cols(&m.slice(0..i, j + 1..ord)?),
-                _ if j == 0 => Ok(m
-                    .slice(0..i, 1..ord)?
-                    .concat_rows(&m.slice((i + 1)..ord, 1..ord)?)?),
-                _ if j == ord - 1 => Ok(m
-                    .slice(0..i, 0..j)
-                    .unwrap()
-                    .concat_rows(&m.slice((i + 1)..ord, 0..j)?)?),
-                _ => Ok({
-                    let slice_top = m
-                        .slice(0..i, 0..j)?
-                        .concat_cols(&m.slice(0..i, (j + 1)..ord)?)?;
-                    let slice_bottom = m
-                        .slice((i + 1)..ord, 0..j)?
-                        .concat_cols(&m.slice((i + 1)..ord, (j + 1)..ord)?)?;
+            unsafe {
+                let slice = match (i, j) {
+                    (0, 0) => m.slice_unchecked(1..ord, 1..ord).clone_into_matrix(),
+                    _ if (i, j) == (ord - 1, ord - 1) => {
+                        m.slice_unchecked(0..i, 0..j).clone_into_matrix()
+                    }
+                    _ if (i, j) == (0, ord - 1) => {
+                        m.slice_unchecked(1..ord, 0..j).clone_into_matrix()
+                    }
+                    _ if (i, j) == (ord - 1, 0) => {
+                        m.slice_unchecked(0..i, 1..ord).clone_into_matrix()
+                    }
+                    _ if i == 0 => m
+                        .slice_unchecked(1..ord, 0..j)
+                        .clone_into_matrix()
+                        .concat_cols_unchecked(
+                            m.slice_unchecked(1..ord, j + 1..ord).clone_into_matrix(),
+                        ),
+                    _ if i == ord - 1 => m
+                        .slice_unchecked(0..i, 0..j)
+                        .clone_into_matrix()
+                        .concat_cols_unchecked(
+                            m.slice_unchecked(0..i, j + 1..ord).clone_into_matrix(),
+                        ),
+                    _ if j == 0 => m
+                        .slice_unchecked(0..i, 1..ord)
+                        .clone_into_matrix()
+                        .concat_rows_unchecked(
+                            m.slice_unchecked((i + 1)..ord, 1..ord).clone_into_matrix(),
+                        ),
+                    _ if j == ord - 1 => m
+                        .slice_unchecked(0..i, 0..j)
+                        .clone_into_matrix()
+                        .concat_rows_unchecked(
+                            m.slice_unchecked((i + 1)..ord, 0..j).clone_into_matrix(),
+                        ),
+                    _ => {
+                        let slice_top = m
+                            .slice_unchecked(0..i, 0..j)
+                            .clone_into_matrix()
+                            .concat_cols_unchecked(
+                                m.slice_unchecked(0..i, (j + 1)..ord).clone_into_matrix(),
+                            );
+                        let slice_bottom = m
+                            .slice_unchecked((i + 1)..ord, 0..j)
+                            .clone_into_matrix()
+                            .concat_cols_unchecked(
+                                m.slice_unchecked((i + 1)..ord, (j + 1)..ord)
+                                    .clone_into_matrix(),
+                            );
 
-                    slice_top.concat_rows(&slice_bottom)?
-                }),
-            }?;
+                        slice_top.concat_rows_unchecked(slice_bottom)
+                    }
+                };
 
-            res[&[j, i]] = if is_minus {
-                -det_slow(&slice)?
-            } else {
-                det_slow(&slice)?
-            };
+                res[&[j, i]] = if is_minus {
+                    -det_slow(&slice)?
+                } else {
+                    det_slow(&slice)?
+                };
+            }
         }
     }
 
