@@ -380,7 +380,7 @@ impl<T> Tensor<T> {
     }
 
     /// Slices the tensor mutably without checking bounds.
-    pub(crate) fn slice_unchecked_mut(
+    pub(crate) unsafe fn slice_unchecked_mut(
         &'_ mut self,
         indices: &[Range<usize>],
     ) -> TensorSliceMut<'_, T> {
@@ -630,7 +630,7 @@ impl<T> Tensor<T> {
     }
 
     /// Transposes a tensor without checking the rank of the transpose.
-    pub(crate) fn transpose_unchecked(self, transpose: &Transpose) -> Tensor<T> {
+    pub(crate) unsafe fn transpose_unchecked(self, transpose: &Transpose) -> Tensor<T> {
         let mut new_elements = Vec::with_capacity(self.shape().element_count());
         let buf = new_elements.spare_capacity_mut();
 
@@ -713,7 +713,7 @@ impl<T> Tensor<T> {
     }
 
     /// Transposes a tensor and returns the result, without checking the rank of the transpose.
-    pub(crate) fn transpose_unchecked_mt(self, transpose: &Transpose) -> Tensor<T>
+    pub(crate) unsafe fn transpose_unchecked_mt(self, transpose: &Transpose) -> Tensor<T>
     where
         T: Send + Sync,
     {
@@ -813,7 +813,7 @@ impl<T> Tensor<T> {
     }
 
     /// Concatenates a tensor with another tensor along the specified axis without validation.
-    pub(crate) fn concat_unchecked(self, other: Tensor<T>, axis: usize) -> Tensor<T> {
+    pub(crate) unsafe fn concat_unchecked(self, other: Tensor<T>, axis: usize) -> Tensor<T> {
         let mut resultant_shape: Vec<usize> = self.shape.0.clone();
         resultant_shape[axis] += other.shape[axis];
 
