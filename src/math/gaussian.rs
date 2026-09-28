@@ -178,7 +178,7 @@ pub fn gaussian_pdf_cov_mat(
         return Ok(res);
     }
 
-    let sigma_inv = sigma.inv()?;
+    let sigma_inv = sigma.clone().inv()?;
 
     let centre = shape
         .0
