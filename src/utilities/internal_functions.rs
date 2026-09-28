@@ -4,15 +4,12 @@ use rayon::iter::IndexedParallelIterator;
 use rayon::iter::IntoParallelRefMutIterator;
 use rayon::iter::ParallelIterator;
 use rayon::prelude::ParallelSliceMut;
+use rayon::slice::ParallelSlice;
 use std::f64::consts::PI;
 use std::ops::{AddAssign, Mul};
-use rayon::slice::ParallelSlice;
 
 /// This computes the dot product of two vectors of any type `T` that implements `Add` and `Mul`
-pub fn dot_vectors<T: AddAssign + Mul<Output = T> + Zero + Clone>(
-    vec1: &[T],
-    vec2: &[T],
-) -> T {
+pub fn dot_vectors<T: AddAssign + Mul<Output = T> + Zero + Clone>(vec1: &[T], vec2: &[T]) -> T {
     // Use accumulators so that the compiler can optimise this when possible
     let mut acc = [T::zero(), T::zero(), T::zero(), T::zero()];
 
@@ -21,10 +18,14 @@ pub fn dot_vectors<T: AddAssign + Mul<Output = T> + Zero + Clone>(
     unsafe {
         for i in 0..chunks {
             let base = i * 4;
-            *acc.get_unchecked_mut(0) += vec1.get_unchecked(base).clone() * vec2.get_unchecked(base).clone();
-            *acc.get_unchecked_mut(1) += vec1.get_unchecked(base + 1).clone() * vec2.get_unchecked(base + 1).clone();
-            *acc.get_unchecked_mut(2) += vec1.get_unchecked(base + 2).clone() * vec2.get_unchecked(base + 2).clone();
-            *acc.get_unchecked_mut(3) += vec1.get_unchecked(base + 3).clone() * vec2.get_unchecked(base + 3).clone();
+            *acc.get_unchecked_mut(0) +=
+                vec1.get_unchecked(base).clone() * vec2.get_unchecked(base).clone();
+            *acc.get_unchecked_mut(1) +=
+                vec1.get_unchecked(base + 1).clone() * vec2.get_unchecked(base + 1).clone();
+            *acc.get_unchecked_mut(2) +=
+                vec1.get_unchecked(base + 2).clone() * vec2.get_unchecked(base + 2).clone();
+            *acc.get_unchecked_mut(3) +=
+                vec1.get_unchecked(base + 3).clone() * vec2.get_unchecked(base + 3).clone();
         }
 
         let mut total = acc.get_unchecked(0).clone()
@@ -64,18 +65,22 @@ pub fn radix_2_fft_vec(x: &[Complex64]) -> Vec<Complex64> {
     let omega = Complex64::from_polar(1.0, -2.0 * PI / n as f64);
 
     // Bit-reverse indices
-    res.par_iter_mut().enumerate().for_each(|(i, val)| {
-        let mut orig = i;
-        let mut rev = 0;
+    res.par_chunks_mut(4096)
+        .enumerate()
+        .for_each(|(chunk_i, vals)| {
+            for i in chunk_i * 4096..chunk_i * 4096 + vals.len() {
+                let mut orig = i;
+                let mut rev = 0;
 
-        for _ in 0..log2_n {
-            rev <<= 1;
-            rev |= orig & 1;
-            orig >>= 1;
-        }
+                for _ in 0..log2_n {
+                    rev <<= 1;
+                    rev |= orig & 1;
+                    orig >>= 1;
+                }
 
-        *val = x[rev];
-    });
+                vals[i] = x[rev];
+            }
+        });
 
     // Compute twiddle factors
     let mut twiddle_factors: Vec<Complex64> = Vec::with_capacity(n);
@@ -88,24 +93,81 @@ pub fn radix_2_fft_vec(x: &[Complex64]) -> Vec<Complex64> {
     // FFT Butterfly
     for iters in 1..=log2_n {
         let half_len = (1 << iters) >> 1;
+        let n_chunks = n >> iters;
 
-        res.par_chunks_mut(1 << iters).for_each(|chunk| {
-            let (firsts, seconds) = chunk.split_at_mut(half_len);
-            firsts
-                .par_iter_mut()
-                .zip(seconds.par_iter_mut())
-                .enumerate()
-                .for_each(|(i, (first_val, second_val))| {
-                    let twiddle_index = (n >> iters) * (i & n - 1);
-                    let twiddle = twiddle_factors[twiddle_index];
+        // Only parallelise when the work is significant
+        if n_chunks >= 8 {
+            res.par_chunks_mut(1 << iters).for_each(|chunk| {
+                let (firsts, seconds) = chunk.split_at_mut(half_len);
 
-                    let first = first_val.clone();
-                    let second = second_val.clone();
+                if half_len >= 512 {
+                    firsts
+                        .par_iter_mut()
+                        .zip(seconds.par_iter_mut())
+                        .enumerate()
+                        .for_each(|(i, (first_val, second_val))| {
+                            let twiddle_index = (n >> iters) * (i & n - 1);
+                            let twiddle = twiddle_factors[twiddle_index];
 
-                    *first_val = first + twiddle * second;
-                    *second_val = first - twiddle * second;
-                });
-        });
+                            let first = first_val.clone();
+                            let second = second_val.clone();
+
+                            *first_val = first + twiddle * second;
+                            *second_val = first - twiddle * second;
+                        });
+                } else {
+                    firsts
+                        .iter_mut()
+                        .zip(seconds.iter_mut())
+                        .enumerate()
+                        .for_each(|(i, (first_val, second_val))| {
+                            let twiddle_index = (n >> iters) * (i & n - 1);
+                            let twiddle = twiddle_factors[twiddle_index];
+
+                            let first = first_val.clone();
+                            let second = second_val.clone();
+
+                            *first_val = first + twiddle * second;
+                            *second_val = first - twiddle * second;
+                        });
+                }
+            });
+        } else {
+            res.chunks_mut(1 << iters).for_each(|chunk| {
+                let (firsts, seconds) = chunk.split_at_mut(half_len);
+                if half_len >= 512 {
+                    firsts
+                        .par_iter_mut()
+                        .zip(seconds.par_iter_mut())
+                        .enumerate()
+                        .for_each(|(i, (first_val, second_val))| {
+                            let twiddle_index = (n >> iters) * (i & n - 1);
+                            let twiddle = twiddle_factors[twiddle_index];
+
+                            let first = first_val.clone();
+                            let second = second_val.clone();
+
+                            *first_val = first + twiddle * second;
+                            *second_val = first - twiddle * second;
+                        });
+                } else {
+                    firsts
+                        .iter_mut()
+                        .zip(seconds.iter_mut())
+                        .enumerate()
+                        .for_each(|(i, (first_val, second_val))| {
+                            let twiddle_index = (n >> iters) * (i & n - 1);
+                            let twiddle = twiddle_factors[twiddle_index];
+
+                            let first = first_val.clone();
+                            let second = second_val.clone();
+
+                            *first_val = first + twiddle * second;
+                            *second_val = first - twiddle * second;
+                        });
+                }
+            });
+        }
     }
 
     res
