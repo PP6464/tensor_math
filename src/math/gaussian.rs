@@ -15,12 +15,12 @@ use std::ops::Add;
 /// but when tensors have an even number of elements in a certain axis, then the centre
 /// is treated as being in between the two.
 /// This fails if the standard deviation is not positive.
-pub fn gaussian_pdf_single_sigma(sigma: f64, shape: &Shape) -> Result<Tensor<f64>, TensorErrors> {
+pub fn gaussian_pdf_single_sigma(sigma: f64, shape: Shape) -> Result<Tensor<f64>, TensorErrors> {
     if sigma <= 0.0 {
         return Err(TensorErrors::NonPositiveSigma(sigma));
     }
 
-    let mut res = Tensor::<f64>::from_shape(shape);
+    let mut res = Tensor::<f64>::from_shape(shape.clone());
 
     if shape.element_count() == 0 {
         return Ok(res);
@@ -55,7 +55,7 @@ pub fn gaussian_pdf_single_sigma(sigma: f64, shape: &Shape) -> Result<Tensor<f64
 /// This fails if any of the standard deviations are not positive.
 pub fn gaussian_pdf_multi_sigma(
     sigma: Vec<f64>,
-    shape: &Shape,
+    shape: Shape,
 ) -> Result<Tensor<f64>, TensorErrors> {
     if sigma.len() != shape.rank() {
         return Err(TensorErrors::SigmaListLengthIncompatible(
@@ -68,7 +68,7 @@ pub fn gaussian_pdf_multi_sigma(
         return Err(TensorErrors::SigmaListNotAllPositive);
     }
 
-    let mut res = Tensor::<f64>::from_shape(shape);
+    let mut res = Tensor::<f64>::from_shape(shape.clone());
 
     if shape.element_count() == 0 {
         return Ok(res);
@@ -105,7 +105,7 @@ pub fn gaussian_pdf_multi_sigma(
 /// This fails if the standard deviation is not positive or if `max <= min`.
 pub fn gaussian_sample(
     sigma: f64,
-    shape: &Shape,
+    shape: Shape,
     min: f64,
     max: f64,
 ) -> Result<Tensor<f64>, TensorErrors> {
@@ -119,7 +119,7 @@ pub fn gaussian_sample(
 
     let step_size = (max - min) / 1e3;
 
-    let mut res = Tensor::<f64>::from_shape(shape);
+    let mut res = Tensor::<f64>::from_shape(shape.clone());
 
     if shape.element_count() == 0 {
         return Ok(res);
@@ -148,7 +148,7 @@ pub fn gaussian_sample(
 /// This fails if the standard deviation matrix is not positive definite.
 pub fn gaussian_pdf_cov_mat(
     sigma: Matrix<f64>,
-    shape: &Shape,
+    shape: Shape,
 ) -> Result<Tensor<f64>, TensorErrors> {
     if !sigma.is_square() {
         return Err(TensorErrors::NonSquareMatrix);
@@ -172,7 +172,7 @@ pub fn gaussian_pdf_cov_mat(
         return Err(TensorErrors::CovMatNotPositiveDefinite);
     }
 
-    let mut res = Tensor::<f64>::from_shape(shape);
+    let mut res = Tensor::<f64>::from_shape(shape.clone());
 
     if shape.element_count() == 0 {
         return Ok(res);
@@ -195,8 +195,10 @@ pub fn gaussian_pdf_cov_mat(
             .map(|(i, j)| *i as f64 - j)
             .collect::<Matrix<f64>>();
 
+        let offset_t = offset.clone().transpose_mt();
+
         let exponent = -0.5
-            * offset.contract_mul_mt(&sigma_inv.contract_mul_mt(&offset.transpose_mt())?)?[(0, 0)];
+            * offset.mat_mul_mt(sigma_inv.clone().mat_mul_mt(offset_t)?)?[(0, 0)];
 
         *val = exponent.exp() / denom;
     }
