@@ -77,9 +77,11 @@ impl<T> Matrix<T> {
             });
         }
 
-        self.enumerated_iter_mut().for_each(|((r, c), out)| {
-            *out += v1[r].clone() * v2[c].clone();
-        });
+        for (row, a) in self.chunks_mut(v2.len()).zip(v1) {
+            for (out, b) in row.iter_mut().zip(v2) {
+                *out += a.clone() * b.clone();
+            }
+        }
 
         Ok(())
     }
@@ -89,9 +91,11 @@ impl<T> Matrix<T> {
     where
         T: Mul<Output = T> + Clone + AddAssign,
     {
-        self.enumerated_iter_mut().for_each(|((r, c), out)| {
-            *out += v1[r].clone() * v2[c].clone();
-        });
+        for (row, a) in self.chunks_mut(v2.len()).zip(v1) {
+            for (out, b) in row.iter_mut().zip(v2) {
+                *out += a.clone() * b.clone();
+            }
+        }
     }
 
     /// Does a rank 1 addition update with the outer product of v1 and v2.
@@ -109,10 +113,10 @@ impl<T> Matrix<T> {
         }
 
         self.par_chunks_mut(v2.len())
-            .enumerate()
-            .for_each(|(r, out_row)| {
-                out_row.iter_mut().enumerate().for_each(|(c, out)| {
-                    *out += v1[r].clone() * v2[c].clone();
+            .zip(v1.par_iter())
+            .for_each(|(out_row, e1)| {
+                out_row.iter_mut().zip(v2).for_each(|(out, e2)| {
+                    *out += e1.clone() * e2.clone();
                 });
             });
 
@@ -125,10 +129,10 @@ impl<T> Matrix<T> {
         T: Mul<Output = T> + Clone + AddAssign + Send + Sync,
     {
         self.par_chunks_mut(v2.len())
-            .enumerate()
-            .for_each(|(r, out_row)| {
-                out_row.iter_mut().enumerate().for_each(|(c, out)| {
-                    *out += v1[r].clone() * v2[c].clone();
+            .zip(v1.par_iter())
+            .for_each(|(out_row, e1)| {
+                out_row.iter_mut().zip(v2).for_each(|(out, e2)| {
+                    *out += e1.clone() * e2.clone();
                 });
             });
     }
@@ -147,9 +151,11 @@ impl<T> Matrix<T> {
             });
         }
 
-        self.enumerated_iter_mut().for_each(|((r, c), out)| {
-            *out -= v1[r].clone() * v2[c].clone();
-        });
+        for (row, a) in self.chunks_mut(v2.len()).zip(v1) {
+            for (out, b) in row.iter_mut().zip(v2) {
+                *out -= a.clone() * b.clone();
+            }
+        }
 
         Ok(())
     }
@@ -159,9 +165,11 @@ impl<T> Matrix<T> {
     where
         T: Mul<Output = T> + Clone + SubAssign,
     {
-        self.enumerated_iter_mut().for_each(|((r, c), out)| {
-            *out -= v1[r].clone() * v2[c].clone();
-        });
+        for (row, a) in self.chunks_mut(v2.len()).zip(v1) {
+            for (out, b) in row.iter_mut().zip(v2) {
+                *out -= a.clone() * b.clone();
+            }
+        }
     }
 
     /// Does a rank 1 subtraction update with the outer product of v1 and v2.
@@ -179,10 +187,10 @@ impl<T> Matrix<T> {
         }
 
         self.par_chunks_mut(v2.len())
-            .enumerate()
-            .for_each(|(r, out_row)| {
-                out_row.iter_mut().enumerate().for_each(|(c, out)| {
-                    *out -= v1[r].clone() * v2[c].clone();
+            .zip(v1.par_iter())
+            .for_each(|(out_row, e1)| {
+                out_row.iter_mut().zip(v2).for_each(|(out, e2)| {
+                    *out -= e1.clone() * e2.clone();
                 });
             });
 
@@ -195,10 +203,10 @@ impl<T> Matrix<T> {
         T: Mul<Output = T> + Clone + SubAssign + Send + Sync,
     {
         self.par_chunks_mut(v2.len())
-            .enumerate()
-            .for_each(|(r, out_row)| {
-                out_row.iter_mut().enumerate().for_each(|(c, out)| {
-                    *out -= v1[r].clone() * v2[c].clone();
+            .zip(v1.par_iter())
+            .for_each(|(out_row, e1)| {
+                out_row.iter_mut().zip(v2).for_each(|(out, e2)| {
+                    *out -= e1.clone() * e2.clone();
                 });
             });
     }
@@ -219,9 +227,11 @@ impl<T> MatrixSliceMut<'_, T> {
             });
         }
 
-        self.enumerated_iter_mut().for_each(|((r, c), out)| {
-            *out += v1[r].clone() * v2[c].clone();
-        });
+        for (row, a) in self.iter_rows_mut().zip(v1) {
+            for (out, b) in row.into_iter().zip(v2) {
+                *out += a.clone() * b.clone();
+            }
+        }
 
         Ok(())
     }
@@ -231,9 +241,11 @@ impl<T> MatrixSliceMut<'_, T> {
     where
         T: Mul<Output = T> + Clone + AddAssign,
     {
-        self.enumerated_iter_mut().for_each(|((r, c), out)| {
-            *out += v1[r].clone() * v2[c].clone();
-        });
+        for (row, a) in self.iter_rows_mut().zip(v1) {
+            for (out, b) in row.into_iter().zip(v2) {
+                *out += a.clone() * b.clone();
+            }
+        }
     }
 
     /// Does a rank 1 addition update with the outer product of v1 and v2.
@@ -250,11 +262,11 @@ impl<T> MatrixSliceMut<'_, T> {
             });
         }
 
-        self.par_chunks_mut(v2.len())
-            .enumerate()
-            .for_each(|(r, out_row)| {
-                out_row.into_iter().enumerate().for_each(|(c, out)| {
-                    *out += v1[r].clone() * v2[c].clone();
+        self.par_iter_rows_mut()
+            .zip(v1.par_iter())
+            .for_each(|(row, e1)| {
+                row.iter_mut().zip(v2).for_each(|(out, e2)| {
+                    *out += e1.clone() * e2.clone();
                 });
             });
 
@@ -266,11 +278,11 @@ impl<T> MatrixSliceMut<'_, T> {
     where
         T: Mul<Output = T> + Clone + AddAssign + Send + Sync,
     {
-        self.par_chunks_mut(v2.len())
-            .enumerate()
-            .for_each(|(r, out_row)| {
-                out_row.into_iter().enumerate().for_each(|(c, out)| {
-                    *out += v1[r].clone() * v2[c].clone();
+        self.par_iter_rows_mut()
+            .zip(v1.par_iter())
+            .for_each(|(row, e1)| {
+                row.iter_mut().zip(v2).for_each(|(out, e2)| {
+                    *out += e1.clone() * e2.clone();
                 });
             });
     }
@@ -289,9 +301,11 @@ impl<T> MatrixSliceMut<'_, T> {
             });
         }
 
-        self.enumerated_iter_mut().for_each(|((r, c), out)| {
-            *out -= v1[r].clone() * v2[c].clone();
-        });
+        for (row, a) in self.iter_rows_mut().zip(v1) {
+            for (out, b) in row.into_iter().zip(v2) {
+                *out -= a.clone() * b.clone();
+            }
+        }
 
         Ok(())
     }
@@ -301,9 +315,11 @@ impl<T> MatrixSliceMut<'_, T> {
     where
         T: Mul<Output = T> + Clone + SubAssign,
     {
-        self.enumerated_iter_mut().for_each(|((r, c), out)| {
-            *out -= v1[r].clone() * v2[c].clone();
-        });
+        for (row, a) in self.iter_rows_mut().zip(v1) {
+            for (out, b) in row.into_iter().zip(v2) {
+                *out -= a.clone() * b.clone();
+            }
+        }
     }
 
     /// Does a rank 1 subtraction update with the outer product of v1 and v2.
@@ -320,11 +336,11 @@ impl<T> MatrixSliceMut<'_, T> {
             });
         }
 
-        self.par_chunks_mut(v2.len())
-            .enumerate()
-            .for_each(|(r, out_row)| {
-                out_row.into_iter().enumerate().for_each(|(c, out)| {
-                    *out -= v1[r].clone() * v2[c].clone();
+        self.par_iter_rows_mut()
+            .zip(v1.par_iter())
+            .for_each(|(row, e1)| {
+                row.iter_mut().zip(v2).for_each(|(out, e2)| {
+                    *out -= e1.clone() * e2.clone();
                 });
             });
 
@@ -336,11 +352,11 @@ impl<T> MatrixSliceMut<'_, T> {
     where
         T: Mul<Output = T> + Clone + SubAssign + Send + Sync,
     {
-        self.par_chunks_mut(v2.len())
-            .enumerate()
-            .for_each(|(r, out_row)| {
-                out_row.into_iter().enumerate().for_each(|(c, out)| {
-                    *out -= v1[r].clone() * v2[c].clone();
+        self.par_iter_rows_mut()
+            .zip(v1.par_iter())
+            .for_each(|(row, e1)| {
+                row.iter_mut().zip(v2).for_each(|(out, e2)| {
+                    *out -= e1.clone() * e2.clone();
                 });
             });
     }
