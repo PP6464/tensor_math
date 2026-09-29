@@ -3,7 +3,7 @@ use crate::definitions::shape::Shape;
 use crate::shape;
 use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 use std::ops::Index;
-
+use rayon::slice::ParallelSlice;
 /*
 --------------------------------------------
 * Immutable matrix slice definition
@@ -96,6 +96,33 @@ impl<T> MatrixSlice<'_, T> {
         T: Send + Sync,
     {
         self.par_iter().chunks(n)
+    }
+
+    /// Returns an iterator over the rows.
+    pub fn iter_rows(&self) -> impl Iterator<Item = &[T]> + DoubleEndedIterator + ExactSizeIterator {
+        unsafe {
+            self.orig
+                .elements
+                .chunks_exact(self.orig.cols)
+                .skip(self.start.0)
+                .take(self.end.0 - self.start.0)
+                .map(|row| row.get_unchecked(self.start.1..self.end.1))
+        }
+    }
+
+    /// Returns a parallel iterator over the rows.
+    pub fn par_iter_rows(&self) -> impl ParallelIterator<Item = &[T]> + IndexedParallelIterator
+    where
+        T: Send + Sync,
+    {
+        unsafe {
+            self.orig
+                .elements
+                .par_chunks_exact(self.orig.cols)
+                .skip(self.start.0)
+                .take(self.end.0 - self.start.0)
+                .map(|row| row.get_unchecked(self.start.1..self.end.1))
+        }
     }
 }
 

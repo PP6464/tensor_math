@@ -4,10 +4,11 @@ use crate::definitions::strides::Strides;
 use crate::definitions::tensor::Tensor;
 use crate::definitions::traits::{IntoMatrix, IntoTensor};
 use crate::{mat_addr, shape};
-use rayon::iter::ParallelIterator;
+use rayon::iter::{IndexedParallelIterator, ParallelIterator};
 use rayon::iter::{FromParallelIterator, IntoParallelIterator};
 use std::ops::{Deref, DerefMut, Index, IndexMut};
 use std::vec::IntoIter;
+use rayon::slice::{ParallelSlice, ParallelSliceMut};
 /*
 --------------------------------------------
 * Matrix definition
@@ -183,6 +184,33 @@ impl<T> Matrix<T> {
         self.elements.swap(mat_addr!(index1, self.cols), mat_addr!(index2, self.cols));
 
         Ok(())
+    }
+
+    /// Returns an iterator over the rows.
+    pub fn iter_rows(&self) -> impl Iterator<Item = &[T]> + ExactSizeIterator + DoubleEndedIterator {
+        self.elements.chunks(self.cols)
+    }
+
+    /// Returns a parallel iterator over the rows.
+    pub fn par_iter_rows(&self) -> impl ParallelIterator<Item = &[T]> + IndexedParallelIterator where T: Send + Sync {
+        self.elements.par_chunks(self.cols)
+    }
+
+    /// Returns a mutable iterator over the rows.
+    pub fn iter_rows_mut(
+        &mut self,
+    ) -> impl Iterator<Item = &mut [T]> + ExactSizeIterator + DoubleEndedIterator {
+        self.elements.chunks_mut(self.cols)
+    }
+
+    /// Returns a parallel mutable iterator over the rows.
+    pub fn par_iter_rows_mut(
+        &mut self,
+    ) -> impl ParallelIterator<Item = &mut [T]> + IndexedParallelIterator
+    where
+        T: Send + Sync,
+    {
+        self.elements.par_chunks_mut(self.cols)
     }
 }
 

@@ -4,6 +4,7 @@ use crate::definitions::shape::Shape;
 use crate::shape;
 use rayon::iter::plumbing::{bridge, Consumer, Producer, ProducerCallback, UnindexedConsumer};
 use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
+use rayon::slice::{ParallelSlice, ParallelSliceMut};
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
 /*
@@ -336,6 +337,65 @@ impl<T> MatrixSliceMut<'_, T> {
             (index1.0 + self.start.0, index1.1 + self.start.1),
             (index2.0 + self.start.0, index2.1 + self.start.1),
         )
+    }
+
+    /// Returns an iterator over the rows.
+    pub fn iter_rows(&self) -> impl Iterator<Item = &[T]> + ExactSizeIterator + DoubleEndedIterator {
+        unsafe {
+            self.orig
+                .elements
+                .chunks_exact(self.orig.cols)
+                .skip(self.start.0)
+                .take(self.end.0 - self.start.0)
+                .map(|row| row.get_unchecked(self.start.1..self.end.1))
+        }
+    }
+
+    /// Returns a parallel iterator over the rows.
+    pub fn par_iter_rows(&self) -> impl ParallelIterator<Item = &[T]> + IndexedParallelIterator where T: Send + Sync {
+        unsafe {
+            self.orig
+                .elements
+                .par_chunks_exact(self.orig.cols)
+                .skip(self.start.0)
+                .take(self.end.0 - self.start.0)
+                .map(|row| row.get_unchecked(self.start.1..self.end.1))
+        }
+    }
+
+    /// Returns a mutable iterator over the rows.
+    pub fn iter_rows_mut(
+        &mut self,
+    ) -> impl Iterator<Item = &mut [T]> + ExactSizeIterator + DoubleEndedIterator {
+        let orig_cols = self.orig.cols;
+
+        unsafe {
+            self.orig
+                .elements
+                .chunks_exact_mut(orig_cols)
+                .skip(self.start.0)
+                .take(self.end.0 - self.start.0)
+                .map(|row| row.get_unchecked_mut(self.start.1..self.end.1))
+        }
+    }
+
+    /// Returns a parallel mutable iterator over the rows.
+    pub fn par_iter_rows_mut(
+        &mut self,
+    ) -> impl ParallelIterator<Item = &mut [T]> + IndexedParallelIterator
+    where
+        T: Send + Sync,
+    {
+        let orig_cols = self.orig.cols;
+
+        unsafe {
+            self.orig
+                .elements
+                .par_chunks_exact_mut(orig_cols)
+                .skip(self.start.0)
+                .take(self.end.0 - self.start.0)
+                .map(|row| row.get_unchecked_mut(self.start.1..self.end.1))
+        }
     }
 }
 
