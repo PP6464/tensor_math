@@ -3,6 +3,8 @@
 * Mutable tensor slice definition
 --------------------------------------------
 */
+
+use crate::definitions::tensor_slice::TensorSlice;
 use crate::definitions::errors::TensorErrors;
 use crate::definitions::shape::Shape;
 use crate::definitions::strides::Strides;
@@ -39,6 +41,20 @@ impl<T> TensorSliceMut<'_, T> {
                 .map(|(e, s)| e - s)
                 .collect(),
         )
+    }
+
+    /// Returns this slice as an immutable slice.
+    pub fn as_slice(&self) -> TensorSlice<'_, T> {
+        TensorSlice {
+            orig: self.orig,
+            start: self.start.clone(),
+            end: self.end.clone(),
+        }
+    }
+
+    /// Uses the immutable version of this slice in a closure, returning the result of the closure.
+    pub fn use_as_immut<R>(&self, f: impl FnOnce(TensorSlice<'_, T>) -> R) -> R {
+        f(self.as_slice())
     }
 
     /// Returns the rank of the tensor slice.
