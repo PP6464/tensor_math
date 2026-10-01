@@ -292,8 +292,8 @@ impl<T> Matrix<T> {
             });
         }
 
-        out.iter_mut().zip(self.transpose()
-            .iter_rows())
+        out.iter_mut()
+            .zip(self.transpose().iter_rows())
             .for_each(|(out_elem, chunk)| *out_elem = dot_vectors(v, chunk));
 
         Ok(())
@@ -304,8 +304,8 @@ impl<T> Matrix<T> {
     where
         T: Clone + Mul<Output = T> + AddAssign + Add<Output = T> + Zero,
     {
-        out.iter_mut().zip(self.transpose()
-            .iter_rows())
+        out.iter_mut()
+            .zip(self.transpose().iter_rows())
             .for_each(|(out_elem, chunk)| *out_elem = dot_vectors(v, chunk));
     }
 
@@ -331,8 +331,8 @@ impl<T> Matrix<T> {
             });
         }
 
-        out.par_iter_mut().zip(self.transpose()
-            .par_iter_rows())
+        out.par_iter_mut()
+            .zip(self.transpose().par_iter_rows())
             .for_each(|(out_elem, chunk)| *out_elem = dot_vectors(v, chunk));
 
         Ok(())
@@ -343,8 +343,8 @@ impl<T> Matrix<T> {
     where
         T: Clone + Mul<Output = T> + AddAssign + Add<Output = T> + Zero + Send + Sync,
     {
-        out.par_iter_mut().zip(self.transpose()
-            .par_iter_rows())
+        out.par_iter_mut()
+            .zip(self.transpose().par_iter_rows())
             .for_each(|(out_elem, chunk)| *out_elem = dot_vectors(v, chunk));
     }
 }
