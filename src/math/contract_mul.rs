@@ -13,7 +13,7 @@ use std::ops::{AddAssign, Mul};
 
 /*
 --------------------------------------------
-* ?Tensor contract multiplication
+* Tensor contract multiplication
 --------------------------------------------
 */
 
