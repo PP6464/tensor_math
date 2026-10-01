@@ -8,7 +8,7 @@ use crate::utilities::internal_functions::dot_vectors;
 use num::Zero;
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator};
 use rayon::iter::ParallelIterator;
-use rayon::slice::{ParallelSlice, ParallelSliceMut};
+use rayon::slice::ParallelSliceMut;
 use std::ops::{AddAssign, Mul};
 
 /*
@@ -323,16 +323,20 @@ impl<T> Matrix<T> {
         let buf = elements.spare_capacity_mut();
         let other_transpose = other.transpose_mt();
 
-        self.par_chunks(self.cols)
+        self.par_iter_rows()
             .zip(buf.par_chunks_mut(self.rows))
             .for_each(|(row, outs)| {
                 other_transpose
-                    .par_chunks(other_transpose.cols)
+                    .par_iter_rows()
                     .zip(outs.par_iter_mut())
                     .for_each(|(col, out)| {
                         out.write(dot_vectors(row, col));
                     });
             });
+
+        unsafe {
+            elements.set_len(self.rows * other_transpose.rows);
+        }
 
         Ok(Matrix {
             rows: self.rows,
@@ -350,16 +354,20 @@ impl<T> Matrix<T> {
         let buf = elements.spare_capacity_mut();
         let other_transpose = other.transpose_mt();
 
-        self.par_chunks(self.cols)
+        self.par_iter_rows()
             .zip(buf.par_chunks_mut(self.rows))
             .for_each(|(row, outs)| {
                 other_transpose
-                    .par_chunks(other_transpose.cols)
+                    .par_iter_rows()
                     .zip(outs.par_iter_mut())
                     .for_each(|(col, out)| {
                         out.write(dot_vectors(row, col));
                     });
             });
+
+        unsafe {
+            elements.set_len(self.rows * other_transpose.rows);
+        }
 
         Matrix {
             rows: self.rows,
