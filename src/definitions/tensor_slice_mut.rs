@@ -44,7 +44,7 @@ impl<T> TensorSliceMut<'_, T> {
     }
 
     /// Returns this slice as an immutable slice.
-    pub fn as_slice(&self) -> TensorSlice<'_, T> {
+    pub fn as_immut(&self) -> TensorSlice<'_, T> {
         TensorSlice {
             orig: self.orig,
             start: self.start.clone(),
@@ -54,7 +54,7 @@ impl<T> TensorSliceMut<'_, T> {
 
     /// Uses the immutable version of this slice in a closure, returning the result of the closure.
     pub fn use_as_immut<R>(&self, f: impl FnOnce(TensorSlice<'_, T>) -> R) -> R {
-        f(self.as_slice())
+        f(self.as_immut())
     }
 
     /// Returns the rank of the tensor slice.

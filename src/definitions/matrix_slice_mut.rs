@@ -54,7 +54,7 @@ impl<T> MatrixSliceMut<'_, T> {
     }
     
     /// Returns this slice as an immutable slice.
-    pub fn as_slice(&self) -> MatrixSlice<'_, T> {
+    pub fn as_immut(&self) -> MatrixSlice<'_, T> {
         MatrixSlice {
             orig: self.orig,
             start: self.start,
@@ -64,7 +64,7 @@ impl<T> MatrixSliceMut<'_, T> {
     
     /// Uses the immutable version of this slice in a closure, returning the result of the closure.
     pub fn use_as_immut<R>(&self, f: impl FnOnce(MatrixSlice<'_, T>) -> R) -> R {
-        f(self.as_slice())
+        f(self.as_immut())
     }
 
     /// Gets the element at the specified indices.
