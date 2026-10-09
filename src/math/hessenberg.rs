@@ -1,8 +1,66 @@
 use crate::definitions::errors::TensorErrors;
 use crate::definitions::matrix::Matrix;
+use crate::definitions::matrix_slice_mut::MatrixSliceMut;
 use crate::utilities::matrix::identity;
 use float_cmp::approx_eq;
-use num::complex::{Complex64, ComplexFloat};
+use num::complex::Complex64;
+/*
+--------------------------------------------
+* Helpers
+--------------------------------------------
+*/
+
+/// B ← (I − 2uuᵀ) B, in place. `w` is scratch with len >= B.cols().
+unsafe fn reflect_left_f64(b: &mut MatrixSliceMut<'_, f64>, u: &[f64], w: &mut [f64]) {
+    let w = w.get_unchecked_mut(..b.cols());
+    b.as_immut().mat_vec_mul_unchecked_mt_into_slice(u, w); // w = uᵀB
+    w.iter_mut().for_each(|x| *x *= 2.0);
+    b.rank1_update_sub_unchecked_mt(u, w); // B −= u·w
+}
+
+/// B ← (I − 2uu*) B, in place. `uc` and `w` are reusable scratch.
+unsafe fn reflect_left_c64(
+    b: &mut MatrixSliceMut<'_, Complex64>,
+    u: &[Complex64],
+    uc: &mut Vec<Complex64>,
+    w: &mut [Complex64],
+) {
+    uc.clear();
+    uc.extend(u.iter().map(|x| x.conj()));
+    let w = w.get_unchecked_mut(..b.cols());
+    b.as_immut().mat_vec_mul_unchecked_mt_into_slice(uc, w); // w = u*B
+    w.iter_mut().for_each(|x| *x *= 2.0);
+    b.rank1_update_sub_unchecked_mt(u, w); // B −= u·w  (no conj)
+}
+
+/// B ← B (I − 2uuᵀ), in place. `y` is scratch with len >= B.rows().
+unsafe fn reflect_right_f64(b: &mut MatrixSliceMut<'_, f64>, u: &[f64], y: &mut [f64]) {
+    let y = &mut y[..b.rows()];
+    b.as_immut().mat_vec_mul_unchecked_mt_into_slice(u, y); // y = B u
+    y.iter_mut().for_each(|x| *x *= 2.0);
+    b.rank1_update_sub_unchecked_mt(y, u); // B −= y·uᵀ
+}
+
+/// B ← B (I − 2uu*), in place. `uc` and `y` are reusable scratch.
+unsafe fn reflect_right_c64(
+    b: &mut MatrixSliceMut<'_, Complex64>,
+    u: &[Complex64],
+    uc: &mut Vec<Complex64>,
+    y: &mut [Complex64],
+) {
+    let y = &mut y[..b.rows()];
+    b.as_immut().mat_vec_mul_unchecked_mt_into_slice(u, y); // y = B u   (no conj)
+    y.iter_mut().for_each(|x| *x *= 2.0);
+    uc.clear();
+    uc.extend(u.iter().map(|x| x.conj()));
+    b.rank1_update_sub_unchecked_mt(y, uc); // B −= y·u*
+}
+
+/*
+--------------------------------------------
+* Hessenberg reflectors
+--------------------------------------------
+*/
 
 pub struct HessenbergReflectors<T> {
     /// One reflector vector per step, stored at the row offset it applies from.
@@ -14,17 +72,17 @@ pub struct HessenbergReflectors<T> {
 impl HessenbergReflectors<f64> {
     /// Accumulate the reflectors into a matrix Q
     pub fn accumulate_q(&self) -> Matrix<f64> {
+        let n = self.rows;
+        let mut w = vec![0.0; n];
         let mut q = identity::<f64>(self.rows);
-        for (k, u) in self.vectors.iter().enumerate() {
-            if u.rows == 0 {
-                continue;
-            } // skip no-op steps (v was ~0)
-            let u_t = u.transpose_mt();
-            let q_slice_copy = q.slice(0..self.rows, (k + 1)..self.rows).unwrap();
-            let mut q_slice_mut = q.slice_mut(0..self.rows, (k + 1)..self.rows).unwrap();
-            let q_u = q_slice_copy.mat_mul_mt(u).unwrap();
-            let q_slice_res = q_slice_copy - q_u.mat_mul_mt(&u_t).unwrap() * 2.0;
-            q_slice_mut.set_all(&q_slice_res).unwrap();
+        unsafe {
+            for (k, u) in self.vectors.iter().enumerate().rev() {
+                if u.rows == 0 {
+                    continue;
+                } // skip no-op steps
+                let mut blk = q.slice_unchecked_mut(k..n, k..n);
+                reflect_left_f64(&mut blk, &u.elements, &mut w);
+            }
         }
         q
     }
@@ -33,29 +91,35 @@ impl HessenbergReflectors<f64> {
 impl HessenbergReflectors<Complex64> {
     /// Accumulate the reflectors into a matrix Q
     pub fn accumulate_q(&self) -> Matrix<Complex64> {
-        let mut q = identity::<Complex64>(self.rows);
-        for (k, u) in self.vectors.iter().enumerate() {
-            if u.rows == 0 {
-                continue;
+        let n = self.rows;
+        let mut q = identity::<Complex64>(n);
+        let mut w = vec![Complex64::ZERO; n];
+        let mut uc = Vec::with_capacity(n);
+        unsafe {
+            for (k, u) in self.vectors.iter().enumerate().rev() {
+                if u.rows == 0 {
+                    continue;
+                } // skip no-op steps
+                let mut blk = q.slice_unchecked_mut(k..n, k..n);
+                reflect_left_c64(&mut blk, &u.elements, &mut uc, &mut w);
             }
-            let u_star = u.conj_transpose_mt();
-            let q_slice_copy = q.slice(0..self.rows, (k + 1)..self.rows).unwrap();
-            let mut q_slice_mut = q.slice_mut(0..self.rows, (k + 1)..self.rows).unwrap();
-            let q_u = q_slice_copy.mat_mul_mt(u).unwrap();
-            let q_slice_res =
-                q_slice_copy - q_u.mat_mul_mt(&u_star).unwrap() * Complex64 { re: 2.0, im: 0.0 };
-            q_slice_mut.set_all(&q_slice_res).unwrap();
         }
         q
     }
 }
+
+/*
+--------------------------------------------
+* Hessenberg methods
+--------------------------------------------
+*/
 
 impl Matrix<f64> {
     /// Computes the upper Hessenberg form for square matrices.
     /// Returns (H, Q) where H is the Hessenberg form and Q is a unitary matrix such that
     /// `Q.mat_mul(H).mat_mul(Q.conj_transpose()) == self`.
     /// This fails if the matrix is not square.
-    pub fn upper_hessenberg(&self) -> Result<(Matrix<f64>, Matrix<f64>), TensorErrors> {
+    pub fn upper_hessenberg(self) -> Result<(Matrix<f64>, Matrix<f64>), TensorErrors> {
         let (h, reflectors) = self.upper_hessenberg_h()?;
         Ok((h, reflectors.accumulate_q()))
     }
@@ -66,7 +130,7 @@ impl Matrix<f64> {
     /// matrix such that `Q.mat_mul(H).mat_mul(Q.conj_transpose()) == self`.
     /// This fails if the matrix is not square.
     pub fn upper_hessenberg_h(
-        &self,
+        self,
     ) -> Result<(Matrix<f64>, HessenbergReflectors<f64>), TensorErrors> {
         if !self.is_square() {
             return Err(TensorErrors::NonSquareMatrix);
@@ -85,65 +149,44 @@ impl Matrix<f64> {
             ));
         }
 
-        let (mut h, mut vectors) = (self.clone(), Vec::with_capacity(ord - 2));
+        let (mut h, mut vectors) = (self, Vec::with_capacity(ord - 2));
+        let mut w = vec![0.0; ord];
+        let mut y = vec![0.0; ord];
 
         for i in 0..ord - 2 {
-            let vec_bottom = h.slice(i + 1..ord, i..i + 1)?;
-            let alpha =
-                -1.0 * match vec_bottom[&[0, 0]] {
-                    0.0 => 1.0,
-                    x => x.signum(),
-                } * vec_bottom.clone().mag();
-            let mut e1 = Matrix::<f64>::from_shape(vec_bottom.rows, vec_bottom.cols);
-            e1[&[0, 0]] = 1.0;
-            let v = vec_bottom - e1 * alpha;
-
-            if v.iter().all(|x| approx_eq!(f64, *x, 0.0)) {
+            let s = i + 1;
+            let mut u: Vec<f64> = (s..ord).map(|r| h[(r, i)]).collect();
+            let norm = u.iter().map(|x| x * x).sum::<f64>().sqrt();
+            let alpha = -(if u[0] == 0.0 { 1.0 } else { u[0].signum() }) * norm;
+            u[0] -= alpha;
+            let vnorm = u.iter().map(|x| x * x).sum::<f64>().sqrt();
+            if approx_eq!(f64, vnorm, 0.0) {
                 vectors.push(Matrix::from_shape(0, 0));
                 continue;
             }
+            u.iter_mut().for_each(|x| *x /= vnorm);
 
-            let u = v.norm_l2();
-            let u_t = u.transpose_mt();
-            // Start position for the reflector matrix
-            let reflector_start = i + 1;
+            unsafe {
+                // right: H[:, s..] ← H[:, s..] (I − 2uuᵀ)
+                let mut right = h.slice_unchecked_mut(0..ord, s..ord);
+                reflect_right_f64(&mut right, &u, &mut y);
+            }
+            unsafe {
+                // left: H[s.., s..] ← (I − 2uuᵀ) H[s.., s..]
+                let mut left = h.slice_unchecked_mut(s..ord, s..ord);
+                reflect_left_f64(&mut left, &u, &mut w);
+            }
+            h[(s, i)] = alpha; // column i is known exactly
+            for r in s + 1..ord {
+                h[(r, i)] = 0.0;
+            }
 
-            // Update H
-            // We can expand H_{n+1} = R* H_n R into H_{n+1} = H_n - 2 H_n u u* -2 u u* H_n
-            //     + 4 u u* H_n u u*
-            // Now if we define:
-            // a = H_n u
-            // b = u* H_n
-            // s = u* a (this is just a scalar)
-            // c = a - 2 s u
-            // Then the formula becomes
-            // H_{n+1} = H_n - 2 u b - 2 c u*
-            // And we avoid massive matrix multiplications
-
-            // Calculate a
-            let a = h.slice(0..ord, reflector_start..ord)?.mat_mul_mt(&u)?;
-            // Calculate b
-            let b = u_t.mat_mul_mt(&h.slice(reflector_start..ord, 0..ord)?)?;
-            // Calculate s
-            let s = u.dot_mt(&a.slice(reflector_start..ord, 0..1)?)?;
-            // Calculate c
-            let slice_copy = a.slice(reflector_start..ord, 0..1)?;
-            let mut c = a;
-            c.slice_mut(reflector_start..ord, 0..1)?
-                .set_all(&(slice_copy - u.clone() * s * 2.0))?;
-            // Subtract 2 u b
-            let h_slice_copy = h.slice(reflector_start..ord, 0..ord)?;
-            h.slice_mut(reflector_start..ord, 0..ord)?
-                .set_all(&(h_slice_copy - u.mat_mul_mt(&(b * 2.0))?))?;
-            // Subtract 2 c u*
-            let h_slice_copy = h.slice(0..ord, reflector_start..ord)?;
-            h.slice_mut(0..ord, reflector_start..ord)?
-                .set_all(&(h_slice_copy - c.mat_mul_mt(&(u_t * 2.0))?))?;
-
-            // Add the new vector
-            vectors.push(u);
+            vectors.push(Matrix {
+                rows: ord - s,
+                cols: 1,
+                elements: u,
+            });
         }
-
         Ok((h, HessenbergReflectors { vectors, rows: ord }))
     }
 
@@ -151,7 +194,7 @@ impl Matrix<f64> {
     /// Returns (H, Q) where H is the Hessenberg form and Q is a unitary matrix such that
     /// `Q.mat_mul(H).mat_mul(Q.conj_transpose()) == self`.
     /// This fails if the matrix is not square.
-    pub fn lower_hessenberg(&self) -> Result<(Matrix<f64>, Matrix<f64>), TensorErrors> {
+    pub fn lower_hessenberg(self) -> Result<(Matrix<f64>, Matrix<f64>), TensorErrors> {
         // Note that Q_l = Q_u and H_l = (H_u) ^ T
         let (h_u, q) = self.transpose_mt().upper_hessenberg()?;
         Ok((h_u.transpose_mt(), q))
@@ -163,7 +206,7 @@ impl Matrix<f64> {
     /// matrix such that `Q.mat_mul(H).mat_mul(Q.conj_transpose()) == self`.
     /// This fails if the matrix is not square.
     pub fn lower_hessenberg_h(
-        &self,
+        self,
     ) -> Result<(Matrix<f64>, HessenbergReflectors<f64>), TensorErrors> {
         // Note that Q_l = Q_u so reflectors are the same and H_l = (H_u) ^ T
         let (h_u, reflectors) = self.transpose_mt().upper_hessenberg_h()?;
@@ -176,7 +219,7 @@ impl Matrix<Complex64> {
     /// Returns (H, Q) where H is the Hessenberg form and Q is a unitary matrix such that
     /// `Q.mat_mul(H).mat_mul(Q.conj_transpose()) == self`.
     /// This fails if the matrix is not square.
-    pub fn upper_hessenberg(&self) -> Result<(Matrix<Complex64>, Matrix<Complex64>), TensorErrors> {
+    pub fn upper_hessenberg(self) -> Result<(Matrix<Complex64>, Matrix<Complex64>), TensorErrors> {
         let (h, reflectors) = self.upper_hessenberg_h()?;
         Ok((h, reflectors.accumulate_q()))
     }
@@ -187,7 +230,7 @@ impl Matrix<Complex64> {
     /// matrix such that `Q.mat_mul(H).mat_mul(Q.conj_transpose()) == self`.
     /// This fails if the matrix is not square.
     pub fn upper_hessenberg_h(
-        &self,
+        self,
     ) -> Result<(Matrix<Complex64>, HessenbergReflectors<Complex64>), TensorErrors> {
         if !self.is_square() {
             return Err(TensorErrors::NonSquareMatrix);
@@ -207,71 +250,50 @@ impl Matrix<Complex64> {
         }
 
         let (mut h, mut vectors) = (self.clone(), Vec::with_capacity(ord - 2));
+        let mut uc = Vec::with_capacity(ord);
+        let mut w = vec![Complex64::ZERO; ord];
+        let mut y = vec![Complex64::ZERO; ord];
 
         for i in 0..ord - 2 {
-            let vec_bottom = h.slice(i + 1..ord, i..i + 1)?;
-            let alpha = Complex64::from(-1.0)
-                * match vec_bottom[&[0, 0]] {
-                    Complex64::ZERO => Complex64::ONE,
-                    x => x / Complex64::abs(x),
-                }
-                * vec_bottom
-                    .iter()
-                    .map(|x| <f64 as Into<Complex64>>::into((x * x).abs()))
-                    .sum::<Complex64>()
-                    .sqrt();
-            let mut e1 = Matrix::<Complex64>::from_shape(vec_bottom.rows, vec_bottom.cols);
-            e1[&[0, 0]] = Complex64::ONE;
-            let v = vec_bottom - e1 * alpha;
-
-            if v.iter().all(|x| approx_eq!(f64, x.abs(), 0.0)) {
+            let s = i + 1;
+            let mut u: Vec<Complex64> = (s..ord).map(|r| h[(r, i)]).collect();
+            let norm = u.iter().map(|x| x.norm_sqr()).sum::<f64>().sqrt();
+            let x0 = u[0];
+            let phase = if x0 == Complex64::ZERO {
+                Complex64::ONE
+            } else {
+                x0 / x0.norm()
+            };
+            let alpha = -phase * norm;
+            u[0] -= alpha;
+            let vnorm = u.iter().map(|x| x.norm_sqr()).sum::<f64>().sqrt();
+            if approx_eq!(f64, vnorm, 0.0) {
+                vectors.push(Matrix::from_shape(0, 0)); // see the bug note below
                 continue;
             }
+            u.iter_mut().for_each(|x| *x /= vnorm);
 
-            let u = v.norm_l2();
-            let u_star = u.conj_transpose_mt();
-            // Start position for the reflector matrix
-            let reflector_start = i + 1;
+            unsafe {
+                // right: H[:, s..] ← H[:, s..] (I − 2uuᵀ)
+                let mut right = h.slice_mut(0..ord, s..ord)?;
+                reflect_right_c64(&mut right, &u, &mut uc, &mut y);
+            }
+            unsafe {
+                // left: H[s.., s..] ← (I − 2uuᵀ) H[s.., s..]
+                let mut left = h.slice_mut(s..ord, s..ord)?;
+                reflect_left_c64(&mut left, &u, &mut uc, &mut w);
+            }
+            h[(s, i)] = alpha; // column i is known exactly
+            for r in s + 1..ord {
+                h[(r, i)] = Complex64::ZERO;
+            }
 
-            // Update H
-            // We can expand H_{n+1} = R* H_n R into H_{n+1} = H_n - 2 H_n u u* -2 u u* H_n
-            //     + 4 u u* H_n u u*
-            // Now if we define:
-            // a = H_n u
-            // b = u* H_n
-            // s = u* a (this is just a scalar)
-            // c = a - 2 s u
-            // Then the formula becomes
-            // H_{n+1} = H_n - 2 u b - 2 c u*
-            // And we avoid massive matrix multiplications
-
-            // Calculate a
-            let a = h.slice(0..ord, reflector_start..ord)?.mat_mul_mt(&u)?;
-            // Calculate b
-            let b = u_star.mat_mul_mt(&h.slice(reflector_start..ord, 0..ord)?)?;
-            // Calculate s
-            let s = u
-                .clone()
-                .conj()
-                .dot_mt(&a.slice(reflector_start..ord, 0..1)?)?;
-            // Calculate c
-            let slice_copy = a.slice(reflector_start..ord, 0..1)?;
-            let mut c = a;
-            c.slice_mut(reflector_start..ord, 0..1)?
-                .set_all(&(slice_copy - u.clone() * s * Complex64::new(2.0, 0.0)))?;
-            // Subtract 2 u b
-            let h_slice_copy = h.slice(reflector_start..ord, 0..ord)?;
-            h.slice_mut(reflector_start..ord, 0..ord)?
-                .set_all(&(h_slice_copy - u.mat_mul_mt(&(b * Complex64::new(2.0, 0.0)))?))?;
-            // Subtract 2 c u*
-            let h_slice_copy = h.slice(0..ord, reflector_start..ord)?;
-            h.slice_mut(0..ord, reflector_start..ord)?
-                .set_all(&(h_slice_copy - c.mat_mul_mt(&(u_star * Complex64::new(2.0, 0.0)))?))?;
-
-            // Add the new vector
-            vectors.push(u);
+            vectors.push(Matrix {
+                rows: ord - s,
+                cols: 1,
+                elements: u,
+            });
         }
-
         Ok((h, HessenbergReflectors { vectors, rows: ord }))
     }
 
@@ -279,7 +301,7 @@ impl Matrix<Complex64> {
     /// Returns (H, Q) where H is the Hessenberg form and Q is a unitary matrix such that
     /// `Q.mat_mul(H).mat_mul(Q.conj_transpose()) == self`.
     /// This fails if the matrix is not square.
-    pub fn lower_hessenberg(&self) -> Result<(Matrix<Complex64>, Matrix<Complex64>), TensorErrors> {
+    pub fn lower_hessenberg(self) -> Result<(Matrix<Complex64>, Matrix<Complex64>), TensorErrors> {
         // Note that Q_l = Q_u and H_l = (H_u) ^ *
         let (h_u, q) = self.conj_transpose_mt().upper_hessenberg()?;
         Ok((h_u.conj_transpose_mt(), q))
@@ -291,7 +313,7 @@ impl Matrix<Complex64> {
     /// matrix such that `Q.mat_mul(H).mat_mul(Q.conj_transpose()) == self`.
     /// This fails if the matrix is not square.
     pub fn lower_hessenberg_h(
-        &self,
+        self,
     ) -> Result<(Matrix<Complex64>, HessenbergReflectors<Complex64>), TensorErrors> {
         // Note that Q_l = Q_u so reflectors are the same and H_l = (H_u) ^ *
         let (h_u, reflectors) = self.conj_transpose_mt().upper_hessenberg_h()?;
