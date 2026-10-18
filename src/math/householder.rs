@@ -2,7 +2,7 @@ use crate::definitions::matrix::Matrix;
 use crate::definitions::matrix_slice_mut::MatrixSliceMut;
 use crate::utilities::matrix::identity;
 use float_cmp::approx_eq;
-use num::complex::{Complex64, ComplexFloat};
+use num::complex::Complex64;
 use std::cmp::min;
 
 /*
@@ -14,12 +14,12 @@ use std::cmp::min;
 /// B ← (I − 2uuᵀ) B, in place. `w` is scratch with len >= B.cols().
 unsafe fn reflect_left_f64(b: &mut MatrixSliceMut<'_, f64>, u: &[f64], w: &mut [f64]) {
     let w = w.get_unchecked_mut(..b.cols());
-    b.as_immut().mat_vec_mul_unchecked_mt_into_slice(u, w); // w = uᵀB
+    b.as_immut().vec_mat_mul_unchecked_mt_into_slice(u, w); // w = uᵀB
     w.iter_mut().for_each(|x| *x *= 2.0);
     b.rank1_update_sub_unchecked_mt(u, w); // B −= u·w
 }
 
-/// B ← (I − 2uu*) B, in place. `uc` and `w` are reusable scratch.
+/// B ← (I − 2uu*) B, in place. `uc` (with len >= B.rows()) and `w` (with len >= B.cols()) are reusable scratch.
 unsafe fn reflect_left_c64(
     b: &mut MatrixSliceMut<'_, Complex64>,
     u: &[Complex64],
@@ -29,9 +29,24 @@ unsafe fn reflect_left_c64(
     uc.clear();
     uc.extend(u.iter().map(|x| x.conj()));
     let w = w.get_unchecked_mut(..b.cols());
-    b.as_immut().mat_vec_mul_unchecked_mt_into_slice(uc, w); // w = u*B
+    b.as_immut().vec_mat_mul_unchecked_mt_into_slice(uc, w); // w = u*B
     w.iter_mut().for_each(|x| *x *= 2.0);
     b.rank1_update_sub_unchecked_mt(u, w); // B −= u·w  (no conj)
+}
+
+/// B ← B (I − 2uu*), in place. `u` has len B.cols(); `y` is scratch with len >= B.rows(); `uc` is reusable scratch for conj(u).
+unsafe fn reflect_right_c64(
+    b: &mut MatrixSliceMut<'_, Complex64>,
+    u: &[Complex64],
+    uc: &mut Vec<Complex64>,
+    y: &mut [Complex64],
+) {
+    let y = &mut y[..b.rows()];
+    b.as_immut().mat_vec_mul_unchecked_mt_into_slice(u, y); // y = Bu
+    y.iter_mut().for_each(|x| *x *= 2.0);
+    uc.clear();
+    uc.extend(u.iter().map(|x| x.conj()));
+    b.rank1_update_sub_unchecked_mt(y, uc);
 }
 
 /*
@@ -84,6 +99,19 @@ impl HouseholderReflectors<Complex64> {
         }
         q
     }
+
+    /// Applies the reflectors to the right of a matrix B, in place.
+    pub(crate) unsafe fn apply_right_unchecked(&self, b: &mut Matrix<Complex64>) {
+        let mut y = vec![Complex64::ZERO; b.rows];
+        let mut uc = Vec::with_capacity(self.rows);
+        for (k, u) in self.vectors.iter().enumerate() {
+            if u.rows == 0 {
+                continue;
+            }
+            let mut block = b.slice_unchecked_mut(0..b.rows, k..self.rows);
+            reflect_right_c64(&mut block, &u.elements, &mut uc, &mut y);
+        }
+    }
 }
 
 /*
@@ -106,7 +134,7 @@ impl Matrix<f64> {
     /// reflectors is something that can be accumulated to construct Q (with the provided method),
     /// where Q is a unitary matrix of shape (rows, rows) such that `Q.mat_mul(R) == t`.
     pub fn householder_r(mut self) -> (Matrix<f64>, HouseholderReflectors<f64>) {
-        let (rows, cols) = (self.shape()[0], self.shape()[1]);
+        let (rows, cols) = (self.rows, self.cols);
         let mut vectors = Vec::with_capacity(min(rows, cols));
         let mut w = vec![0.0; cols];
 
@@ -127,9 +155,11 @@ impl Matrix<f64> {
                 u.iter_mut().for_each(|x| *x /= vnorm);
 
                 if k + 1 < cols {
-                    let mut trail = self.slice_unchecked_mut(k + 1..rows, k + 1..cols);
+                    let mut trail = self.slice_unchecked_mut(k..rows, k + 1..cols);
                     reflect_left_f64(&mut trail, &u, &mut w);
                 }
+
+                // Directly set column k to the Householder vector, with alpha at the top and zeros below
                 *self.get_unchecked_mut((k, k)) = alpha;
                 for i in k + 1..rows {
                     *self.get_unchecked_mut((i, k)) = 0.0;

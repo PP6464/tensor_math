@@ -1,7 +1,6 @@
 use crate::definitions::errors::TensorErrors;
 use crate::definitions::matrix::Matrix;
 use crate::math::polynomials::solve_quadratic;
-use crate::utilities::matrix::identity;
 use num::complex::{Complex64, ComplexFloat};
 
 impl Matrix<Complex64> {
@@ -26,47 +25,57 @@ impl Matrix<Complex64> {
         let mut eigenvalues = Vec::with_capacity(ord);
         let buf = eigenvalues.spare_capacity_mut();
 
-        while m > 1 {
-            // Check if we can deflate
-            if h[(m - 1, m - 2)].abs() < 1e-15 {
-                buf[m - 1].write(h[(m - 1, m - 1)]);
-                m -= 1;
-                iters_since_deflation = 0;
-                continue;
+        unsafe {
+            while m > 1 {
+                // Check if we can deflate
+                if h[(m - 1, m - 2)].abs() < 1e-15 {
+                    buf[m - 1].write(h[(m - 1, m - 1)]);
+                    m -= 1;
+                    iters_since_deflation = 0;
+                    continue;
+                }
+
+                // Fail if we have not converged
+                if iters_since_deflation >= 30 {
+                    return Err(TensorErrors::EigenDecompositionDidNotConverge);
+                }
+
+                iters_since_deflation += 1;
+
+                // Calculate the Wilkinson shift
+                let bottom_right_mat =
+                    h.slice_unchecked(m - 2..m, m - 2..m).clone_into_matrix();
+                let bottom_right = h[(m - 1, m - 1)];
+
+                let trace = bottom_right_mat.trace()?;
+
+                let roots = solve_quadratic(&[bottom_right_mat.det()?, -trace, Complex64::ONE])?;
+
+                let dist0 = (roots[0] - bottom_right).abs();
+                let dist1 = (roots[1] - bottom_right).abs();
+
+                let mut ws = roots[0];
+
+                if dist1 < dist0 {
+                    ws = roots[1]
+                }
+
+                // Shift the matrix and perform a QR decomposition
+                let mut shifted = h.slice_unchecked(0..m, 0..m).clone_into_matrix();
+                for i in 0..m {
+                    shifted[(i, i)] -= ws;
+                }
+                let (mut rs, reflectors) = shifted.householder_r();
+                reflectors.apply_right_unchecked(&mut rs);
+                for i in 0..m {
+                    rs[(i, i)] += ws;
+                }
+
+                h.slice_unchecked_mut(0..m, 0..m).set_all(&rs)?;
+                let mut slice_copy = q.slice_unchecked(0..ord, 0..m).clone_into_matrix();
+                reflectors.apply_right_unchecked(&mut slice_copy);
+                q.slice_unchecked_mut(0..ord, 0..m).set_all(&slice_copy)?;
             }
-
-            // Fail if we have not converged
-            if iters_since_deflation >= 30 {
-                return Err(TensorErrors::EigenDecompositionDidNotConverge);
-            }
-
-            iters_since_deflation += 1;
-
-            // Calculate the Wilkinson shift
-            let bottom_right_mat =
-                unsafe { h.slice_unchecked(m - 2..m, m - 2..m) }.clone_into_matrix();
-            let bottom_right = h[(m - 1, m - 1)];
-            let trace = bottom_right_mat.trace()?;
-
-            let roots = solve_quadratic(&[bottom_right_mat.det()?, -trace, Complex64::ONE])?;
-
-            let dist0 = (roots[0] - bottom_right).abs();
-            let dist1 = (roots[1] - bottom_right).abs();
-
-            let mut ws = roots[0];
-
-            if dist1 < dist0 {
-                ws = roots[1]
-            }
-
-            let shifted = h.slice(0..m, 0..m)?.clone_into_matrix() - identity(m) * ws;
-            let (qs, rs) = shifted.householder();
-
-            h.slice_mut(0..m, 0..m)?
-                .set_all(&(rs.mat_mul_mt(qs.clone())? + identity(m) * ws))?;
-            let slice_copy = q.slice(0..ord, 0..m)?.clone_into_matrix();
-            q.slice_mut(0..ord, 0..m)?
-                .set_all(&slice_copy.mat_mul_mt(qs.clone())?)?;
         }
 
         // At this point we must have converged on all eigenvalues
@@ -98,43 +107,51 @@ impl Matrix<Complex64> {
         let mut eigenvalues = Vec::with_capacity(ord);
         let buf = eigenvalues.spare_capacity_mut();
 
-        while m > 1 {
-            // Check if we can deflate
-            if h[(m - 1, m - 2)].abs() < 1e-15 {
-                buf[m - 1].write(h[(m - 1, m - 1)]);
-                m -= 1;
-                iters_since_deflation = 0;
-                continue;
+        unsafe {
+            while m > 1 {
+                // Check if we can deflate
+                if h[(m - 1, m - 2)].abs() < 1e-15 {
+                    buf[m - 1].write(h[(m - 1, m - 1)]);
+                    m -= 1;
+                    iters_since_deflation = 0;
+                    continue;
+                }
+
+                // Fail if we have not converged
+                if iters_since_deflation >= 30 {
+                    return Err(TensorErrors::EigenDecompositionDidNotConverge);
+                }
+
+                iters_since_deflation += 1;
+
+                // Calculate the Wilkinson shift
+                let bottom_right_mat = h.slice_unchecked(m - 2..m, m - 2..m).clone_into_matrix();
+                let bottom_right = h[(m - 1, m - 1)];
+
+                let trace = bottom_right_mat.trace()?;
+                let roots = solve_quadratic(&[bottom_right_mat.det()?, -trace, Complex64::ONE])?;
+
+                let dist0 = (roots[0] - bottom_right).abs();
+                let dist1 = (roots[1] - bottom_right).abs();
+
+                let mut ws = roots[0];
+
+                if dist1 < dist0 {
+                    ws = roots[1]
+                }
+
+                let mut shifted = h.slice_unchecked(0..m, 0..m).clone_into_matrix();
+                for i in 0..m {
+                    shifted[(i, i)] -= ws;
+                }
+                let (mut rs, reflectors) = shifted.householder_r();
+                reflectors.apply_right_unchecked(&mut rs);
+                for i in 0..m {
+                    rs[(i, i)] += ws;
+                }
+
+                h.slice_unchecked_mut(0..m, 0..m).set_all(&rs)?;
             }
-
-            // Fail if we have not converged
-            if iters_since_deflation >= 30 {
-                return Err(TensorErrors::EigenDecompositionDidNotConverge);
-            }
-
-            iters_since_deflation += 1;
-
-            // Calculate the Wilkinson shift
-            let bottom_right_mat = h.slice(m - 2..m, m - 2..m)?.clone_into_matrix();
-            let bottom_right = h[(m - 1, m - 1)];
-
-            let trace = bottom_right_mat.trace()?;
-            let roots = solve_quadratic(&[bottom_right_mat.det()?, -trace, Complex64::ONE])?;
-
-            let dist0 = (roots[0] - bottom_right).abs();
-            let dist1 = (roots[1] - bottom_right).abs();
-
-            let mut ws = roots[0];
-
-            if dist1 < dist0 {
-                ws = roots[1]
-            }
-
-            let shifted = h.slice(0..m, 0..m)?.clone_into_matrix() - identity(m) * ws;
-            let (qs, rs) = shifted.householder();
-
-            h.slice_mut(0..m, 0..m)?
-                .set_all(&(rs.mat_mul_mt(qs)? + identity(m) * ws))?;
         }
 
         // At this point we must have converged on all eigenvalues
