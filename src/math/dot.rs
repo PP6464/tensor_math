@@ -20,7 +20,7 @@ impl<T> Tensor<T> {
             });
         }
 
-        Ok(dot_vectors(self.elements(), other.elements()))
+        Ok(unsafe { self.dot_unchecked(other) })
     }
 
     /// Computes the dot product of two tensors, i.e. the element-wise product, then the sum of the result, without validity checking.
@@ -45,7 +45,7 @@ impl<T> Tensor<T> {
             });
         }
 
-        Ok(dot_vectors_mt(self.elements(), other.elements()))
+        Ok(unsafe { self.dot_unchecked_mt(other) })
     }
 
     /// Computes the dot product of two tensors, i.e. the element-wise product, then the sum of the result, without validity checking.
@@ -72,7 +72,7 @@ impl<T> Matrix<T> {
             });
         }
 
-        Ok(dot_vectors(self.elements(), other.elements()))
+        Ok(unsafe { self.dot_unchecked(other) })
     }
 
     /// Computes the dot product of the two matrices, i.e. the elementwise product, then the sum of the result, without validity checking.
@@ -97,7 +97,7 @@ impl<T> Matrix<T> {
             });
         }
 
-        Ok(dot_vectors_mt(self.elements(), other.elements()))
+        Ok(unsafe { self.dot_unchecked_mt(other) })
     }
 
     /// Computes the dot product of two matrices, i.e. the element-wise product, then the sum of the result, without validity checking.

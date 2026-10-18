@@ -793,23 +793,7 @@ impl<T> Tensor<T> {
             resultant_shape.push(self.shape[i]);
         }
 
-        let resultant_shape: Shape = resultant_shape.into();
-        let mut new_elements =
-            Vec::with_capacity(self.shape.element_count() + other.shape.element_count());
-
-        let mut self_iter = self.elements.into_iter();
-        let mut other_iter = other.elements.into_iter();
-
-        for _ in 0..self.shape.element_count() / self.strides[axis] {
-            new_elements.extend(self_iter.by_ref().take(self.strides[axis]));
-            new_elements.extend(other_iter.by_ref().take(other.strides[axis]));
-        }
-
-        Ok(Tensor {
-            strides: Strides::from_shape(&resultant_shape),
-            shape: resultant_shape,
-            elements: new_elements,
-        })
+        Ok(unsafe { self.concat_unchecked(other, axis) })
     }
 
     /// Concatenates a tensor with another tensor along the specified axis without validation.

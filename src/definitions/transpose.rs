@@ -119,7 +119,7 @@ impl Transpose {
 
     /// Returns the old shape that would have been transformed into `new_shape` by this transpose.
     /// This fails if `new_shape.rank() != self.permutation().len()`.
-    pub fn old_shape(&self, mut new_shape: Shape) -> Result<Shape, TensorErrors> {
+    pub fn old_shape(&self, new_shape: Shape) -> Result<Shape, TensorErrors> {
         if new_shape.rank() != self.permutation.len() {
             return Err(TensorErrors::TransposeIncompatibleRank {
                 rank: new_shape.rank(),
@@ -127,11 +127,7 @@ impl Transpose {
             });
         }
 
-        for &(i0, i1) in self.two_cycles.iter().rev() {
-            new_shape.0.swap(i0, i1);
-        }
-
-        Ok(new_shape)
+        Ok(unsafe { self.old_shape_unchecked(new_shape) })
     }
 
     /// Returns the old shape that would have been transformed into `new_shape` by this transpose, without validity checking.
@@ -181,13 +177,7 @@ impl Transpose {
             });
         }
 
-        let mut old_index_vec = vec![0; new_index.len()];
-
-        for (count, old_pos) in self.permutation.iter().enumerate() {
-            old_index_vec[*old_pos] = new_index[count];
-        }
-
-        Ok(old_index_vec)
+        Ok(unsafe { self.old_index_unchecked(new_index.to_vec()) })
     }
 
     /// Returns the old index that would have been transformed into `new_index` by this transpose, without validity checking.
@@ -206,7 +196,7 @@ impl Transpose {
         for &(i0, i1) in self.two_cycles.iter().rev() {
             self.permutation.swap(i0, i1);
         }
-        
+
         self.two_cycles.reverse();
 
         self

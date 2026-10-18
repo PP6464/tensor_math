@@ -1,12 +1,12 @@
 use crate::definitions::errors::TensorErrors;
 use crate::definitions::matrix::Matrix;
+use crate::definitions::matrix_slice_mut::MatrixSliceMut;
 use crate::definitions::shape::Shape;
 use crate::shape;
 use rayon::iter::ParallelIterator;
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator};
 use rayon::slice::ParallelSliceMut;
 use std::ops::{AddAssign, Mul, SubAssign};
-use crate::definitions::matrix_slice_mut::MatrixSliceMut;
 /*
 --------------------------------------------
 * Outer product functions
@@ -77,12 +77,7 @@ impl<T> Matrix<T> {
             });
         }
 
-        for (row, a) in self.chunks_mut(v2.len()).zip(v1) {
-            for (out, b) in row.iter_mut().zip(v2) {
-                *out += a.clone() * b.clone();
-            }
-        }
-
+        unsafe { self.rank1_update_add_unchecked(v1, v2) };
         Ok(())
     }
 
@@ -112,14 +107,7 @@ impl<T> Matrix<T> {
             });
         }
 
-        self.par_chunks_mut(v2.len())
-            .zip(v1.par_iter())
-            .for_each(|(out_row, e1)| {
-                out_row.iter_mut().zip(v2).for_each(|(out, e2)| {
-                    *out += e1.clone() * e2.clone();
-                });
-            });
-
+        unsafe { self.rank1_update_add_unchecked_mt(v1, v2) };
         Ok(())
     }
 
@@ -151,12 +139,7 @@ impl<T> Matrix<T> {
             });
         }
 
-        for (row, a) in self.chunks_mut(v2.len()).zip(v1) {
-            for (out, b) in row.iter_mut().zip(v2) {
-                *out -= a.clone() * b.clone();
-            }
-        }
-
+        unsafe { self.rank1_update_sub_unchecked(v1, v2) };
         Ok(())
     }
 
@@ -186,14 +169,7 @@ impl<T> Matrix<T> {
             });
         }
 
-        self.par_chunks_mut(v2.len())
-            .zip(v1.par_iter())
-            .for_each(|(out_row, e1)| {
-                out_row.iter_mut().zip(v2).for_each(|(out, e2)| {
-                    *out -= e1.clone() * e2.clone();
-                });
-            });
-
+        unsafe { self.rank1_update_sub_unchecked_mt(v1, v2) };
         Ok(())
     }
 
@@ -227,12 +203,7 @@ impl<T> MatrixSliceMut<'_, T> {
             });
         }
 
-        for (row, a) in self.iter_rows_mut().zip(v1) {
-            for (out, b) in row.iter_mut().zip(v2) {
-                *out += a.clone() * b.clone();
-            }
-        }
-
+        unsafe { self.rank1_update_add_unchecked(v1, v2) };
         Ok(())
     }
 
@@ -262,14 +233,7 @@ impl<T> MatrixSliceMut<'_, T> {
             });
         }
 
-        self.par_iter_rows_mut()
-            .zip(v1.par_iter())
-            .for_each(|(row, e1)| {
-                row.iter_mut().zip(v2).for_each(|(out, e2)| {
-                    *out += e1.clone() * e2.clone();
-                });
-            });
-
+        unsafe { self.rank1_update_add_unchecked_mt(v1, v2) };
         Ok(())
     }
 
@@ -301,12 +265,7 @@ impl<T> MatrixSliceMut<'_, T> {
             });
         }
 
-        for (row, a) in self.iter_rows_mut().zip(v1) {
-            for (out, b) in row.iter_mut().zip(v2) {
-                *out -= a.clone() * b.clone();
-            }
-        }
-
+        unsafe { self.rank1_update_sub_unchecked(v1, v2) };
         Ok(())
     }
 
@@ -336,14 +295,7 @@ impl<T> MatrixSliceMut<'_, T> {
             });
         }
 
-        self.par_iter_rows_mut()
-            .zip(v1.par_iter())
-            .for_each(|(row, e1)| {
-                row.iter_mut().zip(v2).for_each(|(out, e2)| {
-                    *out -= e1.clone() * e2.clone();
-                });
-            });
-
+        unsafe { self.rank1_update_sub_unchecked_mt(v1, v2) };
         Ok(())
     }
 

@@ -23,12 +23,7 @@ impl<T> Matrix<T> {
             });
         }
 
-        let mut res: Vec<T> = Vec::with_capacity(v.len());
-
-        self.iter_rows()
-            .for_each(|chunk| res.push(dot_vectors(chunk, v)));
-
-        Ok(res)
+        Ok(unsafe { self.mat_vec_mul_unchecked(v) })
     }
 
     /// Computes the product of this matrix with a vector without bounds checking.
@@ -58,20 +53,7 @@ impl<T> Matrix<T> {
             });
         }
 
-        let mut res: Vec<T> = Vec::with_capacity(v.len());
-        let buf = res.spare_capacity_mut();
-
-        self.par_iter_rows()
-            .zip(buf.par_iter_mut())
-            .for_each(|(chunk, out)| {
-                out.write(dot_vectors(chunk, v));
-            });
-
-        unsafe {
-            res.set_len(self.rows);
-        }
-
-        Ok(res)
+        Ok(unsafe { self.mat_vec_mul_unchecked_mt(v) })
     }
 
     /// Computes the product of this matrix with a vector without bounds checking.
@@ -109,13 +91,7 @@ impl<T> Matrix<T> {
             });
         }
 
-        let mut res: Vec<T> = Vec::with_capacity(v.len());
-
-        self.transpose()
-            .iter_rows()
-            .for_each(|chunk| res.push(dot_vectors(v, chunk)));
-
-        Ok(res)
+        Ok(unsafe { self.vec_mat_mul_unchecked(v) })
     }
 
     /// Computes the product of a vector with this matrix without bounds checking.
@@ -146,23 +122,7 @@ impl<T> Matrix<T> {
             });
         }
 
-        let mut res: Vec<T> = Vec::with_capacity(v.len());
-        let buf = res.spare_capacity_mut();
-
-        let cols = self.cols;
-
-        self.transpose_mt()
-            .par_iter_rows()
-            .zip(buf.par_iter_mut())
-            .for_each(|(chunk, out)| {
-                out.write(dot_vectors(chunk, v));
-            });
-
-        unsafe {
-            res.set_len(cols);
-        }
-
-        Ok(res)
+        Ok(unsafe { self.vec_mat_mul_unchecked_mt(v) })
     }
 
     /// Computes the product of a vector with this matrix without bounds checking.
@@ -211,10 +171,7 @@ impl<T> Matrix<T> {
             });
         }
 
-        out.iter_mut()
-            .zip(self.iter_rows())
-            .for_each(|(out_elem, chunk)| *out_elem = dot_vectors(chunk, v));
-
+        unsafe { self.mat_vec_mul_unchecked_into_slice(v, out) };
         Ok(())
     }
 
@@ -250,12 +207,7 @@ impl<T> Matrix<T> {
             });
         }
 
-        self.par_iter_rows()
-            .zip(out.par_iter_mut())
-            .for_each(|(chunk, out)| {
-                *out = dot_vectors(chunk, v);
-            });
-
+        unsafe { self.mat_vec_mul_unchecked_mt_into_slice(v, out) };
         Ok(())
     }
 
@@ -293,10 +245,7 @@ impl<T> Matrix<T> {
             });
         }
 
-        out.iter_mut()
-            .zip(self.transpose().iter_rows())
-            .for_each(|(out_elem, chunk)| *out_elem = dot_vectors(v, chunk));
-
+        unsafe { self.vec_mat_mul_unchecked_into_slice(v, out) };
         Ok(())
     }
 
@@ -332,10 +281,7 @@ impl<T> Matrix<T> {
             });
         }
 
-        out.par_iter_mut()
-            .zip(self.transpose().par_iter_rows())
-            .for_each(|(out_elem, chunk)| *out_elem = dot_vectors(v, chunk));
-
+        unsafe { self.vec_mat_mul_unchecked_mt_into_slice(v, out) };
         Ok(())
     }
 
@@ -365,12 +311,7 @@ impl<T> MatrixSlice<'_, T> {
             });
         }
 
-        let mut res: Vec<T> = Vec::with_capacity(v.len());
-
-        self.iter_rows()
-            .for_each(|chunk| res.push(dot_vectors(chunk, v)));
-
-        Ok(res)
+        Ok(unsafe { self.mat_vec_mul_unchecked(v) })
     }
 
     /// Computes the product of this matrix slice with a vector without bounds checking.
@@ -400,20 +341,7 @@ impl<T> MatrixSlice<'_, T> {
             });
         }
 
-        let mut res: Vec<T> = Vec::with_capacity(v.len());
-        let buf = res.spare_capacity_mut();
-
-        self.par_iter_rows()
-            .zip(buf.par_iter_mut())
-            .for_each(|(chunk, out)| {
-                out.write(dot_vectors(chunk, v));
-            });
-
-        unsafe {
-            res.set_len(self.rows());
-        }
-
-        Ok(res)
+        Ok(unsafe { self.mat_vec_mul_unchecked_mt(v) })
     }
 
     /// Computes the product of this matrix slice with a vector without bounds checking.
@@ -451,14 +379,7 @@ impl<T> MatrixSlice<'_, T> {
             });
         }
 
-        let mut res: Vec<T> = Vec::with_capacity(v.len());
-
-        self.clone_into_matrix()
-            .transpose()
-            .iter_rows()
-            .for_each(|chunk| res.push(dot_vectors(v, chunk)));
-
-        Ok(res)
+        Ok(unsafe { self.vec_mat_mul_unchecked(v) })
     }
 
     /// Computes the product of a vector with this matrix slice without bounds checking.
@@ -490,24 +411,7 @@ impl<T> MatrixSlice<'_, T> {
             });
         }
 
-        let mut res: Vec<T> = Vec::with_capacity(v.len());
-        let buf = res.spare_capacity_mut();
-
-        let cols = self.cols();
-
-        self.clone_into_matrix()
-            .transpose_mt()
-            .par_iter_rows()
-            .zip(buf.par_iter_mut())
-            .for_each(|(chunk, out)| {
-                out.write(dot_vectors(chunk, v));
-            });
-
-        unsafe {
-            res.set_len(cols);
-        }
-
-        Ok(res)
+        Ok(unsafe { self.vec_mat_mul_unchecked_mt(v) })
     }
 
     /// Computes the product of a vector with this matrix slice without bounds checking.
@@ -557,10 +461,7 @@ impl<T> MatrixSlice<'_, T> {
             });
         }
 
-        out.iter_mut()
-            .zip(self.iter_rows())
-            .for_each(|(out_elem, chunk)| *out_elem = dot_vectors(chunk, v));
-
+        unsafe { self.mat_vec_mul_unchecked_into_slice(v, out) };
         Ok(())
     }
 
@@ -596,12 +497,7 @@ impl<T> MatrixSlice<'_, T> {
             });
         }
 
-        self.par_iter_rows()
-            .zip(out.par_iter_mut())
-            .for_each(|(chunk, out)| {
-                *out = dot_vectors(chunk, v);
-            });
-
+        unsafe { self.mat_vec_mul_unchecked_mt_into_slice(v, out) };
         Ok(())
     }
 
@@ -639,10 +535,7 @@ impl<T> MatrixSlice<'_, T> {
             });
         }
 
-        out.iter_mut()
-            .zip(self.clone_into_matrix().transpose().iter_rows())
-            .for_each(|(out_elem, chunk)| *out_elem = dot_vectors(v, chunk));
-
+        unsafe { self.vec_mat_mul_unchecked_into_slice(v, out) };
         Ok(())
     }
 
@@ -678,10 +571,7 @@ impl<T> MatrixSlice<'_, T> {
             });
         }
 
-        out.par_iter_mut()
-            .zip(self.clone_into_matrix().transpose().par_iter_rows())
-            .for_each(|(out_elem, chunk)| *out_elem = dot_vectors(v, chunk));
-
+        unsafe { self.vec_mat_mul_unchecked_mt_into_slice(v, out) };
         Ok(())
     }
 

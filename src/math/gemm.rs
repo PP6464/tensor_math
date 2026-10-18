@@ -1,5 +1,6 @@
 use crate::definitions::errors::TensorErrors;
 use crate::definitions::matrix::Matrix;
+use crate::definitions::matrix_slice_mut::MatrixSliceMut;
 use crate::definitions::shape::Shape;
 use crate::shape;
 use crate::utilities::internal_functions::dot_vectors;
@@ -8,7 +9,6 @@ use rayon::iter::{IndexedParallelIterator, IntoParallelIterator};
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
 use rayon::slice::{ParallelSlice, ParallelSliceMut};
 use std::ops::{Add, AddAssign, Mul, SubAssign};
-use crate::definitions::matrix_slice_mut::MatrixSliceMut;
 /*
 --------------------------------------------
 GEMM functions
@@ -36,21 +36,7 @@ impl<T: Add<Output = T> + AddAssign + Mul<Output = T> + Zero + Clone> Matrix<T> 
             });
         }
 
-        let cols = self.cols;
-
-        let m2_transpose = m2.transpose();
-
-        self.chunks_mut(cols)
-            .zip(m1.chunks(m1.cols))
-            .for_each(|(out_row, row)| {
-                out_row
-                    .iter_mut()
-                    .zip(m2_transpose.chunks(m2_transpose.cols))
-                    .for_each(|(out, col)| {
-                        *out += dot_vectors(row, col);
-                    })
-            });
-
+        unsafe { self.gemm_add_unchecked(m1, m2) };
         Ok(())
     }
 
@@ -95,21 +81,7 @@ impl<T: Add<Output = T> + AddAssign + Mul<Output = T> + Zero + Clone> Matrix<T> 
             });
         }
 
-        let cols = self.cols;
-
-        let m2_transpose = m2.transpose_mt();
-
-        self.par_chunks_mut(cols)
-            .zip(m1.par_chunks(m1.cols))
-            .for_each(|(out_row, row)| {
-                out_row
-                    .par_iter_mut()
-                    .zip(m2_transpose.par_chunks(m2_transpose.cols))
-                    .for_each(|(out, col)| {
-                        *out += dot_vectors(row, col);
-                    })
-            });
-
+        unsafe { self.gemm_add_unchecked_mt(m1, m2) };
         Ok(())
     }
 
@@ -137,7 +109,10 @@ impl<T: Add<Output = T> + AddAssign + Mul<Output = T> + Zero + Clone> Matrix<T> 
     /// Computes the product of the matrices and subtracts it from this matrix.
     /// This fails if the matrices are not multiplicatively compatible or if the result
     /// does not have the same shape as this matrix.
-    pub fn gemm_sub(&mut self, m1: Matrix<T>, m2: Matrix<T>) -> Result<(), TensorErrors> where  T: SubAssign {
+    pub fn gemm_sub(&mut self, m1: Matrix<T>, m2: Matrix<T>) -> Result<(), TensorErrors>
+    where
+        T: SubAssign,
+    {
         if m1.cols != m2.rows {
             return Err(TensorErrors::IncompatibleShapes {
                 shape_1: m1.shape(),
@@ -154,26 +129,15 @@ impl<T: Add<Output = T> + AddAssign + Mul<Output = T> + Zero + Clone> Matrix<T> 
             });
         }
 
-        let cols = self.cols;
-
-        let m2_transpose = m2.transpose();
-
-        self.chunks_mut(cols)
-            .zip(m1.chunks(m1.cols))
-            .for_each(|(out_row, row)| {
-                out_row
-                    .iter_mut()
-                    .zip(m2_transpose.chunks(m2_transpose.cols))
-                    .for_each(|(out, col)| {
-                        *out -= dot_vectors(row, col);
-                    })
-            });
-
+        unsafe { self.gemm_sub_unchecked(m1, m2) };
         Ok(())
     }
 
     /// Computes the products of the matrices and subtracts it from the matrix without bounds checking.
-    pub(crate) unsafe fn gemm_sub_unchecked(&mut self, m1: Matrix<T>, m2: Matrix<T>) where T: SubAssign {
+    pub(crate) unsafe fn gemm_sub_unchecked(&mut self, m1: Matrix<T>, m2: Matrix<T>)
+    where
+        T: SubAssign,
+    {
         let cols = self.cols;
 
         let m2_transpose = m2.transpose();
@@ -213,21 +177,7 @@ impl<T: Add<Output = T> + AddAssign + Mul<Output = T> + Zero + Clone> Matrix<T> 
             });
         }
 
-        let cols = self.cols;
-
-        let m2_transpose = m2.transpose_mt();
-
-        self.par_chunks_mut(cols)
-            .zip(m1.par_chunks(m1.cols))
-            .for_each(|(out_row, row)| {
-                out_row
-                    .par_iter_mut()
-                    .zip(m2_transpose.par_chunks(m2_transpose.cols))
-                    .for_each(|(out, col)| {
-                        *out -= dot_vectors(row, col);
-                    })
-            });
-
+        unsafe { self.gemm_sub_unchecked_mt(m1, m2) };
         Ok(())
     }
 
@@ -274,21 +224,7 @@ impl<T: Add<Output = T> + AddAssign + Mul<Output = T> + Zero + Clone> MatrixSlic
             });
         }
 
-        let cols = self.cols();
-
-        let m2_transpose = m2.transpose();
-
-        self.chunks_mut(cols)
-            .zip(m1.chunks(m1.cols))
-            .for_each(|(out_row, row)| {
-                out_row
-                    .into_iter()
-                    .zip(m2_transpose.chunks(m2_transpose.cols))
-                    .for_each(|(out, col)| {
-                        *out += dot_vectors(row, col);
-                    })
-            });
-
+        unsafe { self.gemm_add_unchecked(m1, m2) };
         Ok(())
     }
 
@@ -333,21 +269,7 @@ impl<T: Add<Output = T> + AddAssign + Mul<Output = T> + Zero + Clone> MatrixSlic
             });
         }
 
-        let cols = self.cols();
-
-        let m2_transpose = m2.transpose_mt();
-
-        self.par_chunks_mut(cols)
-            .zip(m1.par_chunks(m1.cols))
-            .for_each(|(out_row, row)| {
-                out_row
-                    .into_par_iter()
-                    .zip(m2_transpose.par_chunks(m2_transpose.cols))
-                    .for_each(|(out, col)| {
-                        *out += dot_vectors(row, col);
-                    })
-            });
-
+        unsafe { self.gemm_add_unchecked_mt(m1, m2) };
         Ok(())
     }
 
@@ -375,7 +297,10 @@ impl<T: Add<Output = T> + AddAssign + Mul<Output = T> + Zero + Clone> MatrixSlic
     /// Computes the product of the matrices and subtracts it from this matrix slice.
     /// This fails if the matrices are not multiplicatively compatible or if the result
     /// does not have the same shape as this matrix.
-    pub fn gemm_sub(&mut self, m1: Matrix<T>, m2: Matrix<T>) -> Result<(), TensorErrors> where  T: SubAssign {
+    pub fn gemm_sub(&mut self, m1: Matrix<T>, m2: Matrix<T>) -> Result<(), TensorErrors>
+    where
+        T: SubAssign,
+    {
         if m1.cols != m2.rows {
             return Err(TensorErrors::IncompatibleShapes {
                 shape_1: m1.shape(),
@@ -392,26 +317,15 @@ impl<T: Add<Output = T> + AddAssign + Mul<Output = T> + Zero + Clone> MatrixSlic
             });
         }
 
-        let cols = self.cols();
-
-        let m2_transpose = m2.transpose();
-
-        self.chunks_mut(cols)
-            .zip(m1.chunks(m1.cols))
-            .for_each(|(out_row, row)| {
-                out_row
-                    .into_iter()
-                    .zip(m2_transpose.chunks(m2_transpose.cols))
-                    .for_each(|(out, col)| {
-                        *out -= dot_vectors(row, col);
-                    })
-            });
-
+        unsafe { self.gemm_sub_unchecked(m1, m2) };
         Ok(())
     }
 
     /// Computes the products of the matrices and subtracts it from the matrix slice without bounds checking.
-    pub(crate) unsafe fn gemm_sub_unchecked(&mut self, m1: Matrix<T>, m2: Matrix<T>) where T: SubAssign {
+    pub(crate) unsafe fn gemm_sub_unchecked(&mut self, m1: Matrix<T>, m2: Matrix<T>)
+    where
+        T: SubAssign,
+    {
         let cols = self.cols();
 
         let m2_transpose = m2.transpose();
@@ -451,21 +365,7 @@ impl<T: Add<Output = T> + AddAssign + Mul<Output = T> + Zero + Clone> MatrixSlic
             });
         }
 
-        let cols = self.cols();
-
-        let m2_transpose = m2.transpose_mt();
-
-        self.par_chunks_mut(cols)
-            .zip(m1.par_chunks(m1.cols))
-            .for_each(|(out_row, row)| {
-                out_row
-                    .into_par_iter()
-                    .zip(m2_transpose.par_chunks(m2_transpose.cols))
-                    .for_each(|(out, col)| {
-                        *out -= dot_vectors(row, col);
-                    })
-            });
-
+        unsafe { self.gemm_sub_unchecked_mt(m1, m2) };
         Ok(())
     }
 
