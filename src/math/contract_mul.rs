@@ -34,10 +34,11 @@ impl<T> Tensor<T> {
         let other_rank = other.rank();
 
         if self_rank > 0 && other_rank > 0 {
-            let self_matrix_shape =
-                shape![self_shape[..self_rank - 1].iter().product(), self_shape[self_rank - 1]];
-            let other_matrix_shape =
-                shape![other_shape[0], other_shape[1..].iter().product()];
+            let self_matrix_shape = shape![
+                self_shape[..self_rank - 1].iter().product(),
+                self_shape[self_rank - 1]
+            ];
+            let other_matrix_shape = shape![other_shape[0], other_shape[1..].iter().product()];
 
             if self_matrix_shape[1] != other_matrix_shape[0] {
                 return Err(TensorErrors::IncompatibleShapes {
@@ -120,10 +121,11 @@ impl<T> Tensor<T> {
         let other_rank = other.rank();
 
         if self_rank > 0 && other_rank > 0 {
-            let self_matrix_shape =
-                shape![self_shape[..self_rank - 1].iter().product(), self_shape[self_rank - 1]];
-            let other_matrix_shape =
-                shape![other_shape[0], other_shape[1..].iter().product()];
+            let self_matrix_shape = shape![
+                self_shape[..self_rank - 1].iter().product(),
+                self_shape[self_rank - 1]
+            ];
+            let other_matrix_shape = shape![other_shape[0], other_shape[1..].iter().product()];
 
             if self_matrix_shape[1] != other_matrix_shape[0] {
                 return Err(TensorErrors::IncompatibleShapes {
@@ -223,12 +225,10 @@ impl<T> Matrix<T> {
         let mut elements = Vec::with_capacity(self.rows * other.cols);
         let other_transpose = other.transpose();
 
-        self.chunks(self.cols).for_each(|row| {
-            other_transpose
-                .chunks(other_transpose.cols)
-                .for_each(|col| {
-                    elements.push(dot_vectors(row, col));
-                });
+        self.iter_rows().for_each(|row| {
+            other_transpose.iter_rows().for_each(|col| {
+                elements.push(dot_vectors(row, col));
+            });
         });
 
         Matrix {
@@ -265,7 +265,7 @@ impl<T> Matrix<T> {
         let other_transpose = other.transpose_mt();
 
         self.par_iter_rows()
-            .zip(buf.par_chunks_mut(self.rows))
+            .zip(buf.par_chunks_mut(other_transpose.rows))
             .for_each(|(row, outs)| {
                 other_transpose
                     .par_iter_rows()

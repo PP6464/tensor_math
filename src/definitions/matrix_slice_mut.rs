@@ -5,7 +5,6 @@ use crate::definitions::shape::Shape;
 use crate::shape;
 use rayon::iter::plumbing::{bridge, Consumer, Producer, ProducerCallback, UnindexedConsumer};
 use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
-use rayon::slice::{ParallelSlice, ParallelSliceMut};
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
 
@@ -354,14 +353,12 @@ impl<T> MatrixSliceMut<'_, T> {
 
     /// Returns an iterator over the rows.
     pub fn iter_rows(&self) -> impl ExactSizeIterator<Item = &[T]> + DoubleEndedIterator {
-        unsafe {
-            self.orig
-                .elements
-                .chunks_exact(self.orig.cols)
-                .skip(self.start.0)
-                .take(self.end.0 - self.start.0)
-                .map(|row| row.get_unchecked(self.start.1..self.end.1))
-        }
+        let orig_cols = self.orig.cols;
+        let start_col = self.start.1;
+        let end_col = self.end.1;
+        (self.start.0..self.end.0).map(move |row| unsafe {
+            self.orig.elements.get_unchecked(row * orig_cols + start_col..row * orig_cols + end_col)
+        })
     }
 
     /// Returns a parallel iterator over the rows.
@@ -369,30 +366,33 @@ impl<T> MatrixSliceMut<'_, T> {
     where
         T: Send + Sync,
     {
-        unsafe {
-            self.orig
-                .elements
-                .par_chunks_exact(self.orig.cols)
-                .skip(self.start.0)
-                .take(self.end.0 - self.start.0)
-                .map(|row| row.get_unchecked(self.start.1..self.end.1))
-        }
+        let orig_cols = self.orig.cols;
+        let start_col = self.start.1;
+        let end_col = self.end.1;
+        (self.start.0..self.end.0).into_par_iter().map(move |row| unsafe {
+            self.orig.elements.get_unchecked(row * orig_cols + start_col..row * orig_cols + end_col)
+        })
     }
 
     /// Returns a mutable iterator over the rows.
     pub fn iter_rows_mut(
         &mut self,
-    ) -> impl ExactSizeIterator<Item = &mut [T]> + DoubleEndedIterator {
+    ) -> impl ExactSizeIterator<Item = &mut [T]> + DoubleEndedIterator + '_ {
+        let rows = self.end.0 - self.start.0;
         let orig_cols = self.orig.cols;
-
-        unsafe {
-            self.orig
-                .elements
-                .chunks_exact_mut(orig_cols)
-                .skip(self.start.0)
-                .take(self.end.0 - self.start.0)
-                .map(|row| row.get_unchecked_mut(self.start.1..self.end.1))
-        }
+        let start_row = self.start.0;
+        let start_col = self.start.1;
+        let width = self.end.1 - self.start.1;
+        let elements = self.orig.elements.as_mut_ptr();
+        (0..rows).map(move |row| {
+            // The selected row ranges are disjoint; zero-width slices are empty.
+            unsafe {
+                std::slice::from_raw_parts_mut(
+                    elements.add((start_row + row) * orig_cols + start_col),
+                    width,
+                )
+            }
+        })
     }
 
     /// Returns a parallel mutable iterator over the rows.
@@ -400,16 +400,26 @@ impl<T> MatrixSliceMut<'_, T> {
     where
         T: Send + Sync,
     {
+        let rows = self.end.0 - self.start.0;
         let orig_cols = self.orig.cols;
+        let start_row = self.start.0;
+        let start_col = self.start.1;
+        let width = self.end.1 - self.start.1;
+        let mut elements = self.orig.elements.as_mut_slice();
+        let mut row_slices = Vec::with_capacity(rows);
 
-        unsafe {
-            self.orig
-                .elements
-                .par_chunks_exact_mut(orig_cols)
-                .skip(self.start.0)
-                .take(self.end.0 - self.start.0)
-                .map(|row| row.get_unchecked_mut(self.start.1..self.end.1))
+        let (_, remaining) = elements.split_at_mut(start_row * orig_cols);
+        elements = remaining;
+
+        for _ in 0..rows {
+            let (row, remaining) = elements.split_at_mut(orig_cols);
+            let (_, columns) = row.split_at_mut(start_col);
+            let (selected, _) = columns.split_at_mut(width);
+            row_slices.push(selected);
+            elements = remaining;
         }
+
+        row_slices.into_par_iter()
     }
 }
 

@@ -7,7 +7,6 @@ use crate::utilities::internal_functions::dot_vectors;
 use num::Zero;
 use rayon::iter::{IndexedParallelIterator, IntoParallelIterator};
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
-use rayon::slice::{ParallelSlice, ParallelSliceMut};
 use std::ops::{Add, AddAssign, Mul, SubAssign};
 /*
 --------------------------------------------
@@ -42,16 +41,14 @@ impl<T: Add<Output = T> + AddAssign + Mul<Output = T> + Zero + Clone> Matrix<T> 
 
     /// Computes the products of the matrices and adds it to the matrix without bounds checking.
     pub(crate) unsafe fn gemm_add_unchecked(&mut self, m1: Matrix<T>, m2: Matrix<T>) {
-        let cols = self.cols;
-
         let m2_transpose = m2.transpose();
 
-        self.chunks_mut(cols)
-            .zip(m1.chunks(m1.cols))
+        self.iter_rows_mut()
+            .zip(m1.iter_rows())
             .for_each(|(out_row, row)| {
                 out_row
                     .iter_mut()
-                    .zip(m2_transpose.chunks(m2_transpose.cols))
+                    .zip(m2_transpose.iter_rows())
                     .for_each(|(out, col)| {
                         *out += dot_vectors(row, col);
                     })
@@ -90,16 +87,14 @@ impl<T: Add<Output = T> + AddAssign + Mul<Output = T> + Zero + Clone> Matrix<T> 
     where
         T: Send + Sync,
     {
-        let cols = self.cols;
-
         let m2_transpose = m2.transpose_mt();
 
-        self.par_chunks_mut(cols)
-            .zip(m1.par_chunks(m1.cols))
+        self.par_iter_rows_mut()
+            .zip(m1.par_iter_rows())
             .for_each(|(out_row, row)| {
                 out_row
                     .par_iter_mut()
-                    .zip(m2_transpose.par_chunks(m2_transpose.cols))
+                    .zip(m2_transpose.par_iter_rows())
                     .for_each(|(out, col)| {
                         *out += dot_vectors(row, col);
                     })
@@ -138,16 +133,14 @@ impl<T: Add<Output = T> + AddAssign + Mul<Output = T> + Zero + Clone> Matrix<T> 
     where
         T: SubAssign,
     {
-        let cols = self.cols;
-
         let m2_transpose = m2.transpose();
 
-        self.chunks_mut(cols)
-            .zip(m1.chunks(m1.cols))
+        self.iter_rows_mut()
+            .zip(m1.iter_rows())
             .for_each(|(out_row, row)| {
                 out_row
                     .iter_mut()
-                    .zip(m2_transpose.chunks(m2_transpose.cols))
+                    .zip(m2_transpose.iter_rows())
                     .for_each(|(out, col)| {
                         *out -= dot_vectors(row, col);
                     })
@@ -186,16 +179,14 @@ impl<T: Add<Output = T> + AddAssign + Mul<Output = T> + Zero + Clone> Matrix<T> 
     where
         T: Send + Sync + SubAssign,
     {
-        let cols = self.cols;
-
         let m2_transpose = m2.transpose_mt();
 
-        self.par_chunks_mut(cols)
-            .zip(m1.par_chunks(m1.cols))
+        self.par_iter_rows_mut()
+            .zip(m1.par_iter_rows())
             .for_each(|(out_row, row)| {
                 out_row
                     .par_iter_mut()
-                    .zip(m2_transpose.par_chunks(m2_transpose.cols))
+                    .zip(m2_transpose.par_iter_rows())
                     .for_each(|(out, col)| {
                         *out -= dot_vectors(row, col);
                     })
@@ -230,16 +221,14 @@ impl<T: Add<Output = T> + AddAssign + Mul<Output = T> + Zero + Clone> MatrixSlic
 
     /// Computes the products of the matrices and adds it to the matrix slice without bounds checking.
     pub(crate) unsafe fn gemm_add_unchecked(&mut self, m1: Matrix<T>, m2: Matrix<T>) {
-        let cols = self.cols();
-
         let m2_transpose = m2.transpose();
 
-        self.chunks_mut(cols)
-            .zip(m1.chunks(m1.cols))
+        self.iter_rows_mut()
+            .zip(m1.iter_rows())
             .for_each(|(out_row, row)| {
                 out_row
-                    .into_iter()
-                    .zip(m2_transpose.chunks(m2_transpose.cols))
+                    .iter_mut()
+                    .zip(m2_transpose.iter_rows())
                     .for_each(|(out, col)| {
                         *out += dot_vectors(row, col);
                     })
@@ -278,16 +267,14 @@ impl<T: Add<Output = T> + AddAssign + Mul<Output = T> + Zero + Clone> MatrixSlic
     where
         T: Send + Sync,
     {
-        let cols = self.cols();
-
         let m2_transpose = m2.transpose_mt();
 
-        self.par_chunks_mut(cols)
-            .zip(m1.par_chunks(m1.cols))
+        self.par_iter_rows_mut()
+            .zip(m1.par_iter_rows())
             .for_each(|(out_row, row)| {
                 out_row
                     .into_par_iter()
-                    .zip(m2_transpose.par_chunks(m2_transpose.cols))
+                    .zip(m2_transpose.par_iter_rows())
                     .for_each(|(out, col)| {
                         *out += dot_vectors(row, col);
                     })
@@ -326,16 +313,14 @@ impl<T: Add<Output = T> + AddAssign + Mul<Output = T> + Zero + Clone> MatrixSlic
     where
         T: SubAssign,
     {
-        let cols = self.cols();
-
         let m2_transpose = m2.transpose();
 
-        self.chunks_mut(cols)
-            .zip(m1.chunks(m1.cols))
+        self.iter_rows_mut()
+            .zip(m1.iter_rows())
             .for_each(|(out_row, row)| {
                 out_row
-                    .into_iter()
-                    .zip(m2_transpose.chunks(m2_transpose.cols))
+                    .iter_mut()
+                    .zip(m2_transpose.iter_rows())
                     .for_each(|(out, col)| {
                         *out -= dot_vectors(row, col);
                     })
@@ -374,16 +359,14 @@ impl<T: Add<Output = T> + AddAssign + Mul<Output = T> + Zero + Clone> MatrixSlic
     where
         T: Send + Sync + SubAssign,
     {
-        let cols = self.cols();
-
         let m2_transpose = m2.transpose_mt();
 
-        self.par_chunks_mut(cols)
-            .zip(m1.par_chunks(m1.cols))
+        self.par_iter_rows_mut()
+            .zip(m1.par_iter_rows())
             .for_each(|(out_row, row)| {
                 out_row
                     .into_par_iter()
-                    .zip(m2_transpose.par_chunks(m2_transpose.cols))
+                    .zip(m2_transpose.par_iter_rows())
                     .for_each(|(out, col)| {
                         *out -= dot_vectors(row, col);
                     })

@@ -6,7 +6,6 @@ use crate::definitions::traits::{IntoMatrix, IntoTensor};
 use crate::{mat_addr, shape};
 use rayon::iter::{FromParallelIterator, IntoParallelIterator};
 use rayon::iter::{IndexedParallelIterator, ParallelIterator};
-use rayon::slice::{ParallelSlice, ParallelSliceMut};
 use std::ops::{Deref, DerefMut, Index, IndexMut};
 use std::vec::IntoIter;
 /*
@@ -187,10 +186,12 @@ impl<T> Matrix<T> {
     }
 
     /// Returns an iterator over the rows.
-    pub fn iter_rows(
-        &self,
-    ) -> impl ExactSizeIterator<Item = &[T]> + DoubleEndedIterator {
-        self.elements.chunks(self.cols)
+    pub fn iter_rows(&self) -> impl ExactSizeIterator<Item = &[T]> + DoubleEndedIterator {
+        let cols = self.cols;
+        unsafe {
+            (0..self.rows)
+                .map(move |row| self.elements.get_unchecked(row * cols..(row + 1) * cols))
+        }
     }
 
     /// Returns a parallel iterator over the rows.
@@ -198,24 +199,44 @@ impl<T> Matrix<T> {
     where
         T: Send + Sync,
     {
-        self.elements.par_chunks(self.cols)
+        let cols = self.cols;
+        unsafe {
+            (0..self.rows)
+                .into_par_iter()
+                .map(move |row| self.elements.get_unchecked(row * cols..(row + 1) * cols))
+        }
     }
 
     /// Returns a mutable iterator over the rows.
     pub fn iter_rows_mut(
         &mut self,
-    ) -> impl ExactSizeIterator<Item = &mut [T]> + DoubleEndedIterator {
-        self.elements.chunks_mut(self.cols)
+    ) -> impl ExactSizeIterator<Item = &mut [T]> + DoubleEndedIterator + '_ {
+        let rows = self.rows;
+        let cols = self.cols;
+        let elements = self.elements.as_mut_ptr();
+        (0..rows).map(move |row| {
+            // The row ranges are disjoint; zero-width rows are empty slices.
+            unsafe { std::slice::from_raw_parts_mut(elements.add(row * cols), cols) }
+        })
     }
 
     /// Returns a parallel mutable iterator over the rows.
-    pub fn par_iter_rows_mut(
-        &mut self,
-    ) -> impl IndexedParallelIterator<Item = &mut [T]>
+    pub fn par_iter_rows_mut(&mut self) -> impl IndexedParallelIterator<Item = &mut [T]>
     where
         T: Send + Sync,
     {
-        self.elements.par_chunks_mut(self.cols)
+        let rows = self.rows;
+        let cols = self.cols;
+        let mut elements = self.elements.as_mut_slice();
+        let mut row_slices = Vec::with_capacity(rows);
+
+        for _ in 0..rows {
+            let (row, remaining) = elements.split_at_mut(cols);
+            row_slices.push(row);
+            elements = remaining;
+        }
+
+        row_slices.into_par_iter()
     }
 }
 

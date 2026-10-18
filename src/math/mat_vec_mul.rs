@@ -31,7 +31,7 @@ impl<T> Matrix<T> {
     where
         T: Clone + Mul<Output = T> + AddAssign + Add<Output = T> + Zero,
     {
-        let mut res: Vec<T> = Vec::with_capacity(v.len());
+        let mut res: Vec<T> = Vec::with_capacity(self.rows);
 
         self.iter_rows()
             .for_each(|chunk| res.push(dot_vectors(chunk, v)));
@@ -61,7 +61,7 @@ impl<T> Matrix<T> {
     where
         T: Clone + Mul<Output = T> + AddAssign + Add<Output = T> + Zero + Send + Sync,
     {
-        let mut res: Vec<T> = Vec::with_capacity(v.len());
+        let mut res: Vec<T> = Vec::with_capacity(self.rows);
         let buf = res.spare_capacity_mut();
 
         self.par_iter_rows()
@@ -99,7 +99,7 @@ impl<T> Matrix<T> {
     where
         T: Clone + Mul<Output = T> + AddAssign + Add<Output = T> + Zero,
     {
-        let mut res: Vec<T> = Vec::with_capacity(v.len());
+        let mut res: Vec<T> = Vec::with_capacity(self.cols);
 
         self.transpose()
             .iter_rows()
@@ -130,7 +130,7 @@ impl<T> Matrix<T> {
     where
         T: Clone + Mul<Output = T> + AddAssign + Add<Output = T> + Zero + Send + Sync,
     {
-        let mut res: Vec<T> = Vec::with_capacity(v.len());
+        let mut res: Vec<T> = Vec::with_capacity(self.cols);
         let buf = res.spare_capacity_mut();
 
         let cols = self.cols;
@@ -139,7 +139,7 @@ impl<T> Matrix<T> {
             .par_iter_rows()
             .zip(buf.par_iter_mut())
             .for_each(|(chunk, out)| {
-                out.write(dot_vectors(chunk, v));
+                out.write(dot_vectors(v, chunk));
             });
 
         unsafe {
@@ -159,7 +159,7 @@ impl<T> Matrix<T> {
             return Err(TensorErrors::IncompatibleShapes {
                 shape_1: self.shape(),
                 shape_2: shape![v.len()],
-                op: "mat_vec_mul",
+                op: "mat_vec_mul_into_slice",
             });
         }
 
@@ -167,7 +167,7 @@ impl<T> Matrix<T> {
             return Err(TensorErrors::IncompatibleShapes {
                 shape_1: shape![self.rows],
                 shape_2: shape![out.len()],
-                op: "mat_vec_mul",
+                op: "mat_vec_mul_into_slice",
             });
         }
 
@@ -195,7 +195,7 @@ impl<T> Matrix<T> {
             return Err(TensorErrors::IncompatibleShapes {
                 shape_1: self.shape(),
                 shape_2: shape![v.len()],
-                op: "mat_vec_mul",
+                op: "mat_vec_mul_into_slice",
             });
         }
 
@@ -203,7 +203,7 @@ impl<T> Matrix<T> {
             return Err(TensorErrors::IncompatibleShapes {
                 shape_1: shape![self.rows],
                 shape_2: shape![out.len()],
-                op: "mat_vec_mul",
+                op: "mat_vec_mul_into_slice",
             });
         }
 
@@ -233,7 +233,7 @@ impl<T> Matrix<T> {
             return Err(TensorErrors::IncompatibleShapes {
                 shape_1: self.shape(),
                 shape_2: shape![v.len()],
-                op: "vec_mat_mul",
+                op: "vec_mat_mul_into_slice",
             });
         }
 
@@ -241,7 +241,7 @@ impl<T> Matrix<T> {
             return Err(TensorErrors::IncompatibleShapes {
                 shape_1: shape![self.cols],
                 shape_2: shape![out.len()],
-                op: "vec_mat_mul",
+                op: "vec_mat_mul_into_slice",
             });
         }
 
@@ -269,7 +269,7 @@ impl<T> Matrix<T> {
             return Err(TensorErrors::IncompatibleShapes {
                 shape_1: self.shape(),
                 shape_2: shape![v.len()],
-                op: "vec_mat_mul",
+                op: "vec_mat_mul_into_slice",
             });
         }
 
@@ -277,7 +277,7 @@ impl<T> Matrix<T> {
             return Err(TensorErrors::IncompatibleShapes {
                 shape_1: shape![self.cols],
                 shape_2: shape![out.len()],
-                op: "vec_mat_mul",
+                op: "vec_mat_mul_into_slice",
             });
         }
 
@@ -319,7 +319,7 @@ impl<T> MatrixSlice<'_, T> {
     where
         T: Clone + Mul<Output = T> + AddAssign + Add<Output = T> + Zero,
     {
-        let mut res: Vec<T> = Vec::with_capacity(v.len());
+        let mut res: Vec<T> = Vec::with_capacity(self.rows());
 
         self.iter_rows()
             .for_each(|chunk| res.push(dot_vectors(chunk, v)));
@@ -349,7 +349,7 @@ impl<T> MatrixSlice<'_, T> {
     where
         T: Clone + Mul<Output = T> + AddAssign + Add<Output = T> + Zero + Send + Sync,
     {
-        let mut res: Vec<T> = Vec::with_capacity(v.len());
+        let mut res: Vec<T> = Vec::with_capacity(self.rows());
         let buf = res.spare_capacity_mut();
 
         self.par_iter_rows()
@@ -387,7 +387,7 @@ impl<T> MatrixSlice<'_, T> {
     where
         T: Clone + Mul<Output = T> + AddAssign + Add<Output = T> + Zero,
     {
-        let mut res: Vec<T> = Vec::with_capacity(v.len());
+        let mut res: Vec<T> = Vec::with_capacity(self.cols());
 
         self.clone_into_matrix()
             .transpose()
@@ -398,7 +398,7 @@ impl<T> MatrixSlice<'_, T> {
     }
 
     /// Computes the product of a vector with this matrix slice.
-    /// This fails if the length of the vector does not match `self.rows`.
+    /// This fails if the length of the vector does not match `self.rows()`.
     pub fn vec_mat_mul_mt(&self, v: &[T]) -> Result<Vec<T>, TensorErrors>
     where
         T: Clone + Mul<Output = T> + AddAssign + Add<Output = T> + Zero + Send + Sync,
@@ -419,7 +419,7 @@ impl<T> MatrixSlice<'_, T> {
     where
         T: Clone + Mul<Output = T> + AddAssign + Add<Output = T> + Zero + Send + Sync,
     {
-        let mut res: Vec<T> = Vec::with_capacity(v.len());
+        let mut res: Vec<T> = Vec::with_capacity(self.cols());
         let buf = res.spare_capacity_mut();
 
         let cols = self.cols();
@@ -429,7 +429,7 @@ impl<T> MatrixSlice<'_, T> {
             .par_iter_rows()
             .zip(buf.par_iter_mut())
             .for_each(|(chunk, out)| {
-                out.write(dot_vectors(chunk, v));
+                out.write(dot_vectors(v, chunk));
             });
 
         unsafe {
@@ -440,7 +440,7 @@ impl<T> MatrixSlice<'_, T> {
     }
 
     /// Computes the product of this matrix slice with a vector, and stores the result into `out`.
-    /// This fails if the length of the vector does not match `self.cols` or if the length of `out.len() != self.rows`.
+    /// This fails if the length of the vector does not match `self.cols()` or if the length of `out.len() != self.rows()`.
     pub fn mat_vec_mul_into_slice(&self, v: &[T], out: &mut [T]) -> Result<(), TensorErrors>
     where
         T: Clone + Mul<Output = T> + AddAssign + Add<Output = T> + Zero,
@@ -449,7 +449,7 @@ impl<T> MatrixSlice<'_, T> {
             return Err(TensorErrors::IncompatibleShapes {
                 shape_1: self.shape(),
                 shape_2: shape![v.len()],
-                op: "mat_vec_mul",
+                op: "mat_vec_mul_into_slice",
             });
         }
 
@@ -457,7 +457,7 @@ impl<T> MatrixSlice<'_, T> {
             return Err(TensorErrors::IncompatibleShapes {
                 shape_1: shape![self.rows()],
                 shape_2: shape![out.len()],
-                op: "mat_vec_mul",
+                op: "mat_vec_mul_into_slice",
             });
         }
 
@@ -476,7 +476,7 @@ impl<T> MatrixSlice<'_, T> {
     }
 
     /// Computes the product of this matrix slice with a vector and stores the result into `out`.
-    /// This fails if the length of the vector does not match `self.cols` or if `out.len() != self.rows`.
+    /// This fails if the length of the vector does not match `self.cols()` or if `out.len() != self.rows()`.
     pub fn mat_vec_mul_mt_into_slice(&self, v: &[T], out: &mut [T]) -> Result<(), TensorErrors>
     where
         T: Clone + Mul<Output = T> + AddAssign + Add<Output = T> + Zero + Send + Sync,
@@ -485,7 +485,7 @@ impl<T> MatrixSlice<'_, T> {
             return Err(TensorErrors::IncompatibleShapes {
                 shape_1: self.shape(),
                 shape_2: shape![v.len()],
-                op: "mat_vec_mul",
+                op: "mat_vec_mul_into_slice",
             });
         }
 
@@ -493,7 +493,7 @@ impl<T> MatrixSlice<'_, T> {
             return Err(TensorErrors::IncompatibleShapes {
                 shape_1: shape![self.rows()],
                 shape_2: shape![out.len()],
-                op: "mat_vec_mul",
+                op: "mat_vec_mul_into_slice",
             });
         }
 
@@ -514,7 +514,7 @@ impl<T> MatrixSlice<'_, T> {
     }
 
     /// Computes the product of a vector with this matrix slice and stores the result into `out`.
-    /// This fails if the length of the vector does not match `self.rows` or if `out.len() != self.cols`.
+    /// This fails if the length of the vector does not match `self.rows()` or if `out.len() != self.cols()`.
     pub fn vec_mat_mul_into_slice(&self, v: &[T], out: &mut [T]) -> Result<(), TensorErrors>
     where
         T: Clone + Mul<Output = T> + AddAssign + Add<Output = T> + Zero,
@@ -523,7 +523,7 @@ impl<T> MatrixSlice<'_, T> {
             return Err(TensorErrors::IncompatibleShapes {
                 shape_1: self.shape(),
                 shape_2: shape![v.len()],
-                op: "vec_mat_mul",
+                op: "vec_mat_mul_into_slice",
             });
         }
 
@@ -531,7 +531,7 @@ impl<T> MatrixSlice<'_, T> {
             return Err(TensorErrors::IncompatibleShapes {
                 shape_1: shape![self.cols()],
                 shape_2: shape![out.len()],
-                op: "vec_mat_mul",
+                op: "vec_mat_mul_into_slice",
             });
         }
 
@@ -550,7 +550,7 @@ impl<T> MatrixSlice<'_, T> {
     }
 
     /// Computes the product of a vector with this matrix slice and stores it into `out`.
-    /// This fails if the length of the vector does not match `self.rows` or if `out.len() != self.cols`.
+    /// This fails if the length of the vector does not match `self.rows()` or if `out.len() != self.cols()`.
     pub fn vec_mat_mul_mt_into_slice(&self, v: &[T], out: &mut [T]) -> Result<(), TensorErrors>
     where
         T: Clone + Mul<Output = T> + AddAssign + Add<Output = T> + Zero + Send + Sync,
@@ -559,7 +559,7 @@ impl<T> MatrixSlice<'_, T> {
             return Err(TensorErrors::IncompatibleShapes {
                 shape_1: self.shape(),
                 shape_2: shape![v.len()],
-                op: "vec_mat_mul",
+                op: "vec_mat_mul_into_slice",
             });
         }
 
@@ -567,7 +567,7 @@ impl<T> MatrixSlice<'_, T> {
             return Err(TensorErrors::IncompatibleShapes {
                 shape_1: shape![self.cols()],
                 shape_2: shape![out.len()],
-                op: "vec_mat_mul",
+                op: "vec_mat_mul_into_slice",
             });
         }
 

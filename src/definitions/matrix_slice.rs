@@ -2,7 +2,6 @@ use crate::definitions::matrix::Matrix;
 use crate::definitions::shape::Shape;
 use crate::shape;
 use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
-use rayon::slice::ParallelSlice;
 use std::ops::Index;
 /*
 --------------------------------------------
@@ -99,14 +98,14 @@ impl<T> MatrixSlice<'_, T> {
 
     /// Returns an iterator over the rows.
     pub fn iter_rows(&self) -> impl ExactSizeIterator<Item = &[T]> + DoubleEndedIterator {
-        unsafe {
+        let orig_cols = self.orig.cols;
+        let start_col = self.start.1;
+        let end_col = self.end.1;
+        (self.start.0..self.end.0).map(move |row| unsafe {
             self.orig
                 .elements
-                .chunks_exact(self.orig.cols)
-                .skip(self.start.0)
-                .take(self.end.0 - self.start.0)
-                .map(|row| row.get_unchecked(self.start.1..self.end.1))
-        }
+                .get_unchecked(row * orig_cols + start_col..row * orig_cols + end_col)
+        })
     }
 
     /// Returns a parallel iterator over the rows.
@@ -114,14 +113,16 @@ impl<T> MatrixSlice<'_, T> {
     where
         T: Send + Sync,
     {
-        unsafe {
-            self.orig
-                .elements
-                .par_chunks_exact(self.orig.cols)
-                .skip(self.start.0)
-                .take(self.end.0 - self.start.0)
-                .map(|row| row.get_unchecked(self.start.1..self.end.1))
-        }
+        let orig_cols = self.orig.cols;
+        let start_col = self.start.1;
+        let end_col = self.end.1;
+        (self.start.0..self.end.0)
+            .into_par_iter()
+            .map(move |row| unsafe {
+                self.orig
+                    .elements
+                    .get_unchecked(row * orig_cols + start_col..row * orig_cols + end_col)
+            })
     }
 }
 
