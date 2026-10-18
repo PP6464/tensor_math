@@ -172,7 +172,7 @@ impl Matrix<f64> {
     /// This fails if the matrix is not square.
     pub fn eigendecompose(self) -> Result<(Vec<Complex64>, Matrix<Complex64>), TensorErrors> {
         self.par_map_refs(|x| Complex64 {
-            re: x.clone(),
+            re: *x,
             im: 0.0,
         })
         .eigendecompose()
@@ -182,7 +182,7 @@ impl Matrix<f64> {
     /// This fails if the matrix is not square or if the process could not converge on eigenvalues.
     pub fn eigenvalues(self) -> Result<Vec<Complex64>, TensorErrors> {
         self.par_map_refs(|x| Complex64 {
-            re: x.clone(),
+            re: *x,
             im: 0.0,
         })
         .eigenvalues()

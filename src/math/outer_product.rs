@@ -228,7 +228,7 @@ impl<T> MatrixSliceMut<'_, T> {
         }
 
         for (row, a) in self.iter_rows_mut().zip(v1) {
-            for (out, b) in row.into_iter().zip(v2) {
+            for (out, b) in row.iter_mut().zip(v2) {
                 *out += a.clone() * b.clone();
             }
         }
@@ -242,7 +242,7 @@ impl<T> MatrixSliceMut<'_, T> {
         T: Mul<Output = T> + Clone + AddAssign,
     {
         for (row, a) in self.iter_rows_mut().zip(v1) {
-            for (out, b) in row.into_iter().zip(v2) {
+            for (out, b) in row.iter_mut().zip(v2) {
                 *out += a.clone() * b.clone();
             }
         }
@@ -302,7 +302,7 @@ impl<T> MatrixSliceMut<'_, T> {
         }
 
         for (row, a) in self.iter_rows_mut().zip(v1) {
-            for (out, b) in row.into_iter().zip(v2) {
+            for (out, b) in row.iter_mut().zip(v2) {
                 *out -= a.clone() * b.clone();
             }
         }
@@ -316,7 +316,7 @@ impl<T> MatrixSliceMut<'_, T> {
         T: Mul<Output = T> + Clone + SubAssign,
     {
         for (row, a) in self.iter_rows_mut().zip(v1) {
-            for (out, b) in row.into_iter().zip(v2) {
+            for (out, b) in row.iter_mut().zip(v2) {
                 *out -= a.clone() * b.clone();
             }
         }

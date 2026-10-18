@@ -7,13 +7,13 @@ pub fn main() {
     // Warm up (page faults, allocator caching, thread pool spin-up) so the
     // measured loop isn't dominated by one-time setup costs.
     for _ in 0..5 {
-        let r = a.householder();
+        let r = a.clone().householder();
         black_box(&r);
     }
 
     let iterations = 20;
     for _ in 0..iterations {
-        let r = a.householder();
+        let r = a.clone().householder();
         black_box(&r);
     }
 }

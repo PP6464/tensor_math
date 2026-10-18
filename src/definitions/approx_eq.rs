@@ -14,7 +14,7 @@ impl ApproxEq for Tensor<f64> {
         let margin = margin.into();
 
         self.enumerated_iter()
-            .all(|(i, &x)| approx_eq!(f64, x, other[&i], margin.clone()))
+            .all(|(i, &x)| approx_eq!(f64, x, other[&i], margin))
     }
 }
 
@@ -30,7 +30,7 @@ impl ApproxEq for Matrix<f64> {
 
         self.elements
             .into_iter()
-            .zip(other.elements.into_iter())
+            .zip(other.elements)
             .all(|(x, y)| approx_eq!(f64, x, y, m))
     }
 }
@@ -63,7 +63,7 @@ impl ApproxEq for Matrix<Complex64> {
 
         self.elements
             .into_iter()
-            .zip(other.elements.into_iter())
+            .zip(other.elements)
             .all(|(x, y)| {
                 approx_eq!(f64, x.re(), y.re(), m)
                     && approx_eq!(f64, x.im(), y.im(), m)

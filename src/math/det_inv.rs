@@ -128,46 +128,42 @@ pub fn det_slow<T: Add<Output = T> + Mul<Output = T> + Sub<Output = T> + Clone +
 
     let mut determinant = T::zero();
 
-    unsafe {
-        for i in 0..ord {
-            let is_minus = i % 2 != 0;
+    for i in 0..ord {
+        let is_minus = i % 2 != 0;
 
-            unsafe {
-                if i == 0 {
-                    let slice = m.slice_unchecked(1..ord, 1..ord).clone_into_matrix();
-                    determinant = determinant + m[&[0, i]].clone() * det_slow(&slice)?;
+        unsafe {
+            if i == 0 {
+                let slice = m.slice_unchecked(1..ord, 1..ord).clone_into_matrix();
+                determinant = determinant + m[&[0, i]].clone() * det_slow(&slice)?;
 
-                    continue;
-                }
+                continue;
             }
+        }
 
-            unsafe {
-                if i == ord - 1 {
-                    let slice = m.slice_unchecked(1..ord, 0..(ord - 1)).clone_into_matrix();
-
-                    if is_minus {
-                        determinant = determinant - m[&[0, i]].clone() * det_slow(&slice)?;
-                    } else {
-                        determinant = determinant + m[&[0, i]].clone() * det_slow(&slice)?;
-                    }
-
-                    continue;
-                }
-            }
-
-            unsafe {
-                let slice = m
-                    .slice_unchecked(1..ord, 0..i)
-                    .clone_into_matrix()
-                    .concat_cols_unchecked(
-                        m.slice_unchecked(1..ord, i + 1..ord).clone_into_matrix(),
-                    );
+        unsafe {
+            if i == ord - 1 {
+                let slice = m.slice_unchecked(1..ord, 0..(ord - 1)).clone_into_matrix();
 
                 if is_minus {
-                    determinant = determinant - m[&[0, i]].clone() * det_slow(&slice)?
+                    determinant = determinant - m[&[0, i]].clone() * det_slow(&slice)?;
                 } else {
-                    determinant = determinant + m[&[0, i]].clone() * det_slow(&slice)?
+                    determinant = determinant + m[&[0, i]].clone() * det_slow(&slice)?;
                 }
+
+                continue;
+            }
+        }
+
+        unsafe {
+            let slice = m
+                .slice_unchecked(1..ord, 0..i)
+                .clone_into_matrix()
+                .concat_cols_unchecked(m.slice_unchecked(1..ord, i + 1..ord).clone_into_matrix());
+
+            if is_minus {
+                determinant = determinant - m[&[0, i]].clone() * det_slow(&slice)?
+            } else {
+                determinant = determinant + m[&[0, i]].clone() * det_slow(&slice)?
             }
         }
     }
@@ -203,7 +199,7 @@ where
     }
 
     let mut res = Matrix::<T>::zeros(m.rows, m.cols);
-    let d = det_slow(&m)?;
+    let d = det_slow(m)?;
 
     if d == T::zero() {
         return Err(TensorErrors::DeterminantZero);

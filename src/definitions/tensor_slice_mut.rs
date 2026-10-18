@@ -74,8 +74,8 @@ impl<T> TensorSliceMut<'_, T> {
             .map(|(x, y)| x + y)
             .collect::<Vec<usize>>();
 
-        for i in 0..self.orig.rank() {
-            if self.end[i] <= orig_index[i] {
+        for (self_end, orig_index) in self.end.iter().zip(orig_index.iter()) {
+            if *self_end <= *orig_index {
                 return None;
             }
         }
@@ -106,8 +106,8 @@ impl<T> TensorSliceMut<'_, T> {
             .map(|(x, y)| x + y)
             .collect::<Vec<usize>>();
 
-        for i in 0..self.orig.rank() {
-            if self.end[i] <= orig_index[i] {
+        for (self_end, orig_index) in self.end.iter().zip(orig_index.iter()) {
+            if *self_end <= *orig_index {
                 return None;
             }
         }
@@ -127,7 +127,7 @@ impl<T> TensorSliceMut<'_, T> {
     }
 
     /// Returns an iterator over the elements of the tensor slice.
-    pub fn iter(&self) -> impl Iterator<Item = &T> + ExactSizeIterator + DoubleEndedIterator {
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = &T> + DoubleEndedIterator {
         let shape = self.shape();
         (0..shape.element_count())
             .map(move |i| unsafe { self.get_unchecked(&shape.tensor_index_unchecked(i)) })
@@ -149,7 +149,7 @@ impl<T> TensorSliceMut<'_, T> {
     /// Returns a mutable iterator over the elements of the tensor slice.
     pub fn iter_mut(
         &mut self,
-    ) -> impl Iterator<Item = &mut T> + ExactSizeIterator + DoubleEndedIterator {
+    ) -> impl ExactSizeIterator<Item = &mut T> + DoubleEndedIterator {
         struct SliceIterMut<'a, T> {
             base: *mut T,            // Pointer to the start of the original tensor's elements
             flat_index: usize,       // Current flat index in the slice

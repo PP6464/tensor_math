@@ -274,7 +274,7 @@ impl<T> Tensor<T> {
     /// Returns a cloned immutable slice to a specified region in the tensor.
     /// This fails if `range.start > range.end` for any index range,
     /// or if the region includes an out-of-bounds index.
-    pub fn slice(&self, indices: &[Range<usize>]) -> Result<TensorSlice<T>, TensorErrors> {
+    pub fn slice(&self, indices: &[Range<usize>]) -> Result<TensorSlice<'_, T>, TensorErrors> {
         if indices.len() != self.rank() {
             return Err(TensorErrors::IncompatibleShapes {
                 shape_1: indices.iter().map(|r| r.end - r.start).collect(),
@@ -311,7 +311,7 @@ impl<T> Tensor<T> {
     }
 
     /// Slices the tensor without checking bounds.
-    pub(crate) unsafe fn slice_unchecked(&self, indices: &[Range<usize>]) -> TensorSlice<T> {
+    pub(crate) unsafe fn slice_unchecked(&self, indices: &[Range<usize>]) -> TensorSlice<'_, T> {
         let (start, end) = indices.iter().map(|range| (range.start, range.end)).unzip();
 
         TensorSlice {
@@ -322,7 +322,7 @@ impl<T> Tensor<T> {
     }
 
     /// Returns a slice covering the entire tensor.
-    pub fn as_tensor_slice(&self) -> TensorSlice<T> {
+    pub fn as_tensor_slice(&self) -> TensorSlice<'_, T> {
         TensorSlice {
             orig: self,
             start: vec![0; self.rank()],
@@ -394,7 +394,7 @@ impl<T> Tensor<T> {
     }
 
     /// Returns a mutable slice covering the entire tensor.
-    pub fn as_tensor_slice_mut(&mut self) -> TensorSliceMut<T> {
+    pub fn as_tensor_slice_mut(&mut self) -> TensorSliceMut<'_, T> {
         TensorSliceMut {
             start: vec![0; self.rank()],
             end: self.shape.0.clone(),
@@ -918,6 +918,8 @@ impl<T> Tensor<T> {
             .collect();
 
         let mut res = Vec::with_capacity(res_shape.element_count());
+        // We will initialise this vector here so we can disable the error
+        #[allow(clippy::uninit_vec)]
         unsafe {
             res.set_len(res_shape.element_count());
         }
@@ -1010,6 +1012,8 @@ impl<T> Tensor<T> {
             .collect();
 
         let mut res = Vec::with_capacity(res_shape.element_count());
+        // We will initialise this vector here so we can disable the error
+        #[allow(clippy::uninit_vec)]
         unsafe {
             res.set_len(res_shape.element_count());
         }
@@ -1106,6 +1110,8 @@ impl<T> Tensor<T> {
             .collect();
 
         let mut res = Vec::with_capacity(res_shape.element_count());
+        // We will initialise this vector here so we can disable the error
+        #[allow(clippy::uninit_vec)]
         unsafe {
             res.set_len(res_shape.element_count());
         }
@@ -1195,6 +1201,8 @@ impl<T> Tensor<T> {
             .collect();
 
         let mut res = Vec::with_capacity(res_shape.element_count());
+        // We will initialise this vector here so we can disable the error
+        #[allow(clippy::uninit_vec)]
         unsafe {
             res.set_len(res_shape.element_count());
         }

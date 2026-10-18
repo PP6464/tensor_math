@@ -56,8 +56,8 @@ impl<T> TensorSlice<'_, T> {
             .map(|(x, y)| x + y)
             .collect::<Vec<usize>>();
 
-        for i in 0..self.orig.rank() {
-            if self.end[i] <= orig_index[i] {
+        for (self_end, orig_index) in self.end.iter().zip(orig_index.iter()) {
+            if *self_end <= *orig_index {
                 return None;
             }
         }
@@ -77,7 +77,7 @@ impl<T> TensorSlice<'_, T> {
     }
 
     /// Returns an iterator over the elements of the tensor slice.
-    pub fn iter(&self) -> impl Iterator<Item = &T> + ExactSizeIterator + DoubleEndedIterator {
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = &T> + DoubleEndedIterator {
         let shape = self.shape();
         (0..shape.element_count())
             .map(move |i| unsafe { self.get_unchecked(&shape.tensor_index_unchecked(i)) })

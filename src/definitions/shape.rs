@@ -76,7 +76,7 @@ impl Shape {
             }
         }
 
-        Ok(dot_vectors(&Strides::from_shape(self).0, &index))
+        Ok(dot_vectors(&Strides::from_shape(self).0, index))
     }
 
     /// This gives the address for a corresponding shape index and trusts validity
@@ -98,7 +98,7 @@ impl Shape {
         for j in strides.0.iter() {
             let floored_div = remainder / j;
             index_vec.push(floored_div);
-            remainder = remainder % j;
+            remainder %= j;
         }
 
         Ok(index_vec)
@@ -113,7 +113,7 @@ impl Shape {
         for j in strides.0.iter() {
             let floored_div = remainder / j;
             index_vec.push(floored_div);
-            remainder = remainder % j;
+            remainder %= j;
         }
 
         index_vec

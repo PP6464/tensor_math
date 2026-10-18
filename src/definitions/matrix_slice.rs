@@ -2,8 +2,8 @@ use crate::definitions::matrix::Matrix;
 use crate::definitions::shape::Shape;
 use crate::shape;
 use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
-use std::ops::Index;
 use rayon::slice::ParallelSlice;
+use std::ops::Index;
 /*
 --------------------------------------------
 * Immutable matrix slice definition
@@ -64,9 +64,8 @@ impl<T> MatrixSlice<'_, T> {
     }
 
     /// Returns an iterator over the elements of the matrix slice.
-    pub fn iter(&self) -> impl Iterator<Item = &T> + ExactSizeIterator + DoubleEndedIterator {
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = &T> + DoubleEndedIterator {
         (0..self.rows() * self.cols())
-            .into_iter()
             .map(move |i| unsafe { self.get_unchecked((i / self.cols(), i % self.cols())) })
     }
 
@@ -99,7 +98,7 @@ impl<T> MatrixSlice<'_, T> {
     }
 
     /// Returns an iterator over the rows.
-    pub fn iter_rows(&self) -> impl Iterator<Item = &[T]> + DoubleEndedIterator + ExactSizeIterator {
+    pub fn iter_rows(&self) -> impl ExactSizeIterator<Item = &[T]> + DoubleEndedIterator {
         unsafe {
             self.orig
                 .elements
@@ -111,7 +110,7 @@ impl<T> MatrixSlice<'_, T> {
     }
 
     /// Returns a parallel iterator over the rows.
-    pub fn par_iter_rows(&self) -> impl ParallelIterator<Item = &[T]> + IndexedParallelIterator
+    pub fn par_iter_rows(&self) -> impl IndexedParallelIterator<Item = &[T]>
     where
         T: Send + Sync,
     {
@@ -174,7 +173,7 @@ impl<T: Clone> MatrixSlice<'_, T> {
             let start = i * self.orig.cols + self.start.1;
             let end = i * self.orig.cols + self.end.1;
             unsafe {
-                elements.extend_from_slice(&self.orig.elements.get_unchecked(start..end));
+                elements.extend_from_slice(self.orig.elements.get_unchecked(start..end));
             }
         }
 

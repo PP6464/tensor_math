@@ -33,7 +33,7 @@ pub fn dot_vectors<T: AddAssign + Mul<Output = T> + Zero + Clone>(vec1: &[T], ve
             + acc.get_unchecked(2).clone()
             + acc.get_unchecked(3).clone();
         for i in (chunks * 4)..vec1.len() {
-            total = total + vec1.get_unchecked(i).clone() * vec2.get_unchecked(i).clone();
+            total += vec1.get_unchecked(i).clone() * vec2.get_unchecked(i).clone();
         }
         total
     }
@@ -106,11 +106,11 @@ pub fn radix_2_fft_vec(x: &[Complex64]) -> Vec<Complex64> {
                         .zip(seconds.par_iter_mut())
                         .enumerate()
                         .for_each(|(i, (first_val, second_val))| {
-                            let twiddle_index = (n >> iters) * (i & n - 1);
+                            let twiddle_index = (n >> iters) * (i & (n - 1));
                             let twiddle = twiddle_factors[twiddle_index];
 
-                            let first = first_val.clone();
-                            let second = second_val.clone();
+                            let first = *first_val;
+                            let second = *second_val;
 
                             *first_val = first + twiddle * second;
                             *second_val = first - twiddle * second;
@@ -121,11 +121,11 @@ pub fn radix_2_fft_vec(x: &[Complex64]) -> Vec<Complex64> {
                         .zip(seconds.iter_mut())
                         .enumerate()
                         .for_each(|(i, (first_val, second_val))| {
-                            let twiddle_index = (n >> iters) * (i & n - 1);
+                            let twiddle_index = (n >> iters) * (i & (n - 1));
                             let twiddle = twiddle_factors[twiddle_index];
 
-                            let first = first_val.clone();
-                            let second = second_val.clone();
+                            let first = *first_val;
+                            let second = *second_val;
 
                             *first_val = first + twiddle * second;
                             *second_val = first - twiddle * second;
@@ -141,11 +141,11 @@ pub fn radix_2_fft_vec(x: &[Complex64]) -> Vec<Complex64> {
                         .zip(seconds.par_iter_mut())
                         .enumerate()
                         .for_each(|(i, (first_val, second_val))| {
-                            let twiddle_index = (n >> iters) * (i & n - 1);
+                            let twiddle_index = (n >> iters) * (i & (n - 1));
                             let twiddle = twiddle_factors[twiddle_index];
 
-                            let first = first_val.clone();
-                            let second = second_val.clone();
+                            let first = *first_val;
+                            let second = *second_val;
 
                             *first_val = first + twiddle * second;
                             *second_val = first - twiddle * second;
@@ -156,11 +156,11 @@ pub fn radix_2_fft_vec(x: &[Complex64]) -> Vec<Complex64> {
                         .zip(seconds.iter_mut())
                         .enumerate()
                         .for_each(|(i, (first_val, second_val))| {
-                            let twiddle_index = (n >> iters) * (i & n - 1);
+                            let twiddle_index = (n >> iters) * (i & (n - 1));
                             let twiddle = twiddle_factors[twiddle_index];
 
-                            let first = first_val.clone();
-                            let second = second_val.clone();
+                            let first = *first_val;
+                            let second = *second_val;
 
                             *first_val = first + twiddle * second;
                             *second_val = first - twiddle * second;
@@ -224,7 +224,7 @@ pub fn fft_vec(x: &[Complex64]) -> Vec<Complex64> {
         return vec![];
     }
 
-    if n & n - 1 == 0 {
+    if n & (n - 1) == 0 {
         radix_2_fft_vec(x)
     } else {
         bluestein_fft_vec(x)

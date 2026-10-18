@@ -33,12 +33,11 @@ pub fn gaussian_pdf_single_sigma(sigma: f64, shape: Shape) -> Result<Tensor<f64>
         .collect::<Vec<f64>>();
 
     for (pos, val) in res.enumerated_iter_mut() {
-        let exponent = centre
+        let exponent = -centre
             .iter()
             .zip(pos.iter())
             .map(|(x, y)| (x - y.to_f64().unwrap()).powi(2))
             .fold(0.0, f64::add)
-            * -1.0
             / (2.0 * sigma.powi(2));
 
         *val = f64::exp(exponent) / (sigma * f64::sqrt(2.0 * PI)).powi(shape.rank() as i32)

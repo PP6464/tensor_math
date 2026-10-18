@@ -14,12 +14,11 @@ pub fn solve_quadratic(coefficients: &[Complex64; 3]) -> Result<Vec<Complex64>, 
     let c = coefficients[0];
 
     let d = b.powi(2) - 4.0 * a * c;
-    let mut roots = Vec::new();
 
-    roots.push((-b + d.sqrt()) / (2.0 * a));
-    roots.push((-b - d.sqrt()) / (2.0 * a));
-
-    Ok(roots)
+    Ok(vec![
+        (-b + d.sqrt()) / (2.0 * a),
+        (-b - d.sqrt()) / (2.0 * a),
+    ])
 }
 
 /// Solves a cubic. The coefficients are entered as a `&[Complex64; 4]` where the index of the

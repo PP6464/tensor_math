@@ -1,5 +1,6 @@
 use crate::definitions::errors::TensorErrors;
 use crate::definitions::matrix::Matrix;
+use crate::definitions::matrix_slice::MatrixSlice;
 use crate::definitions::shape::Shape;
 use crate::shape;
 use rayon::iter::plumbing::{bridge, Consumer, Producer, ProducerCallback, UnindexedConsumer};
@@ -7,7 +8,6 @@ use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterato
 use rayon::slice::{ParallelSlice, ParallelSliceMut};
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
-use crate::definitions::matrix_slice::MatrixSlice;
 
 /*
 --------------------------------------------
@@ -52,7 +52,7 @@ impl<T> MatrixSliceMut<'_, T> {
     pub fn is_square(&self) -> bool {
         self.rows() == self.cols()
     }
-    
+
     /// Returns this slice as an immutable slice.
     pub fn as_immut(&self) -> MatrixSlice<'_, T> {
         MatrixSlice {
@@ -61,7 +61,7 @@ impl<T> MatrixSliceMut<'_, T> {
             end: self.end,
         }
     }
-    
+
     /// Uses the immutable version of this slice in a closure, returning the result of the closure.
     pub fn use_as_immut<R>(&self, f: impl FnOnce(MatrixSlice<'_, T>) -> R) -> R {
         f(self.as_immut())
@@ -103,9 +103,8 @@ impl<T> MatrixSliceMut<'_, T> {
     }
 
     /// Returns an iterator over the elements of the matrix slice.
-    pub fn iter(&self) -> impl Iterator<Item = &T> + ExactSizeIterator + DoubleEndedIterator {
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = &T> + DoubleEndedIterator {
         (0..self.rows() * self.cols())
-            .into_iter()
             .map(move |i| unsafe { self.get_unchecked((i / self.cols(), i % self.cols())) })
     }
 
@@ -120,9 +119,7 @@ impl<T> MatrixSliceMut<'_, T> {
     }
 
     /// Returns an iterator over mutable references to the elements of the matrix slice.
-    pub fn iter_mut(
-        &mut self,
-    ) -> impl Iterator<Item = &mut T> + ExactSizeIterator + DoubleEndedIterator {
+    pub fn iter_mut(&mut self) -> impl ExactSizeIterator<Item = &mut T> + DoubleEndedIterator {
         struct SliceIterMut<'a, T> {
             base: *mut T,
             flat_index: usize,
@@ -356,7 +353,7 @@ impl<T> MatrixSliceMut<'_, T> {
     }
 
     /// Returns an iterator over the rows.
-    pub fn iter_rows(&self) -> impl Iterator<Item = &[T]> + ExactSizeIterator + DoubleEndedIterator {
+    pub fn iter_rows(&self) -> impl ExactSizeIterator<Item = &[T]> + DoubleEndedIterator {
         unsafe {
             self.orig
                 .elements
@@ -368,7 +365,10 @@ impl<T> MatrixSliceMut<'_, T> {
     }
 
     /// Returns a parallel iterator over the rows.
-    pub fn par_iter_rows(&self) -> impl ParallelIterator<Item = &[T]> + IndexedParallelIterator where T: Send + Sync {
+    pub fn par_iter_rows(&self) -> impl IndexedParallelIterator<Item = &[T]>
+    where
+        T: Send + Sync,
+    {
         unsafe {
             self.orig
                 .elements
@@ -382,7 +382,7 @@ impl<T> MatrixSliceMut<'_, T> {
     /// Returns a mutable iterator over the rows.
     pub fn iter_rows_mut(
         &mut self,
-    ) -> impl Iterator<Item = &mut [T]> + ExactSizeIterator + DoubleEndedIterator {
+    ) -> impl ExactSizeIterator<Item = &mut [T]> + DoubleEndedIterator {
         let orig_cols = self.orig.cols;
 
         unsafe {
@@ -396,9 +396,7 @@ impl<T> MatrixSliceMut<'_, T> {
     }
 
     /// Returns a parallel mutable iterator over the rows.
-    pub fn par_iter_rows_mut(
-        &mut self,
-    ) -> impl ParallelIterator<Item = &mut [T]> + IndexedParallelIterator
+    pub fn par_iter_rows_mut(&mut self) -> impl IndexedParallelIterator<Item = &mut [T]>
     where
         T: Send + Sync,
     {
@@ -475,7 +473,7 @@ impl<T: Clone> MatrixSliceMut<'_, T> {
             let start = i * self.orig.cols + self.start.1;
             let end = i * self.orig.cols + self.end.1;
             unsafe {
-                elements.extend_from_slice(&self.orig.elements.get_unchecked(start..end));
+                elements.extend_from_slice(self.orig.elements.get_unchecked(start..end));
             }
         }
 

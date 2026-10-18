@@ -4,11 +4,11 @@ use crate::definitions::strides::Strides;
 use crate::definitions::tensor::Tensor;
 use crate::definitions::traits::{IntoMatrix, IntoTensor};
 use crate::{mat_addr, shape};
-use rayon::iter::{IndexedParallelIterator, ParallelIterator};
 use rayon::iter::{FromParallelIterator, IntoParallelIterator};
+use rayon::iter::{IndexedParallelIterator, ParallelIterator};
+use rayon::slice::{ParallelSlice, ParallelSliceMut};
 use std::ops::{Deref, DerefMut, Index, IndexMut};
 use std::vec::IntoIter;
-use rayon::slice::{ParallelSlice, ParallelSliceMut};
 /*
 --------------------------------------------
 * Matrix definition
@@ -101,11 +101,6 @@ impl<T> Matrix<T> {
             .get_unchecked_mut(mat_addr!(indices, self.cols))
     }
 
-    /// Consumes the matrix and returns an iterator over its elements.
-    pub fn into_iter(self) -> IntoIter<T> {
-        self.elements.into_iter()
-    }
-
     /// Consumes the matrix and returns a parallel iterator over its elements.
     pub fn into_par_iter(self) -> impl ParallelIterator<Item = T>
     where
@@ -148,7 +143,11 @@ impl<T> Matrix<T> {
     }
 
     /// Swap the values at the indices.
-    pub fn swap(&mut self, index1: (usize, usize), index2: (usize, usize)) -> Result<(), TensorErrors> {
+    pub fn swap(
+        &mut self,
+        index1: (usize, usize),
+        index2: (usize, usize),
+    ) -> Result<(), TensorErrors> {
         if index1.0 >= self.rows {
             return Err(TensorErrors::IndexOutOfBounds {
                 index: index1.0,
@@ -181,32 +180,38 @@ impl<T> Matrix<T> {
             });
         }
 
-        self.elements.swap(mat_addr!(index1, self.cols), mat_addr!(index2, self.cols));
+        self.elements
+            .swap(mat_addr!(index1, self.cols), mat_addr!(index2, self.cols));
 
         Ok(())
     }
 
     /// Returns an iterator over the rows.
-    pub fn iter_rows(&self) -> impl Iterator<Item = &[T]> + ExactSizeIterator + DoubleEndedIterator {
+    pub fn iter_rows(
+        &self,
+    ) -> impl ExactSizeIterator<Item = &[T]> + DoubleEndedIterator {
         self.elements.chunks(self.cols)
     }
 
     /// Returns a parallel iterator over the rows.
-    pub fn par_iter_rows(&self) -> impl ParallelIterator<Item = &[T]> + IndexedParallelIterator where T: Send + Sync {
+    pub fn par_iter_rows(&self) -> impl IndexedParallelIterator<Item = &[T]>
+    where
+        T: Send + Sync,
+    {
         self.elements.par_chunks(self.cols)
     }
 
     /// Returns a mutable iterator over the rows.
     pub fn iter_rows_mut(
         &mut self,
-    ) -> impl Iterator<Item = &mut [T]> + ExactSizeIterator + DoubleEndedIterator {
+    ) -> impl ExactSizeIterator<Item = &mut [T]> + DoubleEndedIterator {
         self.elements.chunks_mut(self.cols)
     }
 
     /// Returns a parallel mutable iterator over the rows.
     pub fn par_iter_rows_mut(
         &mut self,
-    ) -> impl ParallelIterator<Item = &mut [T]> + IndexedParallelIterator
+    ) -> impl IndexedParallelIterator<Item = &mut [T]>
     where
         T: Send + Sync,
     {
@@ -362,5 +367,20 @@ impl<T: Send> FromParallelIterator<T> for Matrix<T> {
             rows: 1,
             elements,
         }
+    }
+}
+
+/*
+--------------------------------------------
+* Conversion into iterators
+--------------------------------------------
+*/
+
+impl<T> IntoIterator for Matrix<T> {
+    type Item = T;
+    type IntoIter = IntoIter<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.elements.into_iter()
     }
 }

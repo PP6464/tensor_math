@@ -23,7 +23,7 @@ fn sum_slice<T: AddAssign + Add<Output = T> + Clone + Zero>(slice: &[T]) -> T {
         let remainder = slice.len() % 4;
 
         for i in 0..remainder {
-            sum = sum + slice.get_unchecked(slice.len() - remainder + i).clone();
+            sum += slice.get_unchecked(slice.len() - remainder + i).clone();
         }
 
         sum

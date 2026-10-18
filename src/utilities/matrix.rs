@@ -283,7 +283,7 @@ impl<T> Matrix<T> {
         &self,
         rows_range: Range<usize>,
         cols_range: Range<usize>,
-    ) -> Result<MatrixSlice<T>, TensorErrors> {
+    ) -> Result<MatrixSlice<'_, T>, TensorErrors> {
         if rows_range.end > self.rows {
             return Err(TensorErrors::SliceIndicesOutOfBounds {
                 start: rows_range.start,
@@ -328,7 +328,7 @@ impl<T> Matrix<T> {
         &self,
         rows_range: Range<usize>,
         cols_range: Range<usize>,
-    ) -> MatrixSlice<T> {
+    ) -> MatrixSlice<'_, T> {
         MatrixSlice {
             orig: self,
             start: (rows_range.start, cols_range.start),
@@ -337,7 +337,7 @@ impl<T> Matrix<T> {
     }
 
     /// Returns a slice covering the entire matrix.
-    pub fn as_matrix_slice(&self) -> MatrixSlice<T> {
+    pub fn as_matrix_slice(&self) -> MatrixSlice<'_, T> {
         MatrixSlice {
             orig: self,
             start: (0, 0),
@@ -406,7 +406,7 @@ impl<T> Matrix<T> {
     }
 
     /// Returns a mutable slice covering the entire matrix.
-    pub fn as_matrix_slice_mut(&mut self) -> MatrixSliceMut<T> {
+    pub fn as_matrix_slice_mut(&mut self) -> MatrixSliceMut<'_, T> {
         MatrixSliceMut {
             start: (0, 0),
             end: (self.rows, self.cols),
@@ -530,7 +530,7 @@ impl<T> Matrix<T> {
                     b.reverse();
                 });
 
-            if self.rows % 2 == 0 {
+            if self.rows.is_multiple_of(2) {
                 // Need to flip the middle row
                 self.elements
                     .get_unchecked_mut(mid * cols..mid * cols + cols)
@@ -542,7 +542,7 @@ impl<T> Matrix<T> {
     }
 
     /// Transpose a matrix.
-    pub fn transpose(mut self) -> Matrix<T> {
+    pub fn transpose(self) -> Matrix<T> {
         let mut new_elements = Vec::<T>::with_capacity(self.elements.len());
         let buf = new_elements.spare_capacity_mut();
 
@@ -624,7 +624,7 @@ impl<T> Matrix<T> {
             });
         }
 
-        self.elements.extend(other.elements.into_iter());
+        self.elements.extend(other.elements);
 
         Ok(Matrix {
             rows: self.rows + other.rows,
@@ -635,7 +635,7 @@ impl<T> Matrix<T> {
 
     /// Concatenates two matrices along the columns without checking for shape compatibility.
     pub(crate) unsafe fn concat_cols_unchecked(mut self, other: Matrix<T>) -> Matrix<T> {
-        self.elements.extend(other.elements.into_iter());
+        self.elements.extend(other.elements);
 
         Matrix {
             rows: self.rows + other.rows,
@@ -713,6 +713,8 @@ impl<T> Matrix<T> {
             self.cols.div_ceil(stride_shape.1),
         );
         let mut res = Vec::with_capacity(res_shape.0 * res_shape.1);
+        // We will initialise this vector here so we can disable the error
+        #[allow(clippy::uninit_vec)]
         unsafe {
             res.set_len(res_shape.0 * res_shape.1);
         }
@@ -762,6 +764,8 @@ impl<T> Matrix<T> {
             self.cols.div_ceil(stride_shape.1),
         );
         let mut res = Vec::with_capacity(res_shape.0 * res_shape.1);
+        // We will initialise this vector here so we can disable the error
+        #[allow(clippy::uninit_vec)]
         unsafe {
             res.set_len(res_shape.0 * res_shape.1);
         }
@@ -816,6 +820,8 @@ impl<T> Matrix<T> {
         );
 
         let mut res = Vec::with_capacity(res_shape.0 * res_shape.1);
+        // We will initialise this vector here so we can disable the error
+        #[allow(clippy::uninit_vec)]
         unsafe {
             res.set_len(res_shape.0 * res_shape.1);
         }
@@ -870,6 +876,8 @@ impl<T> Matrix<T> {
         );
 
         let mut res = Vec::with_capacity(res_shape.0 * res_shape.1);
+        // We will initialise this vector here so we can disable the error
+        #[allow(clippy::uninit_vec)]
         unsafe {
             res.set_len(res_shape.0 * res_shape.1);
         }

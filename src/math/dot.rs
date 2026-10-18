@@ -20,7 +20,7 @@ impl<T> Tensor<T> {
             });
         }
 
-        Ok(dot_vectors(self.elements(), &other.elements()))
+        Ok(dot_vectors(self.elements(), other.elements()))
     }
 
     /// Computes the dot product of two tensors, i.e. the element-wise product, then the sum of the result, without validity checking.
@@ -28,7 +28,7 @@ impl<T> Tensor<T> {
     where
         T: AddAssign + Clone + Mul<Output = T> + Zero,
     {
-        dot_vectors(self.elements(), &other.elements())
+        dot_vectors(self.elements(), other.elements())
     }
 
     /// Computes the dot product of two tensors, i.e. the element-wise product, then the sum of the result.

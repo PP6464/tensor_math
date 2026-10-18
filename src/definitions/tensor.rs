@@ -5,7 +5,6 @@ use crate::definitions::strides::Strides;
 use crate::definitions::traits::{IntoTensor, TryIntoMatrix};
 use crate::shape;
 use crate::utilities::internal_functions::dot_vectors;
-use rayon::iter::IndexedParallelIterator;
 use rayon::iter::{FromParallelIterator, IntoParallelIterator, ParallelIterator};
 use std::ops::{Deref, DerefMut, Index, IndexMut};
 use std::vec::IntoIter;
@@ -64,8 +63,8 @@ impl<T> Tensor<T> {
         if indices.len() != self.rank() {
             return None;
         }
-        for i in 0..self.rank() {
-            if indices[i] >= self.shape[i] {
+        for (index_i, shape_i) in indices.iter().zip(self.shape.0.iter()) {
+            if index_i >= shape_i {
                 return None;
             }
         }
@@ -84,8 +83,8 @@ impl<T> Tensor<T> {
         if indices.len() != self.rank() {
             return None;
         }
-        for i in 0..self.rank() {
-            if indices[i] >= self.shape[i] {
+        for (index_i, shape_i) in indices.iter().zip(self.shape.0.iter()) {
+            if *index_i >= *shape_i {
                 return None;
             }
         }
@@ -97,11 +96,6 @@ impl<T> Tensor<T> {
     pub(crate) unsafe fn get_unchecked_mut(&mut self, indices: &[usize]) -> &mut T {
         self.elements
             .get_unchecked_mut(dot_vectors(&self.strides.0, indices))
-    }
-
-    /// Consumes the tensor and returns an iterator over its elements.
-    pub fn into_iter(self) -> IntoIter<T> {
-        self.elements.into_iter()
     }
 
     /// Consumes the tensor and returns a parallel iterator over its elements.
@@ -127,7 +121,7 @@ impl<T> Tensor<T> {
                 self.rank(),
             ));
         }
-        
+
         for (si, (&i1, &i2)) in index1.iter().zip(index2.iter()).enumerate() {
             if i1 >= self.shape[si] {
                 return Err(TensorErrors::IndexOutOfBounds {
@@ -136,7 +130,7 @@ impl<T> Tensor<T> {
                     index: i1,
                 });
             }
-            
+
             if i2 >= self.shape[si] {
                 return Err(TensorErrors::IndexOutOfBounds {
                     axis: si,
@@ -146,8 +140,13 @@ impl<T> Tensor<T> {
             }
         }
 
-        unsafe { self.elements.swap(self.shape.address_unchecked(index1), self.shape.address_unchecked(index2)); }
-        
+        unsafe {
+            self.elements.swap(
+                self.shape.address_unchecked(index1),
+                self.shape.address_unchecked(index2),
+            );
+        }
+
         Ok(())
     }
 }
@@ -167,16 +166,16 @@ impl<T> Index<&[usize]> for Tensor<T> {
             index.len(),
             "Shape dimension and index dimension do not match"
         );
-        for i in 0..self.rank() {
+        for (index_i, shape_i) in index.iter().zip(self.shape.0.iter()) {
             assert!(
-                index[i] < self.shape[i],
-                "Index for dimension {i} out of bounds: index {}, shape {}",
-                index[i],
-                self.shape[i]
+                index_i < shape_i,
+                "Index for dimension {index_i} out of bounds: index {}, shape {}",
+                index_i,
+                shape_i
             );
         }
 
-        let addr = dot_vectors(&self.strides.clone().0, &index);
+        let addr = dot_vectors(&self.strides.clone().0, index);
         unsafe { self.elements.get_unchecked(addr) }
     }
 }
@@ -188,16 +187,16 @@ impl<T> IndexMut<&[usize]> for Tensor<T> {
             index.len(),
             "Shape dimension and index dimension do not match"
         );
-        for i in 0..self.rank() {
+        for (index_i, shape_i) in index.iter().zip(self.shape.0.iter()) {
             assert!(
-                index[i] < self.shape[i],
-                "Index for dimension {i} out of bounds: index {}, shape {}",
-                index[i],
-                self.shape[i]
+                index_i < shape_i,
+                "Index for dimension {index_i} out of bounds: index {}, shape {}",
+                index_i,
+                shape_i
             );
         }
 
-        let addr = dot_vectors(&self.strides.clone().0, &index.to_vec());
+        let addr = dot_vectors(&self.strides.clone().0, index);
         unsafe { self.elements.get_unchecked_mut(addr) }
     }
 }
@@ -237,6 +236,21 @@ impl<T> IntoTensor<T> for Vec<T> {
             strides: Strides(vec![1]),
             elements: self,
         }
+    }
+}
+
+/*
+--------------------------------------------
+* Conversion into iterator
+--------------------------------------------
+*/
+
+impl<T> IntoIterator for Tensor<T> {
+    type Item = T;
+    type IntoIter = IntoIter<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.elements.into_iter()
     }
 }
 

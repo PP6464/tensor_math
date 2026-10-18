@@ -8,7 +8,7 @@ pub struct Transpose {
 }
 
 /// Returns the two-cycles of a permutation.
-fn two_cycles_from_permutation(permutation: &Vec<usize>) -> Vec<(usize, usize)> {
+fn two_cycles_from_permutation(permutation: &[usize]) -> Vec<(usize, usize)> {
     let mut cycles = Vec::new();
     let mut visited = vec![false; permutation.len()];
 
@@ -37,7 +37,7 @@ fn two_cycles_from_permutation(permutation: &Vec<usize>) -> Vec<(usize, usize)> 
 impl Transpose {
     /// Constructs a new transpose.
     /// This will fail if the permutation is not a rearrangement of `(0..n)`.
-    pub fn new(permutation: &Vec<usize>) -> Result<Self, TensorErrors> {
+    pub fn new(permutation: &[usize]) -> Result<Self, TensorErrors> {
         let mut perm_copy = permutation.to_vec();
         perm_copy.sort();
 
@@ -46,7 +46,7 @@ impl Transpose {
         }
 
         Ok(Transpose {
-            permutation: permutation.clone(),
+            permutation: permutation.to_vec(),
             two_cycles: two_cycles_from_permutation(permutation),
         })
     }
@@ -63,7 +63,7 @@ impl Transpose {
 
     /// Returns the identity transpose for rank `n` tensors.
     pub fn identity(n: usize) -> Self {
-        Transpose::new(&(0..n).collect()).unwrap()
+        Transpose::new(&(0..n).collect::<Vec<_>>()).unwrap()
     }
 
     /// Swaps two axes.
@@ -182,11 +182,9 @@ impl Transpose {
         }
 
         let mut old_index_vec = vec![0; new_index.len()];
-        let mut count = 0;
 
-        for old_pos in self.permutation.iter() {
+        for (count, old_pos) in self.permutation.iter().enumerate() {
             old_index_vec[*old_pos] = new_index[count];
-            count += 1;
         }
 
         Ok(old_index_vec)
