@@ -66,7 +66,7 @@ fn bench_pool_indexed_tensor(c: &mut Criterion) {
             });
         });
         group.bench_with_input(BenchmarkId::new("mt", &label), &label, |bench, _| {
-            let pool_fn = |idx: Vec<usize>, t: TensorSlice<'_, f64>| pool_sum::<f64>(t.into());
+            let pool_fn = |_: Vec<usize>, t: TensorSlice<'_, f64>| pool_sum::<f64>(t.into());
             bench.iter(|| {
                 let r = a
                     .pool_indexed_mt(&pool_fn, &kernel, &stride)
