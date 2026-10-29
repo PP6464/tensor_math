@@ -34,7 +34,7 @@ fn bench_f64_householder(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("f64", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = a.householder();
+                let r = a.clone().householder();
                 black_box(r);
             });
         });
@@ -73,7 +73,7 @@ fn bench_c64_householder(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("c64", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = c.householder();
+                let r = c.clone().householder();
                 black_box(r);
             });
         });
@@ -110,7 +110,7 @@ fn bench_f64_householder_r(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("f64", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = a.householder_r();
+                let r = a.clone().householder_r();
                 black_box(r);
             });
         });
@@ -149,7 +149,7 @@ fn bench_c64_householder_r(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("c64", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = c.householder_r();
+                let r = c.clone().householder_r();
                 black_box(r);
             });
         });

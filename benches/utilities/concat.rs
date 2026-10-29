@@ -4,26 +4,25 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::hint::black_box;
 use tensor_math::definitions::matrix::Matrix;
-use tensor_math::definitions::shape::Shape;
 use tensor_math::definitions::tensor::Tensor;
 use tensor_math::shape;
 
 fn bench_concat_1d(c: &mut Criterion) {
     let mut group = c.benchmark_group("concat/tensor_1d");
     for &n in &[1_000usize, 100_000, 1_000_000, 10_000_000] {
-        let a = Tensor::from_value(&shape![n], 1.0);
-        let b = Tensor::from_value(&shape![n], 2.0);
+        let a = Tensor::from_value(shape![n], 1.0);
+        let b = Tensor::from_value(shape![n], 2.0);
         group.throughput(Throughput::Elements(2 * n as u64));
 
         group.bench_with_input(BenchmarkId::new("st", n), &n, |bench, _| {
             bench.iter(|| {
-                let r = a.concat(&b, 0).expect("concat must succeed");
+                let r = a.clone().concat(b.clone(), 0).expect("concat must succeed");
                 black_box(r);
             });
         });
         group.bench_with_input(BenchmarkId::new("mt", n), &n, |bench, _| {
             bench.iter(|| {
-                let r = a.concat_mt(&b, 0).expect("concat must succeed");
+                let r = a.clone().concat(b.clone(), 0).expect("concat must succeed");
                 black_box(r);
             });
         });
@@ -40,8 +39,8 @@ fn bench_concat_2d_axis1(c: &mut Criterion) {
         (1024, 1024),
         (2048, 4096),
     ] {
-        let a = Tensor::from_value(&shape![rows, cols], 1.0);
-        let b = Tensor::from_value(&shape![rows, cols], 2.0);
+        let a = Tensor::from_value(shape![rows, cols], 1.0);
+        let b = Tensor::from_value(shape![rows, cols], 2.0);
         let elems = (2 * rows * cols) as u64;
         group.throughput(Throughput::Elements(elems));
 
@@ -50,7 +49,7 @@ fn bench_concat_2d_axis1(c: &mut Criterion) {
             &(rows, cols),
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.concat(&b, 1).expect("concat must succeed");
+                    let r = a.clone().concat(b.clone(), 1).expect("concat must succeed");
                     black_box(r);
                 });
             },
@@ -60,7 +59,7 @@ fn bench_concat_2d_axis1(c: &mut Criterion) {
             &(rows, cols),
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.concat_mt(&b, 1).expect("concat must succeed");
+                    let r = a.clone().concat(b.clone(), 1).expect("concat must succeed");
                     black_box(r);
                 });
             },
@@ -77,8 +76,8 @@ fn bench_concat_3d(c: &mut Criterion) {
         (32, 256, 256),
         (64, 256, 256),
     ] {
-        let a = Tensor::from_value(&shape![d0, d1, d2], 1.0);
-        let b = Tensor::from_value(&shape![d0, d1, d2], 1.0);
+        let a = Tensor::from_value(shape![d0, d1, d2], 1.0);
+        let b = Tensor::from_value(shape![d0, d1, d2], 1.0);
         let elems = (2 * d0 * d1 * d2) as u64;
         group.throughput(Throughput::Elements(elems));
 
@@ -86,13 +85,13 @@ fn bench_concat_3d(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("st", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = a.concat(&b, 2).expect("concat must succeed");
+                let r = a.clone().concat(b.clone(), 2).expect("concat must succeed");
                 black_box(r);
             });
         });
         group.bench_with_input(BenchmarkId::new("mt", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = a.concat_mt(&b, 2).expect("concat must succeed");
+                let r = a.clone().concat(b.clone(), 2).expect("concat must succeed");
                 black_box(r);
             });
         });
@@ -117,13 +116,13 @@ fn bench_concat_cols(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("st", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = a.concat_cols(&b).expect("concat must succeed");
+                let r = a.clone().concat_along_cols(b.clone()).expect("concat must succeed");
                 black_box(r);
             });
         });
         group.bench_with_input(BenchmarkId::new("mt", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = a.concat_cols_mt(&b).expect("concat must succeed");
+                let r = a.clone().concat_along_cols(b.clone()).expect("concat must succeed");
                 black_box(r);
             });
         });
@@ -148,13 +147,13 @@ fn bench_concat_rows(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("st", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = a.concat_rows(&b).expect("concat must succeed");
+                let r = a.clone().concat_along_rows(b.clone()).expect("concat must succeed");
                 black_box(r);
             });
         });
         group.bench_with_input(BenchmarkId::new("mt", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = a.concat_rows_mt(&b).expect("concat must succeed");
+                let r = a.clone().concat_along_rows(b.clone()).expect("concat must succeed");
                 black_box(r);
             });
         });

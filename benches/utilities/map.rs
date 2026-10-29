@@ -3,7 +3,6 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::hint::black_box;
 use tensor_math::definitions::matrix::Matrix;
-use tensor_math::definitions::shape::Shape;
 use tensor_math::definitions::tensor::Tensor;
 use tensor_math::shape;
 
@@ -16,7 +15,7 @@ fn bench_map_tensor(c: &mut Criterion) {
         (1024, 1024),
         (2048, 4096),
     ] {
-        let a = Tensor::from_value(&shape![rows, cols], 1.0);
+        let a = Tensor::from_value(shape![rows, cols], 1.0);
         let elems = (rows * cols) as u64;
         group.throughput(Throughput::Elements(elems));
 

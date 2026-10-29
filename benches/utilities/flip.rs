@@ -4,7 +4,6 @@ use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Through
 use std::collections::HashSet;
 use std::hint::black_box;
 use tensor_math::definitions::matrix::Matrix;
-use tensor_math::definitions::shape::Shape;
 use tensor_math::definitions::tensor::Tensor;
 use tensor_math::shape;
 
@@ -17,7 +16,7 @@ fn bench_flip_tensor(c: &mut Criterion) {
         (1024, 1024),
         (2048, 4096),
     ] {
-        let a = Tensor::from_value(&shape![rows, cols], 1.0);
+        let a = Tensor::from_value(shape![rows, cols], 1.0);
         let elems = (rows * cols) as u64;
         group.throughput(Throughput::Elements(elems));
 
@@ -25,13 +24,13 @@ fn bench_flip_tensor(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("st", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = a.flip();
+                let r = a.clone().flip();
                 black_box(r);
             });
         });
         group.bench_with_input(BenchmarkId::new("mt", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = a.flip_mt();
+                let r = a.clone().flip_mt();
                 black_box(r);
             });
         });
@@ -53,7 +52,7 @@ fn bench_flip_axes_tensor(c: &mut Criterion) {
         (32, 256, 256),
         (64, 256, 256),
     ] {
-        let a = Tensor::from_value(&shape![d0, d1, d2], 1.0);
+        let a = Tensor::from_value(shape![d0, d1, d2], 1.0);
         let elems = (d0 * d1 * d2) as u64;
         group.throughput(Throughput::Elements(elems));
 
@@ -61,13 +60,13 @@ fn bench_flip_axes_tensor(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("st", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = a.flip_axes(&axes).expect("flip_axes must succeed");
+                let r = a.clone().flip_axes(&axes).expect("flip_axes must succeed");
                 black_box(r);
             });
         });
         group.bench_with_input(BenchmarkId::new("mt", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = a.flip_axes_mt(&axes).expect("flip_axes_mt must succeed");
+                let r = a.clone().flip_axes_mt(&axes).expect("flip_axes_mt must succeed");
                 black_box(r);
             });
         });
@@ -95,13 +94,13 @@ fn bench_flip_rows_matrix(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("st", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = a.flip_rows();
+                let r = a.clone().flip_rows();
                 black_box(r);
             });
         });
         group.bench_with_input(BenchmarkId::new("mt", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = a.flip_rows_mt();
+                let r = a.clone().flip_rows_mt();
                 black_box(r);
             });
         });
@@ -129,13 +128,13 @@ fn bench_flip_cols_matrix(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("st", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = a.flip_cols();
+                let r = a.clone().flip_cols();
                 black_box(r);
             });
         });
         group.bench_with_input(BenchmarkId::new("mt", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = a.flip_cols_mt();
+                let r = a.clone().flip_cols_mt();
                 black_box(r);
             });
         });
@@ -163,13 +162,13 @@ fn bench_flip_matrix(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("st", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = a.flip();
+                let r = a.clone().flip();
                 black_box(r);
             });
         });
         group.bench_with_input(BenchmarkId::new("mt", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = a.flip_mt();
+                let r = a.clone().flip_mt();
                 black_box(r);
             });
         });

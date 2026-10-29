@@ -13,7 +13,7 @@ fn bench_f64_det(c: &mut Criterion) {
         group.throughput(Throughput::Elements((ord * ord) as u64));
         group.bench_with_input(BenchmarkId::new("f64", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = a.det().expect("det must succeed");
+                let r = a.clone().det().expect("det must succeed");
                 black_box(r);
             });
         });
@@ -30,7 +30,7 @@ fn bench_c64_det(c: &mut Criterion) {
         group.throughput(Throughput::Elements((ord * ord) as u64));
         group.bench_with_input(BenchmarkId::new("c64", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = c.det().expect("det must succeed");
+                let r = c.clone().det().expect("det must succeed");
                 black_box(r);
             });
         });
@@ -45,7 +45,7 @@ fn bench_f64_inv(c: &mut Criterion) {
         group.throughput(Throughput::Elements((ord * ord) as u64));
         group.bench_with_input(BenchmarkId::new("f64", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = a.inv().expect("inv must succeed");
+                let r = a.clone().inv().expect("inv must succeed");
                 black_box(r);
             });
         });
@@ -62,7 +62,7 @@ fn bench_c64_inv(c: &mut Criterion) {
         group.throughput(Throughput::Elements((ord * ord) as u64));
         group.bench_with_input(BenchmarkId::new("c64", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = c.inv().expect("inv must succeed");
+                let r = c.clone().inv().expect("inv must succeed");
                 black_box(r);
             });
         });

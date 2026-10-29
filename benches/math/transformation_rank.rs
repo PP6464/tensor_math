@@ -34,7 +34,7 @@ fn bench_f64_transformation_rank(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("c64", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = a.transformation_rank();
+                let r = a.clone().transformation_rank();
                 black_box(r);
             });
         });
@@ -73,7 +73,7 @@ fn bench_c64_transformation_rank(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("c64", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = c.transformation_rank();
+                let r = c.clone().transformation_rank();
                 black_box(r);
             });
         });

@@ -19,8 +19,8 @@ fn rand_complex_matrix(rows: usize, cols: usize) -> Matrix<Complex64> {
 
 /// Build a `Tensor<Complex64>` with both real and imaginary parts populated.
 fn rand_complex_tensor(s: &Shape) -> Tensor<Complex64> {
-    let a = Tensor::<f64>::rand(s);
-    let b = Tensor::<f64>::rand(s);
+    let a = Tensor::<f64>::rand(s.clone());
+    let b = Tensor::<f64>::rand(s.clone());
     a.into_complex() + b.into_complex().par_map(|v| v * Complex64::I)
 }
 
@@ -45,7 +45,7 @@ fn bench_tensor_f64_fft_single_axis(c: &mut Criterion) {
     ];
 
     for s in &shapes {
-        let t = Tensor::<f64>::rand(s);
+        let t = Tensor::<f64>::rand(s.clone());
         group.throughput(Throughput::Elements(s.element_count() as u64));
         let label = shape_label(s);
 
@@ -56,7 +56,7 @@ fn bench_tensor_f64_fft_single_axis(c: &mut Criterion) {
                 &bench_label,
                 |b, _| {
                     b.iter(|| {
-                        let r = t.fft_single_axis(axis).expect("fft must succeed");
+                        let r = t.clone().fft_single_axis(axis).expect("fft must succeed");
                         black_box(r);
                     });
                 },
@@ -77,7 +77,7 @@ fn bench_tensor_f64_fft_axes(c: &mut Criterion) {
     ];
 
     for (s, axes) in &shapes {
-        let t = Tensor::<f64>::rand(s);
+        let t = Tensor::<f64>::rand(s.clone());
         group.throughput(Throughput::Elements(s.element_count() as u64));
         let mut label = shape_label(s);
         let mut axes_label = String::from("axes=");
@@ -94,7 +94,7 @@ fn bench_tensor_f64_fft_axes(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("f64/tensor", &label), &label, |b, _| {
             b.iter(|| {
-                let r = t.fft_axes(axes).expect("fft must succeed");
+                let r = t.clone().fft_axes(axes).expect("fft must succeed");
                 black_box(r);
             });
         });
@@ -113,13 +113,13 @@ fn bench_tensor_f64_fft(c: &mut Criterion) {
     ];
 
     for s in &shapes {
-        let t = Tensor::<f64>::rand(s);
+        let t = Tensor::<f64>::rand(s.clone());
         group.throughput(Throughput::Elements(s.element_count() as u64));
         let label = shape_label(s);
 
         group.bench_with_input(BenchmarkId::new("f64/tensor", &label), &label, |b, _| {
             b.iter(|| {
-                let r = t.fft().expect("fft must succeed");
+                let r = t.clone().fft().expect("fft must succeed");
                 black_box(r);
             });
         });
@@ -139,7 +139,7 @@ fn bench_tensor_f64_ifft_single_axis(c: &mut Criterion) {
     ];
 
     for s in &shapes {
-        let t = Tensor::<f64>::rand(s);
+        let t = Tensor::<f64>::rand(s.clone());
         group.throughput(Throughput::Elements(s.element_count() as u64));
         let label = shape_label(s);
 
@@ -150,7 +150,7 @@ fn bench_tensor_f64_ifft_single_axis(c: &mut Criterion) {
                 &bench_label,
                 |b, _| {
                     b.iter(|| {
-                        let r = t.ifft_single_axis(axis).expect("ifft must succeed");
+                        let r = t.clone().ifft_single_axis(axis).expect("ifft must succeed");
                         black_box(r);
                     });
                 },
@@ -170,7 +170,7 @@ fn bench_tensor_f64_ifft_axes(c: &mut Criterion) {
     ];
 
     for (s, axes) in &shapes {
-        let t = Tensor::<f64>::rand(s);
+        let t = Tensor::<f64>::rand(s.clone());
         group.throughput(Throughput::Elements(s.element_count() as u64));
         let mut label = shape_label(s);
         let mut axes_label = String::from("axes=");
@@ -187,7 +187,7 @@ fn bench_tensor_f64_ifft_axes(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("f64/tensor", &label), &label, |b, _| {
             b.iter(|| {
-                let r = t.ifft_axes(axes).expect("ifft must succeed");
+                let r = t.clone().ifft_axes(axes).expect("ifft must succeed");
                 black_box(r);
             });
         });
@@ -206,13 +206,13 @@ fn bench_tensor_f64_ifft(c: &mut Criterion) {
     ];
 
     for s in &shapes {
-        let t = Tensor::<f64>::rand(s);
+        let t = Tensor::<f64>::rand(s.clone());
         group.throughput(Throughput::Elements(s.element_count() as u64));
         let label = shape_label(s);
 
         group.bench_with_input(BenchmarkId::new("f64/tensor", &label), &label, |b, _| {
             b.iter(|| {
-                let r = t.ifft().expect("ifft must succeed");
+                let r = t.clone().ifft().expect("ifft must succeed");
                 black_box(r);
             });
         });
@@ -229,8 +229,8 @@ fn bench_tensor_f64_fft_corr_axes(c: &mut Criterion) {
     ];
 
     for (s, k) in &shapes {
-        let a = Tensor::<f64>::rand(s);
-        let b = Tensor::<f64>::rand(k);
+        let a = Tensor::<f64>::rand(s.clone());
+        let b = Tensor::<f64>::rand(k.clone());
         group.throughput(Throughput::Elements(s.element_count() as u64));
         let label = format!("{}__{}", shape_label(s), shape_label(k));
         let axes: HashSet<usize> = (0..s.rank()).collect();
@@ -240,8 +240,8 @@ fn bench_tensor_f64_fft_corr_axes(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a
-                        .fft_corr_axes(&b, &axes)
+                    let r = a.clone()
+                        .fft_corr_axes(&b.clone(), &axes)
                         .expect("fft_corr_axes must succeed");
                     black_box(r);
                 });
@@ -260,8 +260,8 @@ fn bench_tensor_f64_fft_conv_axes(c: &mut Criterion) {
     ];
 
     for (s, k) in &shapes {
-        let a = Tensor::<f64>::rand(s);
-        let b = Tensor::<f64>::rand(k);
+        let a = Tensor::<f64>::rand(s.clone());
+        let b = Tensor::<f64>::rand(k.clone());
         group.throughput(Throughput::Elements(s.element_count() as u64));
         let label = format!("{}__{}", shape_label(s), shape_label(k));
         let axes: HashSet<usize> = (0..s.rank()).collect();
@@ -271,8 +271,8 @@ fn bench_tensor_f64_fft_conv_axes(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a
-                        .fft_conv_axes(&b, &axes)
+                    let r = a.clone()
+                        .fft_conv_axes(&b.clone(), &axes)
                         .expect("fft_conv_axes must succeed");
                     black_box(r);
                 });
@@ -291,8 +291,8 @@ fn bench_tensor_f64_fft_corr(c: &mut Criterion) {
     ];
 
     for (s, k) in &shapes {
-        let a = Tensor::<f64>::rand(s);
-        let b = Tensor::<f64>::rand(k);
+        let a = Tensor::<f64>::rand(s.clone());
+        let b = Tensor::<f64>::rand(k.clone());
         group.throughput(Throughput::Elements(s.element_count() as u64));
         let label = format!("{}__{}", shape_label(s), shape_label(k));
 
@@ -301,7 +301,7 @@ fn bench_tensor_f64_fft_corr(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.fft_corr(&b).expect("fft_corr must succeed");
+                    let r = a.clone().fft_corr(&b.clone()).expect("fft_corr must succeed");
                     black_box(r);
                 });
             },
@@ -319,8 +319,8 @@ fn bench_tensor_f64_fft_conv(c: &mut Criterion) {
     ];
 
     for (s, k) in &shapes {
-        let a = Tensor::<f64>::rand(s);
-        let b = Tensor::<f64>::rand(k);
+        let a = Tensor::<f64>::rand(s.clone());
+        let b = Tensor::<f64>::rand(k.clone());
         group.throughput(Throughput::Elements(s.element_count() as u64));
         let label = format!("{}__{}", shape_label(s), shape_label(k));
 
@@ -329,7 +329,7 @@ fn bench_tensor_f64_fft_conv(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.fft_conv(&b).expect("fft_conv must succeed");
+                    let r = a.clone().fft_conv(&b.clone()).expect("fft_conv must succeed");
                     black_box(r);
                 });
             },
@@ -347,7 +347,7 @@ fn bench_matrix_f64_fft_rows(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("f64/matrix", &label), &label, |b, _| {
             b.iter(|| {
-                let r = m.fft_rows();
+                let r = m.clone().fft_rows();
                 black_box(r);
             });
         });
@@ -364,7 +364,7 @@ fn bench_matrix_f64_fft_cols(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("f64/matrix", &label), &label, |b, _| {
             b.iter(|| {
-                let r = m.fft_cols();
+                let r = m.clone().fft_cols();
                 black_box(r);
             });
         });
@@ -381,7 +381,7 @@ fn bench_matrix_f64_fft(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("f64/matrix", &label), &label, |b, _| {
             b.iter(|| {
-                let r = m.fft();
+                let r = m.clone().fft();
                 black_box(r);
             });
         });
@@ -398,7 +398,7 @@ fn bench_matrix_f64_ifft_rows(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("f64/matrix", &label), &label, |b, _| {
             b.iter(|| {
-                let r = m.ifft_rows();
+                let r = m.clone().ifft_rows();
                 black_box(r);
             });
         });
@@ -415,7 +415,7 @@ fn bench_matrix_f64_ifft_cols(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("f64/matrix", &label), &label, |b, _| {
             b.iter(|| {
-                let r = m.ifft_cols();
+                let r = m.clone().ifft_cols();
                 black_box(r);
             });
         });
@@ -450,7 +450,7 @@ fn bench_matrix_f64_fft_conv_cols(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("f64/matrix", &label), &label, |b, _| {
             b.iter(|| {
-                let r = m.fft_conv_cols(&k).expect("fft_conv_cols must succeed");
+                let r = m.clone().fft_conv_cols(&k.clone()).expect("fft_conv_cols must succeed");
                 black_box(r);
             });
         });
@@ -468,7 +468,7 @@ fn bench_matrix_f64_fft_corr_cols(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("f64/matrix", &label), &label, |b, _| {
             b.iter(|| {
-                let r = m.fft_corr_cols(&k).expect("fft_corr_cols must succeed");
+                let r = m.clone().fft_corr_cols(&k.clone()).expect("fft_corr_cols must succeed");
                 black_box(r);
             });
         });
@@ -486,7 +486,7 @@ fn bench_matrix_f64_fft_conv_rows(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("f64/matrix", &label), &label, |b, _| {
             b.iter(|| {
-                let r = m.fft_conv_rows(&k).expect("fft_conv_rows must succeed");
+                let r = m.clone().fft_conv_rows(&k.clone()).expect("fft_conv_rows must succeed");
                 black_box(r);
             });
         });
@@ -504,7 +504,7 @@ fn bench_matrix_f64_fft_corr_rows(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("f64/matrix", &label), &label, |b, _| {
             b.iter(|| {
-                let r = m.fft_corr_rows(&k).expect("fft_corr_rows must succeed");
+                let r = m.clone().fft_corr_rows(&k.clone()).expect("fft_corr_rows must succeed");
                 black_box(r);
             });
         });
@@ -522,7 +522,7 @@ fn bench_matrix_f64_fft_conv(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("f64/matrix", &label), &label, |b, _| {
             b.iter(|| {
-                let r = m.fft_conv(&k);
+                let r = m.clone().fft_conv(&k.clone());
                 black_box(r);
             });
         });
@@ -540,7 +540,7 @@ fn bench_matrix_f64_fft_corr(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("f64/matrix", &label), &label, |b, _| {
             b.iter(|| {
-                let r = m.fft_corr(&k);
+                let r = m.clone().fft_corr(&k.clone());
                 black_box(r);
             });
         });
@@ -571,7 +571,7 @@ fn bench_tensor_c64_fft_single_axis(c: &mut Criterion) {
                 &bench_label,
                 |b, _| {
                     b.iter(|| {
-                        let r = t.fft_single_axis(axis).expect("fft must succeed");
+                        let r = t.clone().fft_single_axis(axis).expect("fft must succeed");
                         black_box(r);
                     });
                 },
@@ -608,7 +608,7 @@ fn bench_tensor_c64_fft_axes(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("c64/tensor", &label), &label, |b, _| {
             b.iter(|| {
-                let r = t.fft_axes(axes).expect("fft must succeed");
+                let r = t.clone().fft_axes(axes).expect("fft must succeed");
                 black_box(r);
             });
         });
@@ -633,7 +633,7 @@ fn bench_tensor_c64_fft(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("c64/tensor", &label), &label, |b, _| {
             b.iter(|| {
-                let r = t.fft().expect("fft must succeed");
+                let r = t.clone().fft().expect("fft must succeed");
                 black_box(r);
             });
         });
@@ -664,7 +664,7 @@ fn bench_tensor_c64_ifft_single_axis(c: &mut Criterion) {
                 &bench_label,
                 |b, _| {
                     b.iter(|| {
-                        let r = t.ifft_single_axis(axis).expect("ifft must succeed");
+                        let r = t.clone().ifft_single_axis(axis).expect("ifft must succeed");
                         black_box(r);
                     });
                 },
@@ -701,7 +701,7 @@ fn bench_tensor_c64_ifft_axes(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("c64/tensor", &label), &label, |b, _| {
             b.iter(|| {
-                let r = t.ifft_axes(axes).expect("ifft must succeed");
+                let r = t.clone().ifft_axes(axes).expect("ifft must succeed");
                 black_box(r);
             });
         });
@@ -726,7 +726,7 @@ fn bench_tensor_c64_ifft(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("c64/tensor", &label), &label, |b, _| {
             b.iter(|| {
-                let r = t.ifft().expect("ifft must succeed");
+                let r = t.clone().ifft().expect("ifft must succeed");
                 black_box(r);
             });
         });
@@ -754,8 +754,8 @@ fn bench_tensor_c64_fft_corr_axes(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a
-                        .fft_corr_axes(&b, &axes)
+                    let r = a.clone()
+                        .fft_corr_axes(b.clone(), &axes)
                         .expect("fft_corr_axes must succeed");
                     black_box(r);
                 });
@@ -785,8 +785,8 @@ fn bench_tensor_c64_fft_conv_axes(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a
-                        .fft_conv_axes(&b, &axes)
+                    let r = a.clone()
+                        .fft_conv_axes(b.clone(), &axes)
                         .expect("fft_conv_axes must succeed");
                     black_box(r);
                 });
@@ -815,7 +815,7 @@ fn bench_tensor_c64_fft_corr(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.fft_corr(&b).expect("fft_corr must succeed");
+                    let r = a.clone().fft_corr(b.clone()).expect("fft_corr must succeed");
                     black_box(r);
                 });
             },
@@ -843,7 +843,7 @@ fn bench_tensor_c64_fft_conv(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.fft_conv(&b).expect("fft_conv must succeed");
+                    let r = a.clone().fft_conv(b.clone()).expect("fft_conv must succeed");
                     black_box(r);
                 });
             },
@@ -865,7 +865,7 @@ fn bench_matrix_c64_fft_rows(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("c64/matrix", &label), &label, |b, _| {
             b.iter(|| {
-                let r = m.fft_rows();
+                let r = m.clone().fft_rows();
                 black_box(r);
             });
         });
@@ -882,7 +882,7 @@ fn bench_matrix_c64_fft_cols(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("c64/matrix", &label), &label, |b, _| {
             b.iter(|| {
-                let r = m.fft_cols();
+                let r = m.clone().fft_cols();
                 black_box(r);
             });
         });
@@ -899,7 +899,7 @@ fn bench_matrix_c64_fft(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("c64/matrix", &label), &label, |b, _| {
             b.iter(|| {
-                let r = m.fft();
+                let r = m.clone().fft();
                 black_box(r);
             });
         });
@@ -916,7 +916,7 @@ fn bench_matrix_c64_ifft_rows(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("c64/matrix", &label), &label, |b, _| {
             b.iter(|| {
-                let r = m.ifft_rows();
+                let r = m.clone().ifft_rows();
                 black_box(r);
             });
         });
@@ -933,7 +933,7 @@ fn bench_matrix_c64_ifft_cols(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("c64/matrix", &label), &label, |b, _| {
             b.iter(|| {
-                let r = m.ifft_cols();
+                let r = m.clone().ifft_cols();
                 black_box(r);
             });
         });
@@ -968,7 +968,7 @@ fn bench_matrix_c64_fft_conv_cols(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("c64/matrix", &label), &label, |b, _| {
             b.iter(|| {
-                let r = m.fft_conv_cols(&k).expect("fft_conv_cols must succeed");
+                let r = m.clone().fft_conv_cols(k.clone()).expect("fft_conv_cols must succeed");
                 black_box(r);
             });
         });
@@ -986,7 +986,7 @@ fn bench_matrix_c64_fft_corr_cols(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("c64/matrix", &label), &label, |b, _| {
             b.iter(|| {
-                let r = m.fft_corr_cols(&k).expect("fft_corr_cols must succeed");
+                let r = m.clone().fft_corr_cols(k.clone()).expect("fft_corr_cols must succeed");
                 black_box(r);
             });
         });
@@ -1004,7 +1004,7 @@ fn bench_matrix_c64_fft_conv_rows(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("c64/matrix", &label), &label, |b, _| {
             b.iter(|| {
-                let r = m.fft_conv_rows(&k).expect("fft_conv_rows must succeed");
+                let r = m.clone().fft_conv_rows(k.clone()).expect("fft_conv_rows must succeed");
                 black_box(r);
             });
         });
@@ -1022,7 +1022,7 @@ fn bench_matrix_c64_fft_corr_rows(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("c64/matrix", &label), &label, |b, _| {
             b.iter(|| {
-                let r = m.fft_corr_rows(&k).expect("fft_corr_rows must succeed");
+                let r = m.clone().fft_corr_rows(k.clone()).expect("fft_corr_rows must succeed");
                 black_box(r);
             });
         });
@@ -1040,7 +1040,7 @@ fn bench_matrix_c64_fft_conv(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("c64/matrix", &label), &label, |b, _| {
             b.iter(|| {
-                let r = m.fft_conv(&k);
+                let r = m.clone().fft_conv(k.clone());
                 black_box(r);
             });
         });
@@ -1058,7 +1058,7 @@ fn bench_matrix_c64_fft_corr(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("c64/matrix", &label), &label, |b, _| {
             b.iter(|| {
-                let r = m.fft_corr(&k);
+                let r = m.clone().fft_corr(k.clone());
                 black_box(r);
             });
         });

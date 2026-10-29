@@ -12,7 +12,7 @@ fn bench_reshape_tensor(c: &mut Criterion) {
     let mut group = c.benchmark_group("reshape/tensor");
     for &n in &[1_000usize, 100_000, 1_000_000] {
         // 1-D → 2-D square
-        let a = Tensor::from_value(&shape![n], 1.0);
+        let a = Tensor::from_value(shape![n], 1.0);
         let side = (n as f64).sqrt() as usize;
         // Use sizes that exactly multiply to n.
         let new_shape = Shape::new(vec![side, n / side]);
@@ -21,13 +21,13 @@ fn bench_reshape_tensor(c: &mut Criterion) {
         group.throughput(Throughput::Elements(n as u64));
         group.bench_with_input(BenchmarkId::new("1d_to_2d", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = a.clone().reshape(&new_shape).expect("reshape must succeed");
+                let r = a.clone().reshape(new_shape.clone()).expect("reshape must succeed");
                 black_box(r);
             });
         });
 
         // 2-D → 1-D collapse
-        let a2 = Tensor::from_value(&shape![side, n / side], 1.0);
+        let a2 = Tensor::from_value(shape![side, n / side], 1.0);
         let flat = Shape::new(vec![n]);
         let label2 = format!("2d_{n}->1d");
 
@@ -36,7 +36,7 @@ fn bench_reshape_tensor(c: &mut Criterion) {
             &label2,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a2.clone().reshape(&flat).expect("reshape must succeed");
+                    let r = a2.clone().reshape(flat.clone()).expect("reshape must succeed");
                     black_box(r);
                 });
             },
@@ -48,7 +48,7 @@ fn bench_reshape_tensor(c: &mut Criterion) {
 fn bench_flatten_tensor(c: &mut Criterion) {
     let mut group = c.benchmark_group("flatten/tensor");
     for &n in &[1_000usize, 100_000, 1_000_000] {
-        let a = Tensor::from_value(&shape![1, n], 1.0);
+        let a = Tensor::from_value(shape![1, n], 1.0);
         group.throughput(Throughput::Elements(n as u64));
 
         let label = format!("1x{n}");

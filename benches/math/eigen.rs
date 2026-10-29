@@ -12,7 +12,7 @@ fn bench_eigendecompose(c: &mut Criterion) {
         let label = format!("{ord}x{ord}");
         group.bench_with_input(BenchmarkId::new("decompose", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = mat.eigendecompose().expect("eigen must succeed");
+                let r = mat.clone().eigendecompose().expect("eigen must succeed");
                 black_box(r);
             });
         });
@@ -28,7 +28,7 @@ fn bench_eigenvalues(c: &mut Criterion) {
         let label = format!("{ord}x{ord}");
         group.bench_with_input(BenchmarkId::new("values", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = mat.eigenvalues().expect("eigen must succeed");
+                let r = mat.clone().eigenvalues().expect("eigen must succeed");
                 black_box(r);
             });
         });

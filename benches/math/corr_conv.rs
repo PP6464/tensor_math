@@ -31,8 +31,8 @@ fn random_complex_matrix(rows: usize, cols: usize) -> Matrix<Complex64> {
 }
 
 fn random_complex_tensor(shape: &Shape) -> Tensor<Complex64> {
-    let re = Tensor::<f64>::rand(shape);
-    let im = Tensor::<f64>::rand(shape);
+    let re = Tensor::<f64>::rand(shape.clone());
+    let im = Tensor::<f64>::rand(shape.clone());
     re.into_complex() + im.into_complex().par_map(|v| v * Complex64::I)
 }
 fn bench_f64_matrix_corr(c: &mut Criterion) {
@@ -57,7 +57,7 @@ fn bench_f64_matrix_corr(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.corr(&b).expect("corr must succeed");
+                    let r = a.clone().corr(b.clone()).expect("corr must succeed");
                     black_box(r);
                 });
             },
@@ -88,7 +88,7 @@ fn bench_f64_matrix_corr_mt(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.corr_mt(&b).expect("corr_mt must succeed");
+                    let r = a.clone().corr_mt(b.clone()).expect("corr_mt must succeed");
                     black_box(r);
                 });
             },
@@ -119,7 +119,7 @@ fn bench_f64_matrix_conv(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.conv(&b).expect("conv must succeed");
+                    let r = a.clone().conv(b.clone()).expect("conv must succeed");
                     black_box(r);
                 });
             },
@@ -150,7 +150,7 @@ fn bench_f64_matrix_conv_mt(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.conv_mt(&b).expect("conv_mt must succeed");
+                    let r = a.clone().conv_mt(b.clone()).expect("conv_mt must succeed");
                     black_box(r);
                 });
             },
@@ -181,7 +181,7 @@ fn bench_c64_matrix_corr(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.corr(&b).expect("corr must succeed");
+                    let r = a.clone().corr(b.clone()).expect("corr must succeed");
                     black_box(r);
                 });
             },
@@ -212,7 +212,7 @@ fn bench_c64_matrix_corr_mt(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.corr_mt(&b).expect("corr_mt must succeed");
+                    let r = a.clone().corr_mt(b.clone()).expect("corr_mt must succeed");
                     black_box(r);
                 });
             },
@@ -243,7 +243,7 @@ fn bench_c64_matrix_conv(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.conv(&b).expect("conv must succeed");
+                    let r = a.clone().conv(b.clone()).expect("conv must succeed");
                     black_box(r);
                 });
             },
@@ -274,7 +274,7 @@ fn bench_c64_matrix_conv_mt(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.conv_mt(&b).expect("conv_mt must succeed");
+                    let r = a.clone().conv_mt(b.clone()).expect("conv_mt must succeed");
                     black_box(r);
                 });
             },
@@ -300,7 +300,7 @@ fn bench_f64_matrix_corr_cols(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.corr_cols(&b).expect("corr_cols must succeed");
+                    let r = a.clone().corr_cols(b.clone()).expect("corr_cols must succeed");
                     black_box(r);
                 });
             },
@@ -326,7 +326,7 @@ fn bench_f64_matrix_corr_cols_mt(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.corr_cols_mt(&b).expect("corr_cols_mt must succeed");
+                    let r = a.clone().corr_cols_mt(b.clone()).expect("corr_cols_mt must succeed");
                     black_box(r);
                 });
             },
@@ -352,7 +352,7 @@ fn bench_c64_matrix_corr_cols(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.corr_cols(&b).expect("corr_cols must succeed");
+                    let r = a.clone().corr_cols(b.clone()).expect("corr_cols must succeed");
                     black_box(r);
                 });
             },
@@ -378,7 +378,7 @@ fn bench_c64_matrix_corr_cols_mt(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.corr_cols_mt(&b).expect("corr_cols_mt must succeed");
+                    let r = a.clone().corr_cols_mt(b.clone()).expect("corr_cols_mt must succeed");
                     black_box(r);
                 });
             },
@@ -404,7 +404,7 @@ fn bench_f64_matrix_corr_rows(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.corr_rows(&b).expect("corr_rows must succeed");
+                    let r = a.clone().corr_rows(b.clone()).expect("corr_rows must succeed");
                     black_box(r);
                 });
             },
@@ -430,7 +430,7 @@ fn bench_f64_matrix_corr_rows_mt(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.corr_rows_mt(&b).expect("corr_rows_mt must succeed");
+                    let r = a.clone().corr_rows_mt(b.clone()).expect("corr_rows_mt must succeed");
                     black_box(r);
                 });
             },
@@ -456,7 +456,7 @@ fn bench_c64_matrix_corr_rows(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.corr_rows(&b).expect("corr_rows must succeed");
+                    let r = a.clone().corr_rows(b.clone()).expect("corr_rows must succeed");
                     black_box(r);
                 });
             },
@@ -482,7 +482,7 @@ fn bench_c64_matrix_corr_rows_mt(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.corr_rows_mt(&b).expect("corr_rows_mt must succeed");
+                    let r = a.clone().corr_rows_mt(b.clone()).expect("corr_rows_mt must succeed");
                     black_box(r);
                 });
             },
@@ -501,8 +501,8 @@ fn bench_f64_tensor_corr(c: &mut Criterion) {
         (shape![128, 128], shape![5, 5]),
         (shape![16, 16, 16], shape![3, 3, 3]),
     ] {
-        let a = Tensor::<f64>::rand(a_shape);
-        let b = Tensor::<f64>::rand(b_shape);
+        let a = Tensor::<f64>::rand(a_shape.clone());
+        let b = Tensor::<f64>::rand(b_shape.clone());
         let out = a.shape().element_count() / b.shape().element_count()
             * (0..a_shape.rank())
                 .map(|i| a_shape[i] + b_shape[i] - 1)
@@ -516,7 +516,7 @@ fn bench_f64_tensor_corr(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.corr(&b).expect("corr must succeed");
+                    let r = a.clone().corr(b.clone()).expect("corr must succeed");
                     black_box(r);
                 });
             },
@@ -535,8 +535,8 @@ fn bench_f64_tensor_corr_mt(c: &mut Criterion) {
         (shape![128, 128], shape![5, 5]),
         (shape![16, 16, 16], shape![3, 3, 3]),
     ] {
-        let a = Tensor::<f64>::rand(a_shape);
-        let b = Tensor::<f64>::rand(b_shape);
+        let a = Tensor::<f64>::rand(a_shape.clone());
+        let b = Tensor::<f64>::rand(b_shape.clone());
         let out = a.shape().element_count() / b.shape().element_count()
             * (0..a_shape.rank())
                 .map(|i| a_shape[i] + b_shape[i] - 1)
@@ -550,7 +550,7 @@ fn bench_f64_tensor_corr_mt(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.corr_mt(&b).expect("corr_mt must succeed");
+                    let r = a.clone().corr_mt(b.clone()).expect("corr_mt must succeed");
                     black_box(r);
                 });
             },
@@ -569,8 +569,8 @@ fn bench_f64_tensor_conv(c: &mut Criterion) {
         (shape![128, 128], shape![5, 5]),
         (shape![16, 16, 16], shape![3, 3, 3]),
     ] {
-        let a = Tensor::<f64>::rand(a_shape);
-        let b = Tensor::<f64>::rand(b_shape);
+        let a = Tensor::<f64>::rand(a_shape.clone());
+        let b = Tensor::<f64>::rand(b_shape.clone());
         let out = a.shape().element_count() / b.shape().element_count()
             * (0..a_shape.rank())
                 .map(|i| a_shape[i] + b_shape[i] - 1)
@@ -584,7 +584,7 @@ fn bench_f64_tensor_conv(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.conv(&b).expect("conv must succeed");
+                    let r = a.clone().conv(b.clone()).expect("conv must succeed");
                     black_box(r);
                 });
             },
@@ -603,8 +603,8 @@ fn bench_f64_tensor_conv_mt(c: &mut Criterion) {
         (shape![128, 128], shape![5, 5]),
         (shape![16, 16, 16], shape![3, 3, 3]),
     ] {
-        let a = Tensor::<f64>::rand(a_shape);
-        let b = Tensor::<f64>::rand(b_shape);
+        let a = Tensor::<f64>::rand(a_shape.clone());
+        let b = Tensor::<f64>::rand(b_shape.clone());
         let out = a.shape().element_count() / b.shape().element_count()
             * (0..a_shape.rank())
                 .map(|i| a_shape[i] + b_shape[i] - 1)
@@ -618,7 +618,7 @@ fn bench_f64_tensor_conv_mt(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.conv_mt(&b).expect("conv_mt must succeed");
+                    let r = a.clone().conv_mt(b.clone()).expect("conv_mt must succeed");
                     black_box(r);
                 });
             },
@@ -652,7 +652,7 @@ fn bench_c64_tensor_corr(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.corr(&b).expect("corr must succeed");
+                    let r = a.clone().corr(b.clone()).expect("corr must succeed");
                     black_box(r);
                 });
             },
@@ -686,7 +686,7 @@ fn bench_c64_tensor_corr_mt(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.corr_mt(&b).expect("corr_mt must succeed");
+                    let r = a.clone().corr_mt(b.clone()).expect("corr_mt must succeed");
                     black_box(r);
                 });
             },
@@ -720,7 +720,7 @@ fn bench_c64_tensor_conv(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.conv(&b).expect("conv must succeed");
+                    let r = a.clone().conv(b.clone()).expect("conv must succeed");
                     black_box(r);
                 });
             },
@@ -754,7 +754,7 @@ fn bench_c64_tensor_conv_mt(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.conv_mt(&b).expect("conv_mt must succeed");
+                    let r = a.clone().conv_mt(b.clone()).expect("conv_mt must succeed");
                     black_box(r);
                 });
             },
@@ -778,8 +778,8 @@ fn bench_f64_tensor_corr_axes(c: &mut Criterion) {
         (shape![64, 64, 64], shape![64, 64, 5]),
         (shape![16, 16, 128], shape![16, 16, 7]),
     ] {
-        let a = Tensor::<f64>::rand(a_shape);
-        let b = Tensor::<f64>::rand(b_shape);
+        let a = Tensor::<f64>::rand(a_shape.clone());
+        let b = Tensor::<f64>::rand(b_shape.clone());
         let rank = a_shape.rank();
         let axes = axes_last_only(rank);
         // Output elements = a.shape[0..rank-1].product() * (a.shape[rank-1] + b.shape[rank-1] - 1).
@@ -802,7 +802,7 @@ fn bench_f64_tensor_corr_axes(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.corr_axes(&b, &axes).expect("corr_axes must succeed");
+                    let r = a.clone().corr_axes(b.clone(), &axes).expect("corr_axes must succeed");
                     black_box(r);
                 });
             },
@@ -820,8 +820,8 @@ fn bench_f64_tensor_corr_axes_mt(c: &mut Criterion) {
         (shape![64, 64, 64], shape![64, 64, 5]),
         (shape![16, 16, 128], shape![16, 16, 7]),
     ] {
-        let a = Tensor::<f64>::rand(a_shape);
-        let b = Tensor::<f64>::rand(b_shape);
+        let a = Tensor::<f64>::rand(a_shape.clone());
+        let b = Tensor::<f64>::rand(b_shape.clone());
         let rank = a_shape.rank();
         let axes = axes_last_only(rank);
         let mut out = 1usize;
@@ -843,8 +843,8 @@ fn bench_f64_tensor_corr_axes_mt(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a
-                        .corr_axes_mt(&b, &axes)
+                    let r = a.clone()
+                        .corr_axes_mt(b.clone(), &axes)
                         .expect("corr_axes_mt must succeed");
                     black_box(r);
                 });
@@ -886,7 +886,7 @@ fn bench_c64_tensor_corr_axes(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.corr_axes(&b, &axes).expect("corr_axes must succeed");
+                    let r = a.clone().corr_axes(b.clone(), &axes).expect("corr_axes must succeed");
                     black_box(r);
                 });
             },
@@ -927,8 +927,8 @@ fn bench_c64_tensor_corr_axes_mt(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a
-                        .corr_axes_mt(&b, &axes)
+                    let r = a.clone()
+                        .corr_axes_mt(b.clone(), &axes)
                         .expect("corr_axes_mt must succeed");
                     black_box(r);
                 });

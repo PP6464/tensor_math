@@ -15,7 +15,7 @@ fn bench_f64_upper_hessenberg(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("c64", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = a.upper_hessenberg().expect("hessenberg must succeed");
+                let r = a.clone().upper_hessenberg().expect("hessenberg must succeed");
                 black_box(r);
             });
         });
@@ -35,7 +35,7 @@ fn bench_c64_upper_hessenberg(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("c64", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = c.upper_hessenberg().expect("hessenberg must succeed");
+                let r = c.clone().upper_hessenberg().expect("hessenberg must succeed");
                 black_box(r);
             });
         });
@@ -53,7 +53,7 @@ fn bench_f64_lower_hessenberg(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("f64", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = a.lower_hessenberg().expect("hessenberg must succeed");
+                let r = a.clone().lower_hessenberg().expect("hessenberg must succeed");
                 black_box(r);
             });
         });
@@ -73,7 +73,7 @@ fn bench_c64_lower_hessenberg(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("c64", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = c.lower_hessenberg().expect("hessenberg must succeed");
+                let r = c.clone().lower_hessenberg().expect("hessenberg must succeed");
                 black_box(r);
             });
         });
@@ -91,7 +91,7 @@ fn bench_f64_upper_hessenberg_h(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("c64", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = a.upper_hessenberg_h().expect("hessenberg must succeed");
+                let r = a.clone().upper_hessenberg_h().expect("hessenberg must succeed");
                 black_box(r);
             });
         });
@@ -111,7 +111,7 @@ fn bench_c64_upper_hessenberg_h(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("c64", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = c.upper_hessenberg_h().expect("hessenberg must succeed");
+                let r = c.clone().upper_hessenberg_h().expect("hessenberg must succeed");
                 black_box(r);
             });
         });
@@ -129,7 +129,7 @@ fn bench_f64_lower_hessenberg_h(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("f64", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = a.lower_hessenberg_h().expect("hessenberg must succeed");
+                let r = a.clone().lower_hessenberg_h().expect("hessenberg must succeed");
                 black_box(r);
             });
         });
@@ -149,7 +149,7 @@ fn bench_c64_lower_hessenberg_h(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("c64", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = c.lower_hessenberg_h().expect("hessenberg must succeed");
+                let r = c.clone().lower_hessenberg_h().expect("hessenberg must succeed");
                 black_box(r);
             });
         });

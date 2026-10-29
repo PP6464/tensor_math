@@ -20,7 +20,7 @@ fn bench_constructors_tensor(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = tensor_math::definitions::tensor::Tensor::from_value(&shape, 1.0);
+                    let r = tensor_math::definitions::tensor::Tensor::from_value(shape.clone(), 1.0);
                     black_box(r);
                 });
             },
@@ -30,20 +30,20 @@ fn bench_constructors_tensor(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = tensor_math::definitions::tensor::Tensor::<f64>::from_shape(&shape);
+                    let r = tensor_math::definitions::tensor::Tensor::<f64>::from_shape(shape.clone());
                     black_box(r);
                 });
             },
         );
         group.bench_with_input(BenchmarkId::new("zeros", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = tensor_math::definitions::tensor::Tensor::<f64>::zeros(&shape);
+                let r = tensor_math::definitions::tensor::Tensor::<f64>::zeros(shape.clone());
                 black_box(r);
             });
         });
         group.bench_with_input(BenchmarkId::new("rand", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = tensor_math::definitions::tensor::Tensor::<f64>::rand(&shape);
+                let r = tensor_math::definitions::tensor::Tensor::<f64>::rand(shape.clone());
                 black_box(r);
             });
         });

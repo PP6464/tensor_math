@@ -3,7 +3,6 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::hint::black_box;
 use tensor_math::definitions::matrix::Matrix;
-use tensor_math::definitions::shape::Shape;
 use tensor_math::definitions::tensor::Tensor;
 use tensor_math::shape;
 
@@ -24,7 +23,7 @@ fn bench_tensor_dot(c: &mut Criterion) {
         }
         // Remove last x
         label.remove(label.len() - 1);
-        let a = Tensor::<f64>::rand(shape);
+        let a = Tensor::<f64>::rand(shape.clone());
         group.throughput(Throughput::Elements(2 * shape.element_count() as u64));
 
         group.bench_with_input(BenchmarkId::new("tensor", &label), &label, |bench, _| {
@@ -55,7 +54,7 @@ fn bench_tensor_dot_mt(c: &mut Criterion) {
         }
         // Remove last x
         label.remove(label.len() - 1);
-        let a = Tensor::<f64>::rand(shape);
+        let a = Tensor::<f64>::rand(shape.clone());
         group.throughput(Throughput::Elements(2 * shape.element_count() as u64));
 
         group.bench_with_input(BenchmarkId::new("tensor", &label), &label, |bench, _| {

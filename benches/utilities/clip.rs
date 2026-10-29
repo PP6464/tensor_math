@@ -3,7 +3,6 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::hint::black_box;
 use tensor_math::definitions::matrix::Matrix;
-use tensor_math::definitions::shape::Shape;
 use tensor_math::definitions::tensor::Tensor;
 use tensor_math::shape;
 
@@ -16,7 +15,7 @@ fn bench_clip_tensor(c: &mut Criterion) {
         (1024, 1024),
         (2048, 4096),
     ] {
-        let a = Tensor::from_value(&shape![rows, cols], 1.0);
+        let a = Tensor::from_value(shape![rows, cols], 1.0);
         let elems = (rows * cols) as u64;
         group.throughput(Throughput::Elements(elems));
 
@@ -24,13 +23,13 @@ fn bench_clip_tensor(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("st", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = a.clip(-0.5, 0.5);
+                let r = a.clone().clip(-0.5, 0.5);
                 black_box(r);
             });
         });
         group.bench_with_input(BenchmarkId::new("mt", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = a.par_clip(-0.5, 0.5);
+                let r = a.clone().par_clip(-0.5, 0.5);
                 black_box(r);
             });
         });
@@ -48,13 +47,13 @@ fn bench_clip_matrix(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("st", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = a.clip(-0.5, 0.5);
+                let r = a.clone().clip(-0.5, 0.5);
                 black_box(r);
             });
         });
         group.bench_with_input(BenchmarkId::new("mt", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = a.par_clip(-0.5, 0.5);
+                let r = a.clone().par_clip(-0.5, 0.5);
                 black_box(r);
             });
         });

@@ -27,8 +27,8 @@ fn random_complex_matrix(rows: usize, cols: usize) -> Matrix<Complex64> {
 }
 
 fn random_complex_tensor(shape: &Shape) -> Tensor<Complex64> {
-    let re = Tensor::<f64>::rand(shape);
-    let im = Tensor::<f64>::rand(shape);
+    let re = Tensor::<f64>::rand(shape.clone());
+    let im = Tensor::<f64>::rand(shape.clone());
     re.into_complex() + im.into_complex().par_map(|v| v * Complex64::I)
 }
 
@@ -41,7 +41,7 @@ fn bench_f64_tensor_sum(c: &mut Criterion) {
         shape![100, 100, 100],
         shape![1000000],
     ] {
-        let a = Tensor::<f64>::rand(shape);
+        let a = Tensor::<f64>::rand(shape.clone());
         group.throughput(Throughput::Elements(shape.element_count() as u64));
 
         let label = label_shape(shape);
@@ -51,7 +51,7 @@ fn bench_f64_tensor_sum(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.sum();
+                    let r = a.clone().sum();
                     black_box(r);
                 });
             },
@@ -70,7 +70,7 @@ fn bench_f64_tensor_sum_mt(c: &mut Criterion) {
         shape![100, 100, 100],
         shape![1000000],
     ] {
-        let a = Tensor::<f64>::rand(shape);
+        let a = Tensor::<f64>::rand(shape.clone());
         group.throughput(Throughput::Elements(shape.element_count() as u64));
 
         let label = label_shape(shape);
@@ -80,7 +80,7 @@ fn bench_f64_tensor_sum_mt(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.sum_mt();
+                    let r = a.clone().sum_mt();
                     black_box(r);
                 });
             },
@@ -109,7 +109,7 @@ fn bench_c64_tensor_sum(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.sum();
+                    let r = a.clone().sum();
                     black_box(r);
                 });
             },
@@ -138,7 +138,7 @@ fn bench_c64_tensor_sum_mt(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.sum_mt();
+                    let r = a.clone().sum_mt();
                     black_box(r);
                 });
             },
@@ -162,7 +162,7 @@ fn bench_f64_matrix_sum(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.sum();
+                    let r = a.clone().sum();
                     black_box(r);
                 });
             },
@@ -186,7 +186,7 @@ fn bench_f64_matrix_sum_mt(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.sum_mt();
+                    let r = a.clone().sum_mt();
                     black_box(r);
                 });
             },
@@ -210,7 +210,7 @@ fn bench_c64_matrix_sum(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.sum();
+                    let r = a.clone().sum();
                     black_box(r);
                 });
             },
@@ -234,7 +234,7 @@ fn bench_c64_matrix_sum_mt(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.sum_mt();
+                    let r = a.clone().sum_mt();
                     black_box(r);
                 });
             },
@@ -259,7 +259,7 @@ fn bench_f64_matrix_trace(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.trace().expect("trace must succeed");
+                    let r = a.clone().trace().expect("trace must succeed");
                     black_box(r);
                 });
             },
@@ -283,7 +283,7 @@ fn bench_f64_matrix_trace_mt(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.trace_mt().expect("trace_mt must succeed");
+                    let r = a.clone().trace_mt().expect("trace_mt must succeed");
                     black_box(r);
                 });
             },
@@ -307,7 +307,7 @@ fn bench_c64_matrix_trace(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.trace().expect("trace must succeed");
+                    let r = a.clone().trace().expect("trace must succeed");
                     black_box(r);
                 });
             },
@@ -331,7 +331,7 @@ fn bench_c64_matrix_trace_mt(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.trace_mt().expect("trace_mt must succeed");
+                    let r = a.clone().trace_mt().expect("trace_mt must succeed");
                     black_box(r);
                 });
             },

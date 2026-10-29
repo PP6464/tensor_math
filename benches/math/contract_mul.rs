@@ -29,8 +29,8 @@ fn random_complex_matrix(rows: usize, cols: usize) -> Matrix<Complex64> {
 }
 
 fn random_complex_tensor(shape: &Shape) -> Tensor<Complex64> {
-    let re = Tensor::<f64>::rand(shape);
-    let im = Tensor::<f64>::rand(shape);
+    let re = Tensor::<f64>::rand(shape.clone());
+    let im = Tensor::<f64>::rand(shape.clone());
     re.into_complex() + im.into_complex().par_map(|v| v * Complex64::I)
 }
 
@@ -50,7 +50,7 @@ fn bench_f64_matrix_contract_mul(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.contract_mul(&b).expect("contract_mul must succeed");
+                    let r = a.clone().mat_mul_mt(b.clone()).expect("contract_mul must succeed");
                     black_box(r);
                 });
             },
@@ -75,7 +75,7 @@ fn bench_f64_matrix_contract_mul_mt(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.contract_mul_mt(&b).expect("contract_mul_mt must succeed");
+                    let r = a.clone().mat_mul_mt(b.clone()).expect("contract_mul_mt must succeed");
                     black_box(r);
                 });
             },
@@ -100,7 +100,7 @@ fn bench_f64_matrix_mat_mul(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.mat_mul(&b).expect("mat_mul must succeed");
+                    let r = a.clone().mat_mul(b.clone()).expect("mat_mul must succeed");
                     black_box(r);
                 });
             },
@@ -125,7 +125,7 @@ fn bench_f64_matrix_mat_mul_mt(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.mat_mul_mt(&b).expect("mat_mul_mt must succeed");
+                    let r = a.clone().mat_mul_mt(b.clone()).expect("mat_mul_mt must succeed");
                     black_box(r);
                 });
             },
@@ -152,7 +152,7 @@ fn bench_c64_matrix_contract_mul(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.contract_mul(&b).expect("contract_mul must succeed");
+                    let r = a.clone().mat_mul(b.clone()).expect("contract_mul must succeed");
                     black_box(r);
                 });
             },
@@ -177,7 +177,7 @@ fn bench_c64_matrix_contract_mul_mt(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.contract_mul_mt(&b).expect("contract_mul_mt must succeed");
+                    let r = a.clone().mat_mul_mt(b.clone()).expect("contract_mul_mt must succeed");
                     black_box(r);
                 });
             },
@@ -202,7 +202,7 @@ fn bench_c64_matrix_mat_mul(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.mat_mul(&b).expect("mat_mul must succeed");
+                    let r = a.clone().mat_mul(b.clone()).expect("mat_mul must succeed");
                     black_box(r);
                 });
             },
@@ -227,7 +227,7 @@ fn bench_c64_matrix_mat_mul_mt(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.mat_mul_mt(&b).expect("mat_mul_mt must succeed");
+                    let r = a.clone().mat_mul_mt(b.clone()).expect("mat_mul_mt must succeed");
                     black_box(r);
                 });
             },
@@ -247,20 +247,20 @@ fn bench_f64_tensor_contract_mul(c: &mut Criterion) {
         shape![256, 256, 256],
     ] {
         let inner = shape[shape.rank() - 1];
-        let a = Tensor::<f64>::rand(shape);
-        let b = Tensor::<f64>::rand(&shape![inner, 32, 32]);
+        let a = Tensor::<f64>::rand(shape.clone());
+        let b = Tensor::<f64>::rand(shape![inner, 32, 32]);
         // Output has shape a.shape[..rank-1] x 32 x 32.
         let out_elems = a.shape().element_count() / inner * 32 * 32;
         group.throughput(Throughput::Elements((2 * out_elems * inner) as u64));
 
-        let label = format!("{}-x{}x32x32", label_shape(a.shape()), inner);
+        let label = format!("{}-x{}x32x32", label_shape(&a.shape()), inner);
 
         group.bench_with_input(
             BenchmarkId::new("f64/tensor", &label),
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.contract_mul(&b).expect("contract_mul must succeed");
+                    let r = a.clone().contract_mul(b.clone()).expect("contract_mul must succeed");
                     black_box(r);
                 });
             },
@@ -280,8 +280,8 @@ fn bench_f64_tensor_contract_mul_mt(c: &mut Criterion) {
         shape![256, 256, 256],
     ] {
         let inner = shape[shape.rank() - 1];
-        let a = Tensor::<f64>::rand(shape);
-        let b = Tensor::<f64>::rand(&shape![inner, 32, 32]);
+        let a = Tensor::<f64>::rand(shape.clone());
+        let b = Tensor::<f64>::rand(shape![inner, 32, 32]);
         let out_elems = a.shape().element_count() / inner * 32 * 32;
         group.throughput(Throughput::Elements((2 * out_elems * inner) as u64));
 
@@ -292,7 +292,7 @@ fn bench_f64_tensor_contract_mul_mt(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.contract_mul_mt(&b).expect("contract_mul_mt must succeed");
+                    let r = a.clone().contract_mul_mt(b.clone()).expect("contract_mul_mt must succeed");
                     black_box(r);
                 });
             },
@@ -324,7 +324,7 @@ fn bench_c64_tensor_contract_mul(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.contract_mul(&b).expect("contract_mul must succeed");
+                    let r = a.clone().contract_mul(b.clone()).expect("contract_mul must succeed");
                     black_box(r);
                 });
             },
@@ -356,7 +356,7 @@ fn bench_c64_tensor_contract_mul_mt(c: &mut Criterion) {
             &label,
             |bench, _| {
                 bench.iter(|| {
-                    let r = a.contract_mul_mt(&b).expect("contract_mul_mt must succeed");
+                    let r = a.clone().contract_mul_mt(b.clone()).expect("contract_mul_mt must succeed");
                     black_box(r);
                 });
             },

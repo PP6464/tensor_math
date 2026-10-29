@@ -3,7 +3,6 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::hint::black_box;
 use tensor_math::definitions::matrix::Matrix;
-use tensor_math::definitions::shape::Shape;
 use tensor_math::definitions::tensor::Tensor;
 use tensor_math::shape;
 
@@ -44,7 +43,7 @@ fn bench_iter_tensor(c: &mut Criterion) {
         (1024, 1024),
         (2048, 4096),
     ] {
-        let a = Tensor::from_value(&shape![rows, cols], 1.0);
+        let a = Tensor::from_value(shape![rows, cols], 1.0);
         let elems = (rows * cols) as u64;
         group.throughput(Throughput::Elements(elems));
 
@@ -52,7 +51,7 @@ fn bench_iter_tensor(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("st/iter", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = drain_iter(a.enumerated_iter());
+                let r = drain_iter(a.enumerated_iter().map(|(idx, v)| (idx, *v)));
                 black_box(r);
             });
         });
@@ -119,7 +118,7 @@ fn bench_iter_matrix(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::new("st/iter", &label), &label, |bench, _| {
             bench.iter(|| {
-                let r = drain_iter(a.enumerated_iter().map(|((r, c), v)| (vec![r, c], v)));
+                let r = drain_iter(a.enumerated_iter().map(|((r, c), v)| (vec![r, c], *v)));
                 black_box(r);
             });
         });
