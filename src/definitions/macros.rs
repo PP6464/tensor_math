@@ -295,7 +295,6 @@ macro_rules! impl_bin_op {
     };
 }
 #[macro_export]
-
 /// Implement an assignment operation element-wise for tensors and matrices.
 macro_rules! impl_assign_op {
     ($op:ident, $op_fn:ident) => {

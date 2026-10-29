@@ -118,7 +118,7 @@ impl<'a, T> TensorSliceMut<'a, T> {
         self.orig.slice_mut(
             &new_start
                 .into_iter()
-                .zip(new_end.into_iter())
+                .zip(new_end)
                 .map(|(x, y)| x as usize..y as usize)
                 .collect::<Vec<_>>(),
         )

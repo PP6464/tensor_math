@@ -127,7 +127,7 @@ impl<T> TensorSlice<'_, T> {
         self.orig.slice(
             &new_start
                 .into_iter()
-                .zip(new_end.into_iter())
+                .zip(new_end)
                 .map(|(x, y)| x as usize..y as usize)
                 .collect::<Vec<_>>(),
         )
