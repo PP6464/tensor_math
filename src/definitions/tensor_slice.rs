@@ -62,7 +62,7 @@ impl<T> TensorSlice<'_, T> {
             }
         }
 
-        unsafe { Some(self.orig.get_unchecked(orig_index.as_slice())) }
+        Some(unsafe { self.get_unchecked(indices) })
     }
 
     /// Gets a reference to the element at the specified indices in the tensor slice without bounds checking.
@@ -124,6 +124,11 @@ impl<T> Index<&[usize]> for TensorSlice<'_, T> {
     type Output = T;
 
     fn index(&self, index: &[usize]) -> &Self::Output {
+        assert_eq!(
+            index.len(),
+            self.rank(),
+            "Index rank does not match tensor slice rank"
+        );
         let actual_index = self
             .start
             .iter()
@@ -156,29 +161,205 @@ impl<T: Clone> TensorSlice<'_, T> {
             };
         }
 
-        let mut elements = Vec::with_capacity(self.shape().element_count());
-
-        unsafe {
-            let per_chunk_delta = self.orig.strides.0.get_unchecked(0);
-            let slice_start_pos = self.orig.shape.address_unchecked(&self.start);
-            let n_chunks = self
-                .shape()
-                .0
-                .get_unchecked(0..self.rank() - 1)
-                .iter()
-                .product();
-
-            for i in 0..n_chunks {
-                let start = slice_start_pos + i * per_chunk_delta;
-                let end = start + self.shape().0.get_unchecked(self.rank() - 1);
-                elements.extend_from_slice(self.orig.elements.get_unchecked(start..end));
+        let slice_shape = self.shape();
+        let mut elements = Vec::with_capacity(slice_shape.element_count());
+        for i in 0..slice_shape.element_count() {
+            let mut index = unsafe { slice_shape.tensor_index_unchecked(i) };
+            for (index_i, start_i) in index.iter_mut().zip(self.start.iter()) {
+                *index_i += start_i;
             }
+            let address = unsafe { self.orig.shape.address_unchecked(&index) };
+            elements.push(unsafe { self.orig.elements.get_unchecked(address) }.clone());
         }
 
         Tensor {
-            shape: self.shape(),
-            strides: Strides::from_shape(&self.shape()),
+            shape: slice_shape.clone(),
+            strides: Strides::from_shape(&slice_shape),
             elements,
         }
+    }
+}
+
+#[cfg(test)]
+mod tensor_slice_tests {
+    use rayon::iter::{IndexedParallelIterator, ParallelIterator};
+    use tensor_math::definitions::tensor::Tensor;
+    use tensor_math::shape;
+
+    #[test]
+    fn slice_bounds_shape_rank_and_scalar_shape() {
+        let tensor = Tensor::new(shape![3, 4], (0..12).collect()).unwrap();
+        let slice = tensor.slice(&[1..3, 1..4]).unwrap();
+
+        assert_eq!(slice.start(), &[1, 1]);
+        assert_eq!(slice.end(), &[3, 4]);
+        assert_eq!(slice.shape(), shape![2, 3]);
+        assert_eq!(slice.rank(), 2);
+
+        let scalar = Tensor::new(shape![], vec![5]).unwrap();
+        let scalar_slice = scalar.slice(&[]).unwrap();
+        assert_eq!(scalar_slice.start(), &[]);
+        assert_eq!(scalar_slice.end(), &[]);
+        assert_eq!(scalar_slice.shape(), shape![]);
+        assert_eq!(scalar_slice.rank(), 0);
+    }
+
+    #[test]
+    fn get_checks_rank_and_slice_relative_bounds() {
+        let tensor = Tensor::new(shape![3, 4], (0..12).collect()).unwrap();
+        let slice = tensor.slice(&[1..3, 1..4]).unwrap();
+
+        assert_eq!(slice.get(&[0, 0]), Some(&5));
+        assert_eq!(slice.get(&[1, 2]), Some(&11));
+        assert_eq!(slice.get(&[]), None);
+        assert_eq!(slice.get(&[0]), None);
+        assert_eq!(slice.get(&[2, 0]), None);
+        assert_eq!(slice.get(&[0, 3]), None);
+
+        let scalar = Tensor::new(shape![], vec![42]).unwrap();
+        assert_eq!(scalar.slice(&[]).unwrap().get(&[]), Some(&42));
+
+        let empty = Tensor::<i32>::new(shape![2, 0, 3], vec![]).unwrap();
+        assert_eq!(
+            empty.slice(&[0..2, 0..0, 0..3]).unwrap().get(&[0, 0, 0]),
+            None
+        );
+    }
+
+    #[test]
+    fn element_iterators_are_row_major_and_support_rank_zero() {
+        let tensor = Tensor::new(shape![2, 3, 4], (0..24).collect()).unwrap();
+        let slice = tensor.slice(&[0..2, 1..3, 1..4]).unwrap();
+        let expected = vec![5, 6, 7, 9, 10, 11, 17, 18, 19, 21, 22, 23];
+
+        assert_eq!(slice.iter().copied().collect::<Vec<_>>(), expected);
+        assert_eq!(slice.par_iter().copied().collect::<Vec<_>>(), expected);
+        assert_eq!(slice.iter().next_back(), Some(&23));
+        assert_eq!(slice.par_iter().len(), 12);
+
+        let scalar = Tensor::new(shape![], vec![42]).unwrap();
+        let scalar_slice = scalar.slice(&[]).unwrap();
+        assert_eq!(scalar_slice.iter().copied().collect::<Vec<_>>(), vec![42]);
+        assert_eq!(
+            scalar_slice.par_iter().copied().collect::<Vec<_>>(),
+            vec![42]
+        );
+    }
+
+    #[test]
+    fn empty_dimension_slices_have_empty_element_iterators() {
+        for (tensor_shape, ranges, slice_shape) in [
+            (shape![0, 2], vec![0..0, 0..2], shape![0, 2]),
+            (shape![2, 0], vec![0..2, 0..0], shape![2, 0]),
+            (shape![0, 0], vec![0..0, 0..0], shape![0, 0]),
+        ] {
+            let tensor = Tensor::<i32>::new(tensor_shape, vec![]).unwrap();
+            let slice = tensor.slice(&ranges).unwrap();
+            assert_eq!(slice.shape(), slice_shape);
+            assert_eq!(slice.iter().count(), 0);
+            assert_eq!(slice.par_iter().count(), 0);
+        }
+    }
+
+    #[test]
+    fn chunks_cover_elements_and_empty_slices() {
+        let tensor = Tensor::new(shape![2, 3], (0..6).collect()).unwrap();
+        let slice = tensor.slice(&[0..2, 1..3]).unwrap();
+        let expected = vec![vec![1, 2, 4], vec![5]];
+
+        assert_eq!(
+            slice
+                .chunks(3)
+                .map(|chunk| chunk.into_iter().copied().collect::<Vec<_>>())
+                .collect::<Vec<_>>(),
+            expected
+        );
+        assert_eq!(
+            slice
+                .par_chunks(3)
+                .map(|chunk| chunk.into_iter().copied().collect::<Vec<_>>())
+                .collect::<Vec<_>>(),
+            expected
+        );
+        assert_eq!(slice.chunks(0).count(), 0);
+        let scalar = Tensor::new(shape![], vec![8]).unwrap();
+        assert_eq!(scalar.slice(&[]).unwrap().chunks(2).count(), 1);
+        assert_eq!(scalar.slice(&[]).unwrap().par_chunks(2).count(), 1);
+
+        let empty = Tensor::<i32>::new(shape![0, 2], vec![]).unwrap();
+        let empty_slice = empty.slice(&[0..0, 0..2]).unwrap();
+        assert_eq!(empty_slice.chunks(2).count(), 0);
+        assert_eq!(empty_slice.par_chunks(2).count(), 0);
+    }
+
+    #[test]
+    fn indexing_reads_slice_relative_indices_and_rank_zero() {
+        let tensor = Tensor::new(shape![3, 4], (0..12).collect()).unwrap();
+        let slice = tensor.slice(&[1..3, 1..4]).unwrap();
+        assert_eq!(slice[&[0, 0]], 5);
+        assert_eq!(slice[&[1, 2]], 11);
+
+        let scalar = Tensor::new(shape![], vec![42]).unwrap();
+        assert_eq!(scalar.slice(&[]).unwrap()[&[]], 42);
+    }
+
+    #[test]
+    #[should_panic]
+    fn indexing_panics_outside_slice() {
+        let tensor = Tensor::new(shape![2, 2], vec![1, 2, 3, 4]).unwrap();
+        let slice = tensor.slice(&[0..1, 0..1]).unwrap();
+        let _ = slice[&[1, 0]];
+    }
+
+    #[test]
+    #[should_panic]
+    fn indexing_panics_for_short_index_rank() {
+        let tensor = Tensor::new(shape![2, 2], vec![1, 2, 3, 4]).unwrap();
+        let slice = tensor.slice(&[0..2, 0..2]).unwrap();
+        let _ = slice[&[0]];
+    }
+
+    #[test]
+    #[should_panic]
+    fn indexing_panics_for_long_index_rank() {
+        let tensor = Tensor::new(shape![2, 2], vec![1, 2, 3, 4]).unwrap();
+        let slice = tensor.slice(&[0..2, 0..2]).unwrap();
+        let _ = slice[&[0, 0, 0]];
+    }
+
+    #[test]
+    fn clone_into_tensor_preserves_scalar_and_zero_dimension_shapes() {
+        let scalar = Tensor::new(shape![], vec![42]).unwrap();
+        assert_eq!(
+            scalar.slice(&[]).unwrap().clone_into_tensor(),
+            Tensor::new(shape![], vec![42]).unwrap()
+        );
+
+        let tensor = Tensor::new(shape![3, 4], (0..12).collect()).unwrap();
+        assert_eq!(
+            tensor.slice(&[1..3, 1..3]).unwrap().clone_into_tensor(),
+            Tensor::new(shape![2, 2], vec![5, 6, 9, 10]).unwrap()
+        );
+        let rank_three = Tensor::new(shape![2, 3, 2], (0..12).collect()).unwrap();
+        assert_eq!(
+            rank_three
+                .slice(&[0..2, 1..3, 0..2])
+                .unwrap()
+                .clone_into_tensor(),
+            Tensor::new(shape![2, 2, 2], vec![2, 3, 4, 5, 8, 9, 10, 11]).unwrap()
+        );
+        assert_eq!(
+            tensor.slice(&[1..1, 0..4]).unwrap().clone_into_tensor(),
+            Tensor::new(shape![0, 4], vec![]).unwrap()
+        );
+        assert_eq!(
+            tensor.slice(&[0..3, 2..2]).unwrap().clone_into_tensor(),
+            Tensor::new(shape![3, 0], vec![]).unwrap()
+        );
+        let empty = Tensor::<i32>::new(shape![0, 3], vec![]).unwrap();
+        assert_eq!(
+            empty.slice(&[0..0, 0..3]).unwrap().clone_into_tensor(),
+            Tensor::new(shape![0, 3], vec![]).unwrap()
+        );
     }
 }

@@ -4,11 +4,11 @@
 --------------------------------------------
 */
 
-use crate::definitions::tensor_slice::TensorSlice;
 use crate::definitions::errors::TensorErrors;
 use crate::definitions::shape::Shape;
 use crate::definitions::strides::Strides;
 use crate::definitions::tensor::Tensor;
+use crate::definitions::tensor_slice::TensorSlice;
 use rayon::iter::plumbing::{bridge, Consumer, Producer, ProducerCallback, UnindexedConsumer};
 use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 use std::marker::PhantomData;
@@ -80,7 +80,7 @@ impl<T> TensorSliceMut<'_, T> {
             }
         }
 
-        unsafe { Some(self.orig.get_unchecked(orig_index.as_slice())) }
+        Some(unsafe { self.get_unchecked(indices) })
     }
 
     /// Gets a reference to the element at the specified indices in the tensor slice without bounds checking.
@@ -112,7 +112,7 @@ impl<T> TensorSliceMut<'_, T> {
             }
         }
 
-        unsafe { Some(self.orig.get_unchecked_mut(orig_index.as_slice())) }
+        Some(unsafe { self.get_unchecked_mut(indices) })
     }
 
     /// Gets a mutable reference to the element at the specified indices in the tensor slice without bounds checking.
@@ -147,9 +147,7 @@ impl<T> TensorSliceMut<'_, T> {
     }
 
     /// Returns a mutable iterator over the elements of the tensor slice.
-    pub fn iter_mut(
-        &mut self,
-    ) -> impl ExactSizeIterator<Item = &mut T> + DoubleEndedIterator {
+    pub fn iter_mut(&mut self) -> impl ExactSizeIterator<Item = &mut T> + DoubleEndedIterator {
         struct SliceIterMut<'a, T> {
             base: *mut T,            // Pointer to the start of the original tensor's elements
             flat_index: usize,       // Current flat index in the slice
@@ -233,7 +231,7 @@ impl<T> TensorSliceMut<'_, T> {
         let orig_shape = self.orig.shape.clone();
         let slice_shape = self.shape().clone();
         let base = self.orig.elements_mut().as_mut_ptr();
-        let count = orig_shape.element_count();
+        let count = slice_shape.element_count();
 
         struct TensorSliceMutIter<'a, T> {
             slice_start: Vec<usize>, // Start of the entire slice
@@ -409,6 +407,31 @@ impl<T> TensorSliceMut<'_, T> {
 
     /// Swaps the elements at the specified indices.
     pub fn swap(&mut self, index1: &[usize], index2: &[usize]) -> Result<(), TensorErrors> {
+        let rank = self.rank();
+        if index1.len() != rank {
+            return Err(TensorErrors::IndicesInvalidForRank(index1.len(), rank));
+        }
+        if index2.len() != rank {
+            return Err(TensorErrors::IndicesInvalidForRank(index2.len(), rank));
+        }
+        let slice_shape = self.shape();
+        for axis in 0..rank {
+            if index1[axis] >= slice_shape[axis] {
+                return Err(TensorErrors::IndexOutOfBounds {
+                    index: index1[axis],
+                    axis,
+                    length: slice_shape[axis],
+                });
+            }
+            if index2[axis] >= slice_shape[axis] {
+                return Err(TensorErrors::IndexOutOfBounds {
+                    index: index2[axis],
+                    axis,
+                    length: slice_shape[axis],
+                });
+            }
+        }
+
         self.orig.swap(
             &index1
                 .iter()
@@ -434,6 +457,11 @@ impl<T> Index<&[usize]> for TensorSliceMut<'_, T> {
     type Output = T;
 
     fn index(&self, index: &[usize]) -> &Self::Output {
+        assert_eq!(
+            index.len(),
+            self.rank(),
+            "Index rank does not match tensor slice rank"
+        );
         let actual_index = self
             .start
             .iter()
@@ -451,6 +479,11 @@ impl<T> Index<&[usize]> for TensorSliceMut<'_, T> {
 
 impl<T> IndexMut<&[usize]> for TensorSliceMut<'_, T> {
     fn index_mut(&mut self, index: &[usize]) -> &mut Self::Output {
+        assert_eq!(
+            index.len(),
+            self.rank(),
+            "Index rank does not match tensor slice rank"
+        );
         let actual_index = self
             .start
             .iter()
@@ -483,29 +516,522 @@ impl<T: Clone> TensorSliceMut<'_, T> {
             };
         }
 
-        let mut elements = Vec::with_capacity(self.shape().element_count());
-
-        unsafe {
-            let per_chunk_delta = self.orig.strides.0.get_unchecked(0);
-            let slice_start_pos = self.orig.shape.address_unchecked(&self.start);
-            let n_chunks = self
-                .shape()
-                .0
-                .get_unchecked(0..self.rank() - 1)
-                .iter()
-                .product();
-
-            for i in 0..n_chunks {
-                let start = slice_start_pos + i * per_chunk_delta;
-                let end = start + self.shape().0.get_unchecked(self.rank() - 1);
-                elements.extend_from_slice(self.orig.elements.get_unchecked(start..end));
+        let slice_shape = self.shape();
+        let mut elements = Vec::with_capacity(slice_shape.element_count());
+        for i in 0..slice_shape.element_count() {
+            let mut index = unsafe { slice_shape.tensor_index_unchecked(i) };
+            for (index_i, start_i) in index.iter_mut().zip(self.start.iter()) {
+                *index_i += start_i;
             }
+            let address = unsafe { self.orig.shape.address_unchecked(&index) };
+            elements.push(unsafe { self.orig.elements.get_unchecked(address) }.clone());
         }
 
         Tensor {
-            shape: self.shape(),
-            strides: Strides::from_shape(&self.shape()),
+            shape: slice_shape.clone(),
+            strides: Strides::from_shape(&slice_shape),
             elements,
         }
+    }
+}
+
+#[cfg(test)]
+mod tensor_slice_mut_tests {
+    use rayon::iter::{IndexedParallelIterator, ParallelIterator};
+    use tensor_math::definitions::errors::TensorErrors;
+    use tensor_math::definitions::tensor::Tensor;
+    use tensor_math::shape;
+
+    #[test]
+    fn slice_rank_and_shape() {
+        let shape = shape![4, 5, 6];
+        let mut tensor = Tensor::<i32>::from_shape(shape);
+        let slice = tensor.slice_mut(&[1..4, 0..2, 3..6]).unwrap();
+
+        assert_eq!(slice.rank(), 3);
+        assert_eq!(slice.shape(), shape![3, 2, 3]);
+    }
+
+    #[test]
+    #[should_panic]
+    fn invalid_index() {
+        let shape = shape![2, 3, 4];
+        let mut tensor = Tensor::<i32>::from_shape(shape);
+        let slice = tensor.slice_mut(&[0..1, 0..1, 0..1]).unwrap();
+
+        slice[&[1, 0, 0]];
+    }
+
+    #[test]
+    fn index_mut() {
+        let shape = shape![2, 3, 4];
+        let mut tensor = Tensor::<i32>::from_shape(shape);
+        let mut slice = tensor.slice_mut(&[0..1, 0..1, 0..1]).unwrap();
+
+        assert_eq!(slice[&[0, 0, 0]], 0);
+
+        slice[&[0, 0, 0]] = 67;
+
+        assert_eq!(slice[&[0, 0, 0]], 67);
+    }
+
+    #[test]
+    fn get_is_safe_index() {
+        let shape = shape![2, 3, 4];
+        let mut tensor = Tensor::<i32>::from_shape(shape);
+        let slice = tensor.slice_mut(&[0..1, 0..1, 0..1]).unwrap();
+
+        assert_eq!(slice.get(&[0, 0]), None);
+        assert_eq!(slice.get(&[0, 0, 0]), Some(&0));
+    }
+
+    #[test]
+    fn get_mut_is_safe_index_mut() {
+        let shape = shape![2, 3, 4];
+        let mut tensor = Tensor::<i32>::from_shape(shape);
+        let mut slice = tensor.slice_mut(&[0..1, 0..1, 0..1]).unwrap();
+
+        assert_eq!(slice.get_mut(&[0, 0]), None);
+        assert_eq!(slice.get_mut(&[0, 0, 0]).copied(), Some(0));
+        slice.get_mut(&[0, 0, 0]).map(|x| *x = 42);
+
+        assert_eq!(tensor, Tensor::new(shape![2, 3, 4], vec![
+            42, 0, 0, 0,
+            0, 0, 0, 0,
+            0, 0, 0, 0,
+
+            0, 0, 0, 0,
+            0, 0, 0, 0,
+            0, 0, 0, 0,
+        ]).unwrap());
+    }
+
+    #[test]
+    fn convert_into_tensor() {
+        let shape = shape![2, 3, 4];
+        let mut tensor = Tensor::<i32>::from_shape(shape);
+        let slice = tensor.slice_mut(&[0..1, 0..1, 0..1]).unwrap();
+        let ans = Tensor::new(shape![1, 1, 1], vec![0]).unwrap();
+
+        assert_eq!(slice.clone_into_tensor(), ans);
+
+        let slice = tensor.slice_mut(&[0..1, 0..1, 0..1]).unwrap();
+
+        assert_eq!(slice.clone_into_tensor(), ans);
+    }
+
+    #[test]
+    fn slicing_on_scalar_tensor() {
+        let mut tensor = Tensor::<i32>::new(shape![], vec![42]).unwrap();
+        let mut slice = tensor.slice_mut(&[]).unwrap();
+
+        assert_eq!(slice.get(&[]), Some(&42));
+        slice[&[]] = 10;
+        assert_eq!(
+            slice.clone_into_tensor(),
+            Tensor::new(shape![], vec![10]).unwrap()
+        );
+    }
+
+    #[test]
+    fn slicing_on_empty_tensor() {
+        let mut tensor = Tensor::<i32>::new(shape![0, 3], vec![]).unwrap();
+        let slice = tensor.slice_mut(&[0..0, 1..2]).unwrap();
+
+        assert_eq!(slice.start(), vec![0, 1]);
+        assert_eq!(slice.end(), vec![0, 2]);
+        assert_eq!(slice.clone_into_tensor().shape(), shape![0, 1]);
+
+        let mut tensor2 = Tensor::<i32>::new(shape![3, 0], vec![]).unwrap();
+        let slice2 = tensor2.slice_mut(&[1..2, 0..0]).unwrap();
+
+        assert_eq!(slice2.start(), vec![1, 0]);
+        assert_eq!(slice2.end(), vec![2, 0]);
+        assert_eq!(slice2.clone_into_tensor().shape(), shape![1, 0]);
+    }
+
+    #[test]
+    fn slice_shape() {
+        let shape = shape![10, 20, 30];
+        let mut tensor = Tensor::<i32>::from_shape(shape);
+
+        // Regular slice
+        let slice = tensor.slice_mut(&[2..5, 0..10, 15..30]).unwrap();
+        assert_eq!(slice.shape(), shape![3, 10, 15]);
+
+        // Zero-length dimension
+        let slice = tensor.slice_mut(&[0..10, 5..5, 0..30]).unwrap();
+        assert_eq!(slice.shape(), shape![10, 0, 30]);
+    }
+
+    #[test]
+    fn for_each_mut_basic() {
+        let shape = shape![2, 3, 4];
+        let mut tensor = Tensor::<i32>::from_shape(shape);
+        let mut slice = tensor.slice_mut(&[0..2, 1..3, 1..4]).unwrap();
+        // slice shape: [2, 2, 3]
+
+        slice.iter_mut().for_each(|x| *x = 1);
+
+        for i in 0..2 {
+            for j in 0..3 {
+                for k in 0..4 {
+                    let val = *tensor.get(&[i, j, k]).unwrap();
+                    if j >= 1 && j < 3 && k >= 1 && k < 4 {
+                        assert_eq!(val, 1, "Expected 1 at [{}, {}, {}]", i, j, k);
+                    } else {
+                        assert_eq!(val, 0, "Expected 0 at [{}, {}, {}]", i, j, k);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn for_each_mut_scalar() {
+        let mut tensor = Tensor::<i32>::new(shape![], vec![42]).unwrap();
+        let mut slice = tensor.slice_mut(&[]).unwrap();
+
+        slice.iter_mut().for_each(|x| *x += 1);
+        assert_eq!(*tensor.get(&[]).unwrap(), 43);
+    }
+
+    #[test]
+    fn for_each_mut_empty() {
+        let mut tensor = Tensor::<i32>::new(shape![3, 0], vec![]).unwrap();
+        let mut slice = tensor.slice_mut(&[1..2, 0..0]).unwrap();
+
+        let mut count = 0;
+        slice.iter_mut().for_each(|_| count += 1);
+        assert_eq!(count, 0);
+    }
+    #[test]
+    fn enumerated_for_each_mut_basic() {
+        let shape = shape![2, 3, 4];
+        let mut tensor = Tensor::<i32>::from_shape(shape);
+        let mut slice = tensor.slice_mut(&[0..2, 1..3, 1..4]).unwrap();
+        // slice shape: [2, 2, 3]
+
+        slice.enumerated_iter_mut().for_each(|(idx, x)| {
+            // idx should be relative to the slice: [0..2, 0..2, 0..3]
+            *x = (idx[0] * 100 + idx[1] * 10 + idx[2] + 1) as i32;
+        });
+
+        for i in 0..2 {
+            for j in 0..3 {
+                for k in 0..4 {
+                    let val = *tensor.get(&[i, j, k]).unwrap();
+                    if j >= 1 && j < 3 && k >= 1 && k < 4 {
+                        let expected = (i * 100 + (j - 1) * 10 + (k - 1) + 1) as i32;
+                        assert_eq!(
+                            val, expected,
+                            "Mismatch at tensor index [{}, {}, {}]",
+                            i, j, k
+                        );
+                    } else {
+                        assert_eq!(
+                            val, 0,
+                            "Expected zero at tensor index [{}, {}, {}]",
+                            i, j, k
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn enumerated_for_each_mut_scalar() {
+        let mut tensor = Tensor::<i32>::new(shape![], vec![42]).unwrap();
+        let mut slice = tensor.slice_mut(&[]).unwrap();
+
+        slice.enumerated_iter_mut().for_each(|(idx, x)| {
+            assert_eq!(idx.len(), 0);
+            *x += 1;
+        });
+        assert_eq!(*tensor.get(&[]).unwrap(), 43);
+    }
+
+    #[test]
+    fn enumerated_for_each_mut_empty() {
+        let mut tensor = Tensor::<i32>::new(shape![3, 0], vec![]).unwrap();
+        let mut slice = tensor.slice_mut(&[1..2, 0..0]).unwrap();
+
+        let mut count = 0;
+        slice.enumerated_iter_mut().for_each(|(_, _)| count += 1);
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn immutable_views_and_checked_mutable_access_cover_scalar_and_empty_slices() {
+        let mut tensor = Tensor::new(shape![2, 3], (0..6).collect()).unwrap();
+        {
+            let mut slice = tensor.slice_mut(&[1..2, 1..3]).unwrap();
+            assert_eq!(slice.start(), &[1, 1]);
+            assert_eq!(slice.end(), &[2, 3]);
+            assert_eq!(slice.shape(), shape![1, 2]);
+            assert_eq!(slice.rank(), 2);
+            assert_eq!(
+                slice.as_immut().iter().copied().collect::<Vec<_>>(),
+                vec![4, 5]
+            );
+            assert_eq!(
+                slice.use_as_immut(|view| view.get(&[0, 1]).copied()),
+                Some(5)
+            );
+            assert_eq!(slice.get(&[]), None);
+            assert_eq!(slice.get(&[0]), None);
+            assert_eq!(slice.get(&[0, 0]), Some(&4));
+            assert_eq!(slice.get(&[1, 0]), None);
+            assert_eq!(slice.get(&[0, 2]), None);
+            *slice.get_mut(&[0, 0]).unwrap() = 40;
+            assert!(slice.get_mut(&[1, 0]).is_none());
+            assert!(slice.get_mut(&[0, 2]).is_none());
+        }
+        assert_eq!(tensor.get(&[1, 1]), Some(&40));
+
+        let mut scalar = Tensor::new(shape![], vec![7]).unwrap();
+        let scalar_slice = scalar.slice_mut(&[]).unwrap();
+        assert_eq!(scalar_slice.rank(), 0);
+        assert_eq!(scalar_slice.shape(), shape![]);
+        assert_eq!(scalar_slice.as_immut().get(&[]), Some(&7));
+        assert_eq!(scalar_slice.get(&[]), Some(&7));
+        drop(scalar_slice);
+
+        let mut empty = Tensor::<i32>::new(shape![0, 3], vec![]).unwrap();
+        let mut empty_slice = empty.slice_mut(&[0..0, 1..3]).unwrap();
+        assert_eq!(empty_slice.shape(), shape![0, 2]);
+        assert_eq!(empty_slice.get(&[0, 0]), None);
+        assert!(empty_slice.get_mut(&[0, 0]).is_none());
+    }
+
+    #[test]
+    fn iterators_visit_only_slice_elements_and_mutate_them() {
+        let mut tensor = Tensor::new(shape![2, 3, 4], (0..24).collect()).unwrap();
+        let slice = tensor.slice_mut(&[0..2, 1..3, 1..3]).unwrap();
+        let expected = vec![5, 6, 9, 10, 17, 18, 21, 22];
+        assert_eq!(slice.iter().copied().collect::<Vec<_>>(), expected);
+        assert_eq!(slice.par_iter().copied().collect::<Vec<_>>(), expected);
+        assert_eq!(slice.iter().next_back(), Some(&22));
+        assert_eq!(slice.par_iter().len(), 8);
+        drop(slice);
+
+        let mut slice = tensor.slice_mut(&[0..2, 1..3, 1..3]).unwrap();
+        slice.iter_mut().for_each(|value| *value += 100);
+        drop(slice);
+        assert_eq!(tensor.get(&[0, 1, 1]), Some(&105));
+        assert_eq!(tensor.get(&[0, 1, 3]), Some(&7));
+
+        let mut slice = tensor.slice_mut(&[0..2, 1..3, 1..3]).unwrap();
+        slice.par_iter_mut().for_each(|value| *value += 1000);
+        drop(slice);
+        assert_eq!(tensor.get(&[0, 1, 1]), Some(&1105));
+        assert_eq!(tensor.get(&[1, 2, 2]), Some(&1122));
+        assert_eq!(tensor.get(&[0, 0, 0]), Some(&0));
+    }
+
+    #[test]
+    fn parallel_mutable_iterator_visits_scalar_once_and_empty_slice_never() {
+        let mut scalar = Tensor::new(shape![], vec![4]).unwrap();
+        scalar
+            .slice_mut(&[])
+            .unwrap()
+            .par_iter_mut()
+            .for_each(|value| *value += 1);
+        assert_eq!(scalar.get(&[]), Some(&5));
+
+        for (tensor_shape, ranges) in [
+            (shape![0, 2], vec![0..0, 0..2]),
+            (shape![2, 0], vec![0..2, 0..0]),
+            (shape![0, 0], vec![0..0, 0..0]),
+        ] {
+            let mut tensor = Tensor::<i32>::new(tensor_shape, vec![]).unwrap();
+            let mut slice = tensor.slice_mut(&ranges).unwrap();
+            assert_eq!(slice.par_iter_mut().count(), 0);
+            assert_eq!(slice.iter_mut().count(), 0);
+        }
+    }
+
+    #[test]
+    fn chunks_cover_scalar_and_regular_mutable_slices() {
+        let mut tensor = Tensor::new(shape![2, 3], (0..6).collect()).unwrap();
+        let slice = tensor.slice_mut(&[0..2, 1..3]).unwrap();
+        let expected = vec![vec![1, 2, 4], vec![5]];
+        assert_eq!(
+            slice
+                .chunks(3)
+                .map(|chunk| chunk.into_iter().copied().collect::<Vec<_>>())
+                .collect::<Vec<_>>(),
+            expected
+        );
+        assert_eq!(
+            slice
+                .par_chunks(3)
+                .map(|chunk| chunk.into_iter().copied().collect::<Vec<_>>())
+                .collect::<Vec<_>>(),
+            expected
+        );
+        drop(slice);
+
+        let mut slice = tensor.slice_mut(&[0..2, 1..3]).unwrap();
+        slice
+            .chunks_mut(2)
+            .for_each(|chunk| chunk.into_iter().for_each(|value| *value += 10));
+        drop(slice);
+        assert_eq!(tensor.elements(), &[0, 11, 12, 3, 14, 15]);
+
+        let mut slice = tensor.slice_mut(&[0..2, 1..3]).unwrap();
+        slice
+            .par_chunks_mut(2)
+            .for_each(|chunk| chunk.into_iter().for_each(|value| *value *= 2));
+        drop(slice);
+        assert_eq!(tensor.elements(), &[0, 22, 24, 3, 28, 30]);
+
+        let mut scalar = Tensor::new(shape![], vec![8]).unwrap();
+        assert_eq!(scalar.slice_mut(&[]).unwrap().chunks(1).count(), 1);
+        assert_eq!(scalar.slice_mut(&[]).unwrap().par_chunks(1).count(), 1);
+    }
+
+    #[test]
+    fn chunks_mut_are_empty_for_all_empty_dimension_shapes() {
+        for (tensor_shape, ranges) in [
+            (shape![0, 2], vec![0..0, 0..2]),
+            (shape![2, 0], vec![0..2, 0..0]),
+            (shape![0, 0], vec![0..0, 0..0]),
+        ] {
+            let mut tensor = Tensor::<i32>::new(tensor_shape, vec![]).unwrap();
+            let mut slice = tensor.slice_mut(&ranges).unwrap();
+            assert_eq!(slice.chunks(2).count(), 0);
+            assert_eq!(slice.par_chunks(2).count(), 0);
+            assert_eq!(slice.chunks_mut(2).count(), 0);
+            assert_eq!(slice.par_chunks_mut(2).count(), 0);
+        }
+    }
+
+    #[test]
+    fn swap_checks_slice_relative_indices_and_supports_rank_zero() {
+        let mut tensor = Tensor::new(shape![3, 3], (0..9).collect()).unwrap();
+        {
+            let mut slice = tensor.slice_mut(&[1..3, 1..3]).unwrap();
+            slice.swap(&[0, 0], &[1, 1]).unwrap();
+            assert_eq!(slice[&[0, 0]], 8);
+            assert_eq!(slice[&[1, 1]], 4);
+            assert_eq!(
+                slice.swap(&[0], &[0, 0]),
+                Err(TensorErrors::IndicesInvalidForRank(1, 2))
+            );
+            assert_eq!(
+                slice.swap(&[0, 0], &[0, 2]),
+                Err(TensorErrors::IndexOutOfBounds {
+                    axis: 1,
+                    length: 2,
+                    index: 2
+                })
+            );
+            assert_eq!(
+                slice.swap(&[2, 0], &[0, 0]),
+                Err(TensorErrors::IndexOutOfBounds {
+                    axis: 0,
+                    length: 2,
+                    index: 2
+                })
+            );
+            assert_eq!(
+                slice.swap(&[0, 0], &[0]),
+                Err(TensorErrors::IndicesInvalidForRank(1, 2))
+            );
+        }
+        assert_eq!(tensor.elements(), &[0, 1, 2, 3, 8, 5, 6, 7, 4]);
+
+        let mut scalar = Tensor::new(shape![], vec![42]).unwrap();
+        scalar.slice_mut(&[]).unwrap().swap(&[], &[]).unwrap();
+        assert_eq!(scalar.get(&[]), Some(&42));
+    }
+
+    #[test]
+    fn mutable_indexing_supports_scalar_and_checks_exact_rank() {
+        let mut tensor = Tensor::new(shape![2, 2], vec![0, 1, 2, 3]).unwrap();
+        {
+            let mut slice = tensor.slice_mut(&[1..2, 0..2]).unwrap();
+            slice[&[0, 1]] = 30;
+            assert_eq!(slice[&[0, 1]], 30);
+        }
+        assert_eq!(tensor.get(&[1, 1]), Some(&30));
+
+        let mut scalar = Tensor::new(shape![], vec![7]).unwrap();
+        scalar.slice_mut(&[]).unwrap()[&[]] = 8;
+        assert_eq!(scalar.get(&[]), Some(&8));
+    }
+
+    #[test]
+    #[should_panic]
+    fn immutable_indexing_panics_for_short_index_rank() {
+        let mut tensor = Tensor::new(shape![2, 2], vec![0, 1, 2, 3]).unwrap();
+        let slice = tensor.slice_mut(&[0..2, 0..2]).unwrap();
+        let _ = slice[&[0]];
+    }
+
+    #[test]
+    #[should_panic]
+    fn mutable_indexing_panics_for_short_index_rank() {
+        let mut tensor = Tensor::new(shape![2, 2], vec![0, 1, 2, 3]).unwrap();
+        let mut slice = tensor.slice_mut(&[0..2, 0..2]).unwrap();
+        slice[&[0]] = 1;
+    }
+
+    #[test]
+    #[should_panic]
+    fn mutable_indexing_panics_for_long_index_rank() {
+        let mut tensor = Tensor::new(shape![2, 2], vec![0, 1, 2, 3]).unwrap();
+        let mut slice = tensor.slice_mut(&[0..2, 0..2]).unwrap();
+        slice[&[0, 0, 0]] = 1;
+    }
+
+    #[test]
+    fn clone_into_tensor_handles_scalar_and_each_empty_dimension_position() {
+        let mut scalar = Tensor::new(shape![], vec![42]).unwrap();
+        assert_eq!(
+            scalar.slice_mut(&[]).unwrap().clone_into_tensor(),
+            Tensor::new(shape![], vec![42]).unwrap()
+        );
+
+        let mut tensor = Tensor::new(shape![2, 3, 2], (0..12).collect()).unwrap();
+        assert_eq!(
+            tensor
+                .slice_mut(&[0..2, 1..3, 0..2])
+                .unwrap()
+                .clone_into_tensor(),
+            Tensor::new(shape![2, 2, 2], vec![2, 3, 4, 5, 8, 9, 10, 11]).unwrap()
+        );
+        let mut tensor = Tensor::new(shape![2, 3, 2], (0..12).collect()).unwrap();
+        assert_eq!(
+            tensor
+                .slice_mut(&[0..2, 1..1, 0..2])
+                .unwrap()
+                .clone_into_tensor(),
+            Tensor::new(shape![2, 0, 2], vec![]).unwrap()
+        );
+    }
+
+    #[test]
+    fn reversed_iterators_work_as_expected() {
+        let mut tensor = Tensor::new(shape![2, 3], (0..6).collect()).unwrap();
+        let slice = tensor.slice_mut(&[0..2, 1..3]).unwrap();
+        let expected = vec![5, 4, 2, 1];
+        assert_eq!(slice.iter().rev().copied().collect::<Vec<_>>(), expected);
+        assert_eq!(
+            slice.par_iter().rev().copied().collect::<Vec<_>>(),
+            expected
+        );
+
+        let mut slice = tensor.slice_mut(&[0..2, 1..3]).unwrap();
+        slice.iter_mut().rev().for_each(|value| *value += 10);
+        drop(slice);
+        assert_eq!(tensor.elements(), &[0, 11, 12, 3, 14, 15]);
+
+        let mut slice = tensor.slice_mut(&[0..2, 1..3]).unwrap();
+        slice.par_iter_mut().rev().for_each(|value| *value *= 2);
+        drop(slice);
+        assert_eq!(tensor.elements(), &[0, 22, 24, 3, 28, 30]);
     }
 }

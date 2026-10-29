@@ -55,6 +55,7 @@ unsafe fn reflect_right_c64(
 --------------------------------------------
 */
 
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct HouseholderReflectors<T> {
     /// One reflector vector per step, stored at the row offset it applies from.
     /// vectors\[k\] has length (rows - k).
@@ -235,5 +236,342 @@ impl Matrix<Complex64> {
             }
         }
         (self, HouseholderReflectors { vectors, rows })
+    }
+}
+
+#[cfg(test)]
+mod householder_tests {
+    use float_cmp::approx_eq;
+    use float_cmp::{ApproxEq, F64Margin, FloatMargin};
+    use num::complex::{Complex64, ComplexFloat};
+    use tensor_math::definitions::matrix::Matrix;
+    use tensor_math::definitions::tensor::Tensor;
+    use tensor_math::definitions::traits::TryIntoMatrix;
+    use tensor_math::shape;
+    use tensor_math::utilities::matrix::eye;
+
+    fn assert_f64_qr(input: Matrix<f64>) {
+        let (r, reflectors) = input.clone().householder_r();
+        let q = reflectors.accumulate_q();
+        let margin = F64Margin::default().epsilon(1e-10);
+        let (q_from_householder, r_from_householder) = input.clone().householder();
+
+        assert_eq!(q.shape(), shape![input.rows(), input.rows()]);
+        assert_eq!(r.shape(), input.shape());
+        assert_eq!(r, r_from_householder);
+        assert!(q_from_householder.approx_eq(q.clone(), margin));
+        assert!(q
+            .clone()
+            .mat_mul(r.clone())
+            .unwrap()
+            .approx_eq(input, margin));
+        assert!(q
+            .clone()
+            .transpose()
+            .mat_mul(q.clone())
+            .unwrap()
+            .approx_eq(eye(q.rows()), margin));
+        for row in 0..r.rows() {
+            for col in 0..row.min(r.cols()) {
+                assert!(approx_eq!(f64, r[(row, col)], 0.0, epsilon = 1e-10));
+            }
+        }
+    }
+
+    fn assert_complex_qr(input: Matrix<Complex64>) {
+        let (r, reflectors) = input.clone().householder_r();
+        let q = reflectors.accumulate_q();
+        let margin = F64Margin::default().epsilon(1e-10);
+        let (q_from_householder, r_from_householder) = input.clone().householder();
+
+        assert_eq!(q.shape(), shape![input.rows(), input.rows()]);
+        assert_eq!(r.shape(), input.shape());
+        assert_eq!(r, r_from_householder);
+        assert!(q_from_householder.approx_eq(q.clone(), margin));
+        assert!(q
+            .clone()
+            .mat_mul(r.clone())
+            .unwrap()
+            .approx_eq(input, margin));
+        assert!(q
+            .clone()
+            .conj_transpose()
+            .mat_mul(q.clone())
+            .unwrap()
+            .approx_eq(eye(q.rows()), margin));
+        for row in 0..r.rows() {
+            for col in 0..row.min(r.cols()) {
+                assert!(r[(row, col)].abs() <= 1e-10);
+            }
+        }
+    }
+
+    #[test]
+    fn test_householder() {
+        let m1 = Matrix::new(3, 3, vec![4.0, 1.0, 1.0, 1.0, 3.0, 0.0, 1.0, 0.0, 2.0]).unwrap();
+
+        let (q1, r1) = m1.clone().householder();
+
+        for i in 0..r1.shape()[0] {
+            if i >= r1.shape()[1] - 1 {
+                continue;
+            }
+
+            assert!(r1
+                .slice(i + 1..r1.shape()[0], i..i + 1)
+                .unwrap()
+                .iter()
+                .all(|x| { x.abs() <= 1e-10 }));
+        }
+        assert!(q1
+            .mat_mul(r1.clone())
+            .unwrap()
+            .approx_eq(m1.clone(), F64Margin::default().epsilon(1e-10)));
+
+        let m2: Matrix<Complex64> = Tensor::<Complex64>::new(
+            shape![3, 2],
+            vec![
+                Complex64 { re: 4.0, im: 1.0 },
+                Complex64 { re: -5.0, im: -2.0 },
+                Complex64 { re: 5.0, im: -4.0 },
+                Complex64 { re: 5.0, im: 3.0 },
+                Complex64 { re: 0.0, im: 0.0 },
+                Complex64 { re: 1.0, im: -1.0 },
+            ],
+        )
+        .unwrap()
+        .try_into_matrix()
+        .unwrap();
+        let (q2, r2) = m2.clone().householder();
+
+        for i in 0..r2.shape()[0] {
+            if i >= r2.shape()[1] - 1 {
+                continue;
+            }
+
+            assert!(r2
+                .slice(i + 1..r2.shape()[0], i..i + 1)
+                .unwrap()
+                .iter()
+                .all(|x| x.abs() <= 1e-10));
+        }
+        assert!(q2
+            .mat_mul(r2.clone())
+            .unwrap()
+            .approx_eq(m2, F64Margin::default().epsilon(1e-10)));
+
+        let m3: Matrix<Complex64> = Tensor::<Complex64>::new(
+            shape![2, 3],
+            vec![
+                Complex64 { re: -4.0, im: -1.0 },
+                Complex64 { re: 5.0, im: -3.0 },
+                Complex64 { re: 2.0, im: -4.0 },
+                Complex64 { re: -5.0, im: 2.0 },
+                Complex64 { re: 2.0, im: -1.0 },
+                Complex64 { re: 4.0, im: -1.0 },
+            ],
+        )
+        .unwrap()
+        .try_into_matrix()
+        .unwrap();
+        let (q3, r3) = m3.clone().householder();
+
+        for i in 0..(r3.shape()[0] - 1) {
+            if i >= r3.shape()[1] - 1 {
+                continue;
+            }
+            assert!(r3
+                .slice(i + 1..r3.shape()[0], i..i + 1)
+                .unwrap()
+                .iter()
+                .all(|x| x.abs() <= 1e-10));
+        }
+        assert!(q3
+            .mat_mul(r3.clone())
+            .unwrap()
+            .approx_eq(m3, F64Margin::default().epsilon(1e-10)));
+    }
+
+    #[test]
+    fn householder_of_zeros() {
+        let m1 = Matrix::<f64>::zeros(3, 3);
+        let m2 = Matrix::<Complex64>::zeros(3, 3);
+
+        assert_eq!(m1.clone().householder(), (eye(3), m1));
+        assert_eq!(m2.clone().householder(), (eye(3), m2));
+    }
+
+    #[test]
+    fn householder_intermediate_zero_reflector() {
+        let m1 = Matrix::new(
+            4,
+            3,
+            vec![1.0, 2.0, 3.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0],
+        )
+        .unwrap();
+        let (q1, r1) = m1.clone().householder();
+
+        for i in 0..r1.rows() {
+            if i >= r1.cols() - 1 {
+                continue;
+            }
+            assert!(r1
+                .slice(i + 1..r1.rows(), i..i + 1)
+                .unwrap()
+                .iter()
+                .all(|x| { x.abs() <= 1e-10 }));
+        }
+        assert!(q1
+            .mat_mul(r1.clone())
+            .unwrap()
+            .approx_eq(m1, F64Margin::default().epsilon(1e-10)));
+
+        let m2 = Matrix::<Complex64>::new(
+            4,
+            3,
+            vec![
+                Complex64 { re: 1.0, im: 0.0 },
+                Complex64 { re: 0.5, im: 1.0 },
+                Complex64 { re: 0.0, im: 0.0 },
+                Complex64 { re: 2.0, im: 1.0 },
+                Complex64 { re: 0.0, im: 0.0 },
+                Complex64 { re: 0.0, im: 0.0 },
+                Complex64 { re: 3.0, im: -2.0 },
+                Complex64 { re: 0.0, im: 0.0 },
+                Complex64 { re: 0.0, im: 0.0 },
+                Complex64 { re: 3.0, im: -2.0 },
+                Complex64 { re: 0.0, im: 0.0 },
+                Complex64 { re: 2.0, im: -10.0 },
+            ],
+        )
+        .unwrap();
+        let (q2, r2) = m2.clone().householder();
+
+        for i in 0..r2.shape()[0] {
+            if i >= r2.shape()[1] - 1 {
+                continue;
+            }
+            assert!(r2
+                .slice(i + 1..r2.shape()[0], i..i + 1)
+                .unwrap()
+                .iter()
+                .all(|x| x.abs() <= 1e-10));
+        }
+        assert!(q2
+            .mat_mul(r2.clone())
+            .unwrap()
+            .approx_eq(m2, F64Margin::default().epsilon(1e-10)));
+    }
+
+    #[test]
+    fn householder_empty_matrices() {
+        let m1 = Matrix::<f64>::zeros(0, 0);
+        let (q1, r1) = m1.clone().householder();
+        assert_eq!(q1, eye(0));
+        assert_eq!(r1, m1);
+
+        let m2 = Matrix::<f64>::zeros(3, 0);
+        let (q2, r2) = m2.clone().householder();
+        assert_eq!(q2, eye(3));
+        assert_eq!(r2, m2);
+
+        let m3 = Matrix::<f64>::zeros(0, 3);
+        let (q3, r3) = m3.clone().householder();
+        assert_eq!(q3, eye(0));
+        assert_eq!(r3, m3);
+    }
+
+    #[test]
+    fn householder_r_and_accumulated_q_cover_shapes_and_leading_zero_pivots() {
+        assert_f64_qr(Matrix::new(1, 1, vec![-3.0]).unwrap());
+        assert_f64_qr(Matrix::new(4, 1, vec![0.0, 2.0, -3.0, 4.0]).unwrap());
+        assert_f64_qr(Matrix::new(2, 4, vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0]).unwrap());
+        assert_f64_qr(Matrix::new(0, 4, vec![]).unwrap());
+        assert_f64_qr(Matrix::new(4, 0, vec![]).unwrap());
+        assert_f64_qr(Matrix::new(0, 0, vec![]).unwrap());
+        assert_f64_qr(Matrix::new(0, 1, vec![]).unwrap());
+        assert_f64_qr(Matrix::new(1, 0, vec![]).unwrap());
+
+        let complex = |re, im| Complex64::new(re, im);
+        assert_complex_qr(Matrix::new(1, 1, vec![complex(0.0, -3.0)]).unwrap());
+        assert_complex_qr(
+            Matrix::new(
+                4,
+                1,
+                vec![
+                    complex(0.0, 0.0),
+                    complex(2.0, -1.0),
+                    complex(-3.0, 2.0),
+                    complex(4.0, 1.0),
+                ],
+            )
+            .unwrap(),
+        );
+        assert_complex_qr(
+            Matrix::new(
+                2,
+                4,
+                vec![
+                    complex(0.0, 0.0),
+                    complex(1.0, 1.0),
+                    complex(2.0, -1.0),
+                    complex(3.0, 2.0),
+                    complex(4.0, -2.0),
+                    complex(5.0, 1.0),
+                    complex(6.0, 3.0),
+                    complex(7.0, -1.0),
+                ],
+            )
+            .unwrap(),
+        );
+        assert_complex_qr(Matrix::new(0, 4, vec![]).unwrap());
+        assert_complex_qr(Matrix::new(4, 0, vec![]).unwrap());
+        assert_complex_qr(Matrix::new(0, 0, vec![]).unwrap());
+        assert_complex_qr(Matrix::new(0, 1, vec![]).unwrap());
+        assert_complex_qr(Matrix::new(1, 0, vec![]).unwrap());
+    }
+
+    #[test]
+    fn householder_matches_householder_r_and_accumulates_noop_reflectors() {
+        let real = Matrix::new(3, 2, vec![0.0, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap();
+        let (q, r) = real.clone().householder();
+        let (r_from_r, reflectors) = real.householder_r();
+        assert_eq!(r, r_from_r);
+        assert!(q.approx_eq(
+            reflectors.accumulate_q(),
+            F64Margin::default().epsilon(1e-10)
+        ));
+
+        let complex = Matrix::new(
+            3,
+            2,
+            vec![
+                Complex64::new(0.0, 0.0),
+                Complex64::new(2.0, -1.0),
+                Complex64::new(3.0, 1.0),
+                Complex64::new(4.0, 2.0),
+                Complex64::new(5.0, -3.0),
+                Complex64::new(6.0, 1.0),
+            ],
+        )
+        .unwrap();
+        let (q, r) = complex.clone().householder();
+        let (r_from_r, reflectors) = complex.householder_r();
+        assert_eq!(r, r_from_r);
+        assert!(q.approx_eq(
+            reflectors.accumulate_q(),
+            F64Margin::default().epsilon(1e-10)
+        ));
+
+        let noop_real = super::HouseholderReflectors::<f64> {
+            vectors: vec![Matrix::from_shape(0, 1), Matrix::from_shape(0, 1)],
+            rows: 2,
+        };
+        assert_eq!(noop_real.accumulate_q(), eye(2));
+        let noop_complex = super::HouseholderReflectors::<Complex64> {
+            vectors: vec![Matrix::from_shape(0, 1), Matrix::from_shape(0, 1)],
+            rows: 2,
+        };
+        assert_eq!(noop_complex.accumulate_q(), eye(2));
     }
 }

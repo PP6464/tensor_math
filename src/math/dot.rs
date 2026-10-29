@@ -108,3 +108,55 @@ impl<T> Matrix<T> {
         dot_vectors_mt(self.elements(), other.elements())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::shape;
+
+    #[test]
+    fn tensor_dot_normal_empty_and_incompatible_shapes() {
+        let left = Tensor::new(shape![2, 2], vec![1, 2, 3, 4]).unwrap();
+        let right = Tensor::new(shape![2, 2], vec![5, 6, 7, 8]).unwrap();
+        assert_eq!(left.dot(&right), Ok(70));
+        assert_eq!(left.dot_mt(&right), Ok(70));
+
+        let empty_left = Tensor::<i32>::new(shape![0], vec![]).unwrap();
+        let empty_right = Tensor::<i32>::new(shape![0], vec![]).unwrap();
+        assert_eq!(empty_left.dot(&empty_right), Ok(0));
+        assert_eq!(empty_left.dot_mt(&empty_right), Ok(0));
+
+        let wrong_shape = Tensor::new(shape![4], vec![1, 2, 3, 4]).unwrap();
+        assert!(matches!(
+            left.dot(&wrong_shape),
+            Err(TensorErrors::IncompatibleShapes { .. })
+        ));
+        assert!(matches!(
+            left.dot_mt(&wrong_shape),
+            Err(TensorErrors::IncompatibleShapes { .. })
+        ));
+    }
+
+    #[test]
+    fn matrix_dot_normal_empty_and_incompatible_shapes() {
+        let left = Matrix::new(2, 2, vec![1, 2, 3, 4]).unwrap();
+        let right = Matrix::new(2, 2, vec![5, 6, 7, 8]).unwrap();
+        assert_eq!(left.dot(&right), Ok(70));
+        assert_eq!(left.dot_mt(&right), Ok(70));
+
+        let empty_left = Matrix::<i32>::new(0, 2, vec![]).unwrap();
+        let empty_right = Matrix::<i32>::new(0, 2, vec![]).unwrap();
+        assert_eq!(empty_left.dot(&empty_right), Ok(0));
+        assert_eq!(empty_left.dot_mt(&empty_right), Ok(0));
+
+        let wrong_shape = Matrix::new(1, 4, vec![1, 2, 3, 4]).unwrap();
+        assert!(matches!(
+            left.dot(&wrong_shape),
+            Err(TensorErrors::IncompatibleShapes { .. })
+        ));
+        assert!(matches!(
+            left.dot_mt(&wrong_shape),
+            Err(TensorErrors::IncompatibleShapes { .. })
+        ));
+    }
+}

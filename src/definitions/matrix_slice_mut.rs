@@ -89,8 +89,7 @@ impl<T> MatrixSliceMut<'_, T> {
 
         unsafe {
             Some(
-                self.orig
-                    .get_unchecked_mut((indices.0 + self.start.0, indices.1 + self.start.1)),
+                self.get_unchecked_mut((indices.0, indices.1)),
             )
         }
     }
@@ -119,42 +118,86 @@ impl<T> MatrixSliceMut<'_, T> {
 
     /// Returns an iterator over mutable references to the elements of the matrix slice.
     pub fn iter_mut(&mut self) -> impl ExactSizeIterator<Item = &mut T> + DoubleEndedIterator {
-        struct SliceIterMut<'a, T> {
-            base: *mut T,
-            flat_index: usize,
-            len: usize,
+        let orig_shape = self.orig.shape().clone();
+        let slice_shape = self.shape().clone();
+        let base = self.orig.elements_mut().as_mut_ptr();
+        let count = slice_shape.element_count();
+
+        #[derive(Debug)]
+        struct MatrixSliceMutIter<'a, T> {
+            slice_start: (usize, usize), // Start of the entire slice
+            start: usize,                // Flat index of start (within entire slice)
+            end: usize,                  // Flat exclusive end of subslice (within entire slice)
+            base: *mut T,                // start for the entire original matrix
+            slice_shape: Shape,          // Shape of the entire slice
+            orig_shape: Shape,           // Shape of entire original matrix
             _marker: PhantomData<&'a T>,
         }
 
-        impl<'a, T: 'a> Iterator for SliceIterMut<'a, T> {
+        impl<'a, T: 'a> Iterator for MatrixSliceMutIter<'a, T> {
             type Item = &'a mut T;
 
             fn next(&mut self) -> Option<Self::Item> {
-                (self.flat_index < self.len).then_some(unsafe {
-                    self.flat_index += 1;
-                    self.base.add(self.flat_index - 1).as_mut()?
-                })
+                if self.start >= self.end {
+                    return None;
+                }
+
+                let orig_index = unsafe {
+                    self.slice_shape
+                        .tensor_index_unchecked(self.start)
+                        .iter()
+                        .zip([self.slice_start.0, self.slice_start.1].iter())
+                        .map(|(a, b)| a + b)
+                        .collect::<Vec<_>>()
+                };
+                let res = unsafe {
+                    self.base
+                        .add(self.orig_shape.address_unchecked(&orig_index))
+                        .as_mut()
+                };
+
+                self.start += 1;
+
+                res
             }
 
             fn size_hint(&self) -> (usize, Option<usize>) {
-                (self.len - self.flat_index, Some(self.len - self.flat_index))
+                (self.end - self.start, Some(self.end - self.start))
             }
         }
-        impl<'a, T: 'a> ExactSizeIterator for SliceIterMut<'a, T> {}
-        impl<'a, T: 'a> DoubleEndedIterator for SliceIterMut<'a, T> {
+        impl<'a, T: 'a> ExactSizeIterator for MatrixSliceMutIter<'a, T> {}
+        impl<'a, T: 'a> DoubleEndedIterator for MatrixSliceMutIter<'a, T> {
             fn next_back(&mut self) -> Option<Self::Item> {
-                (self.len > self.flat_index).then_some(unsafe {
-                    self.len -= 1;
-                    self.base.add(self.len).as_mut()?
-                })
+                if self.end <= self.start {
+                    return None;
+                }
+
+                self.end -= 1;
+
+                unsafe {
+                    let orig_index = self
+                        .slice_shape
+                        .tensor_index_unchecked(self.end)
+                        .iter()
+                        .zip([self.slice_start.0, self.slice_start.1].iter())
+                        .map(|(a, b)| a + b)
+                        .collect::<Vec<_>>();
+
+                    self.base
+                        .add(self.orig_shape.address_unchecked(&orig_index))
+                        .as_mut()
+                }
             }
         }
 
-        SliceIterMut {
-            base: self.orig.elements_mut().as_mut_ptr(),
-            flat_index: 0,
-            len: self.shape().element_count(),
-            _marker: Default::default(),
+        MatrixSliceMutIter {
+            slice_start: self.start,
+            start: 0,
+            end: count,
+            base,
+            slice_shape,
+            orig_shape,
+            _marker: PhantomData,
         }
     }
 
@@ -166,7 +209,7 @@ impl<T> MatrixSliceMut<'_, T> {
         let orig_shape = self.orig.shape().clone();
         let slice_shape = self.shape().clone();
         let base = self.orig.elements_mut().as_mut_ptr();
-        let count = orig_shape.element_count();
+        let count = slice_shape.element_count();
 
         struct MatrixSliceMutIter<'a, T> {
             slice_start: (usize, usize), // Start of the entire slice
@@ -357,7 +400,9 @@ impl<T> MatrixSliceMut<'_, T> {
         let start_col = self.start.1;
         let end_col = self.end.1;
         (self.start.0..self.end.0).map(move |row| unsafe {
-            self.orig.elements.get_unchecked(row * orig_cols + start_col..row * orig_cols + end_col)
+            self.orig
+                .elements
+                .get_unchecked(row * orig_cols + start_col..row * orig_cols + end_col)
         })
     }
 
@@ -369,9 +414,13 @@ impl<T> MatrixSliceMut<'_, T> {
         let orig_cols = self.orig.cols;
         let start_col = self.start.1;
         let end_col = self.end.1;
-        (self.start.0..self.end.0).into_par_iter().map(move |row| unsafe {
-            self.orig.elements.get_unchecked(row * orig_cols + start_col..row * orig_cols + end_col)
-        })
+        (self.start.0..self.end.0)
+            .into_par_iter()
+            .map(move |row| unsafe {
+                self.orig
+                    .elements
+                    .get_unchecked(row * orig_cols + start_col..row * orig_cols + end_col)
+            })
     }
 
     /// Returns a mutable iterator over the rows.
@@ -492,5 +541,488 @@ impl<T: Clone> MatrixSliceMut<'_, T> {
             cols: self.cols(),
             elements,
         }
+    }
+}
+
+#[cfg(test)]
+mod matrix_slice_mut_tests {
+    use rayon::iter::{IndexedParallelIterator, ParallelIterator};
+    use tensor_math::definitions::errors::TensorErrors;
+    use tensor_math::definitions::matrix::Matrix;
+    use tensor_math::shape;
+
+    #[test]
+    fn slice_mut_dimensions() {
+        let mut m1 = Matrix::new(5, 5, (0..25).collect()).unwrap();
+        let slice = m1.slice_mut(1..4, 2..5).unwrap();
+
+        assert_eq!(slice.rows(), 3);
+        assert_eq!(slice.cols(), 3);
+        assert_eq!(slice.shape(), shape![3, 3]);
+    }
+
+    #[test]
+    fn empty_slice_mut() {
+        let mut m1 = Matrix::<usize>::new(0, 0, vec![]).unwrap();
+        let slice = m1.slice_mut(0..0, 0..0).unwrap();
+        assert_eq!(slice.end(), (0, 0));
+        assert_eq!(slice.start(), (0, 0));
+        assert_eq!(slice.rows(), 0);
+        assert_eq!(slice.cols(), 0);
+    }
+
+    #[test]
+    fn index_mut_slice() {
+        let mut m1 = Matrix::new(3, 3, (0..9).collect()).unwrap();
+
+        let mut slice = m1.slice_mut(1..3, 1..3).unwrap();
+
+        assert_eq!(slice[&[0, 0]], 4);
+        assert_eq!(slice[(0, 1)], 5);
+
+        slice[(1, 0)] = -1;
+        slice[(1, 1)] = -2;
+
+        let ans = Matrix::new(3, 3, vec![0, 1, 2, 3, 4, 5, 6, -1, -2]).unwrap();
+
+        assert_eq!(m1, ans);
+    }
+
+    #[test]
+    fn convert_into_mat() {
+        let mut m1 = Matrix::new(3, 3, (0..9).collect()).unwrap();
+
+        let mut slice = m1.slice_mut(1..3, 1..3).unwrap();
+        slice[(0, 1)] = 10;
+
+        let ans = Matrix::new(2, 2, vec![4, 10, 7, 8]).unwrap();
+
+        assert_eq!(slice.clone_into_matrix(), ans);
+
+        let slice = m1.slice_mut(1..3, 1..3).unwrap();
+
+        assert_eq!(slice.clone_into_matrix(), ans);
+    }
+
+    #[test]
+    fn get_in_slice() {
+        let mut m1 = Matrix::new(3, 3, (0..9).collect()).unwrap();
+
+        let slice = m1.slice_mut(1..3, 1..3).unwrap();
+
+        assert_eq!(slice.get((0, 0)), Some(&4));
+        assert_eq!(slice.get((2, 2)), None);
+    }
+
+    #[test]
+    fn rows_and_cols() {
+        let mut m1 = Matrix::new(5, 8, (0..40).collect()).unwrap();
+        let slice = m1.slice_mut(1..4, 2..7).unwrap();
+
+        assert_eq!(slice.rows(), 3);
+        assert_eq!(slice.cols(), 5);
+        assert_eq!(slice.shape(), shape![3, 5]);
+    }
+
+    #[test]
+    fn for_each_mut_basic() {
+        let mut m1 = Matrix::new(3, 3, (0..9).collect()).unwrap();
+
+        let mut slice = m1.slice_mut(1..3, 1..3).unwrap();
+        slice.iter_mut().for_each(|x| *x += 10);
+
+        let ans = Matrix::new(3, 3, vec![0, 1, 2, 3, 14, 15, 6, 17, 18]).unwrap();
+
+        assert_eq!(m1, ans);
+    }
+
+    #[test]
+    fn for_each_mut_empty() {
+        let mut m1 = Matrix::<usize>::new(0, 0, vec![]).unwrap();
+        let mut slice = m1.slice_mut(0..0, 0..0).unwrap();
+        let mut count = 0;
+        slice.iter_mut().for_each(|_| count += 1);
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn for_each_mut_rectangular() {
+        let mut m1 = Matrix::new(4, 4, (0..16).collect()).unwrap();
+
+        let mut slice = m1.slice_mut(1..3, 0..4).unwrap();
+        slice.iter_mut().for_each(|x| *x = 0);
+
+        let ans = Matrix::new(
+            4,
+            4,
+            vec![0, 1, 2, 3, 0, 0, 0, 0, 0, 0, 0, 0, 12, 13, 14, 15],
+        )
+        .unwrap();
+
+        assert_eq!(m1, ans);
+    }
+
+    #[test]
+    fn enumerated_for_each_mut_basic() {
+        let mut m1 = Matrix::new(3, 3, (0..9).collect()).unwrap();
+
+        let mut slice = m1.slice_mut(1..3, 1..3).unwrap();
+        slice.enumerated_iter_mut().for_each(|(idx, x)| {
+            // idx should be relative to the slice: [0..2, 0..2]
+            *x = ((idx.0 + 1) * 10 + (idx.1 + 1)) as i32;
+        });
+
+        let ans = Matrix::new(3, 3, vec![0, 1, 2, 3, 11, 12, 6, 21, 22]).unwrap();
+
+        assert_eq!(m1, ans);
+    }
+
+    #[test]
+    fn enumerated_for_each_mut_empty() {
+        let mut m1 = Matrix::<usize>::new(0, 0, vec![]).unwrap();
+        let mut slice = m1.slice_mut(0..0, 0..0).unwrap();
+
+        let mut count = 0;
+        slice.enumerated_iter_mut().for_each(|_| count += 1);
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn zero_column_slices_yield_one_empty_row_per_row() {
+        let matrix = Matrix::new(3, 0, Vec::<i32>::new()).unwrap();
+        let slice = matrix.slice(1..3, 0..0).unwrap();
+
+        assert_eq!(
+            slice.iter_rows().map(<[i32]>::len).collect::<Vec<_>>(),
+            [0; 2]
+        );
+        assert_eq!(
+            slice.par_iter_rows().map(<[i32]>::len).collect::<Vec<_>>(),
+            [0; 2]
+        );
+    }
+
+    #[test]
+    fn zero_column_slices_mut_yield_one_empty_row_per_row() {
+        let mut matrix = Matrix::new(3, 0, Vec::<i32>::new()).unwrap();
+        let mut slice = matrix.slice_mut(1..3, 0..0).unwrap();
+
+        assert_eq!(
+            slice
+                .iter_rows_mut()
+                .map(|row| row.len())
+                .collect::<Vec<_>>(),
+            [0; 2]
+        );
+        assert_eq!(
+            slice
+                .par_iter_rows_mut()
+                .map(|row| row.len())
+                .collect::<Vec<_>>(),
+            [0; 2]
+        );
+    }
+
+    #[test]
+    fn square_and_zero_dimension_slice_shapes() {
+        let mut matrix = Matrix::new(3, 4, (0..12).collect()).unwrap();
+
+        let slice = matrix.slice_mut(0..2, 1..3).unwrap();
+        assert!(slice.is_square());
+        assert_eq!(slice.shape(), shape![2, 2]);
+        drop(slice);
+
+        let no_rows = matrix.slice_mut(1..1, 0..4).unwrap();
+        assert_eq!(no_rows.start(), (1, 0));
+        assert_eq!(no_rows.end(), (1, 4));
+        assert_eq!(no_rows.shape(), shape![0, 4]);
+        assert!(!no_rows.is_square());
+        drop(no_rows);
+
+        let no_columns = matrix.slice_mut(0..3, 2..2).unwrap();
+        assert_eq!(no_columns.shape(), shape![3, 0]);
+        assert!(!no_columns.is_square());
+    }
+
+    #[test]
+    fn immutable_view_methods_read_the_selected_region() {
+        let mut matrix = Matrix::new(3, 4, (0..12).collect()).unwrap();
+        let slice = matrix.slice_mut(1..3, 1..3).unwrap();
+        let view = slice.as_immut();
+
+        assert_eq!(view.start(), (1, 1));
+        assert_eq!(view.end(), (3, 3));
+        assert_eq!(view.iter().copied().collect::<Vec<_>>(), vec![5, 6, 9, 10]);
+
+        let sum = slice.use_as_immut(|view| view.iter().copied().sum::<i32>());
+        assert_eq!(sum, 30);
+    }
+
+    #[test]
+    fn get_and_get_mut_check_each_axis_and_handle_empty_regions() {
+        let mut matrix = Matrix::new(3, 3, (0..9).collect()).unwrap();
+        let mut slice = matrix.slice_mut(1..3, 1..3).unwrap();
+
+        assert_eq!(slice.get((0, 0)), Some(&4));
+        assert_eq!(slice.get((2, 0)), None);
+        assert_eq!(slice.get((0, 2)), None);
+        *slice.get_mut((1, 1)).unwrap() = 99;
+        assert_eq!(slice.get((1, 1)), Some(&99));
+        assert!(slice.get_mut((2, 0)).is_none());
+        assert!(slice.get_mut((0, 2)).is_none());
+        drop(slice);
+        assert_eq!(matrix[(2, 2)], 99);
+
+        let mut no_rows_matrix = Matrix::<i32>::new(0, 3, vec![]).unwrap();
+        let mut no_rows = no_rows_matrix.slice_mut(0..0, 0..3).unwrap();
+        assert_eq!(no_rows.get((0, 0)), None);
+        assert!(no_rows.get_mut((0, 0)).is_none());
+        drop(no_rows);
+
+        let mut no_columns_matrix = Matrix::<i32>::new(3, 0, vec![]).unwrap();
+        let mut no_columns = no_columns_matrix.slice_mut(0..3, 0..0).unwrap();
+        assert_eq!(no_columns.get((0, 0)), None);
+        assert!(no_columns.get_mut((0, 0)).is_none());
+    }
+
+    #[test]
+    fn element_iterators_cover_selected_elements_in_row_major_order() {
+        let mut matrix = Matrix::new(3, 4, (0..12).collect()).unwrap();
+        let slice = matrix.slice_mut(1..3, 1..3).unwrap();
+        assert_eq!(slice.iter().copied().collect::<Vec<_>>(), vec![5, 6, 9, 10]);
+        assert_eq!(
+            slice.par_iter().copied().collect::<Vec<_>>(),
+            vec![5, 6, 9, 10]
+        );
+        assert_eq!(slice.iter().next_back(), Some(&10));
+        assert_eq!(slice.par_iter().len(), 4);
+        drop(slice);
+
+        let mut matrix = Matrix::new(3, 4, (0..12).collect()).unwrap();
+        let mut slice = matrix.slice_mut(1..3, 1..3).unwrap();
+        slice.iter_mut().for_each(|element| *element += 10);
+        drop(slice);
+        assert_eq!(
+            matrix.elements(),
+            &[0, 1, 2, 3, 4, 15, 16, 7, 8, 19, 20, 11]
+        );
+
+        let mut slice = matrix.slice_mut(1..3, 1..3).unwrap();
+        slice.par_iter_mut().for_each(|element| *element *= 2);
+        drop(slice);
+        assert_eq!(
+            matrix.elements(),
+            &[0, 1, 2, 3, 4, 30, 32, 7, 8, 38, 40, 11]
+        );
+    }
+
+    #[test]
+    fn reversed_iterators_work_as_expected() {
+        let mut matrix = Matrix::new(3, 4, (0..12).collect()).unwrap();
+        let slice = matrix.slice_mut(1..3, 1..3).unwrap();
+        assert_eq!(
+            slice.iter().rev().copied().collect::<Vec<_>>(),
+            vec![10, 9, 6, 5]
+        );
+        assert_eq!(
+            slice.par_iter().rev().copied().collect::<Vec<_>>(),
+            vec![10, 9, 6, 5]
+        );
+        drop(slice);
+
+        let mut slice = matrix.slice_mut(1..3, 1..3).unwrap();
+        slice.iter_mut().rev().for_each(|element| *element += 10);
+        drop(slice);
+        assert_eq!(
+            matrix.elements(),
+            &[0, 1, 2, 3, 4, 15, 16, 7, 8, 19, 20, 11]
+        );
+
+        let mut slice = matrix.slice_mut(1..3, 1..3).unwrap();
+        slice.par_iter_mut().rev().for_each(|element| *element *= 2);
+        drop(slice);
+        assert_eq!(
+            matrix.elements(),
+            &[0, 1, 2, 3, 4, 30, 32, 7, 8, 38, 40, 11]
+        );
+    }
+
+    #[test]
+    fn element_iterators_are_empty_for_zero_sized_regions() {
+        for (rows, cols, selected_rows, selected_cols) in
+            [(0, 3, 0..0, 0..3), (3, 0, 0..3, 0..0), (0, 0, 0..0, 0..0)]
+        {
+            let mut matrix = Matrix::<i32>::new(rows, cols, vec![]).unwrap();
+            let mut slice = matrix
+                .slice_mut(selected_rows.clone(), selected_cols.clone())
+                .unwrap();
+            assert_eq!(slice.iter().count(), 0);
+            assert_eq!(slice.par_iter().count(), 0);
+            assert_eq!(slice.iter_mut().count(), 0);
+            assert_eq!(slice.par_iter_mut().count(), 0);
+        }
+    }
+
+    #[test]
+    fn immutable_and_mutable_chunks_cover_elements() {
+        let mut matrix = Matrix::new(2, 3, (0..6).collect()).unwrap();
+        let slice = matrix.slice_mut(0..2, 1..3).unwrap();
+
+        assert_eq!(
+            slice
+                .chunks(3)
+                .map(|chunk| chunk.into_iter().copied().collect::<Vec<_>>())
+                .collect::<Vec<_>>(),
+            vec![vec![1, 2, 4], vec![5]]
+        );
+        assert_eq!(
+            slice
+                .par_chunks(3)
+                .map(|chunk| chunk.into_iter().copied().collect::<Vec<_>>())
+                .collect::<Vec<_>>(),
+            vec![vec![1, 2, 4], vec![5]]
+        );
+        assert_eq!(slice.chunks(0).count(), 0);
+        drop(slice);
+
+        let mut slice = matrix.slice_mut(0..2, 1..3).unwrap();
+        for chunk in slice.chunks_mut(2) {
+            for element in chunk {
+                *element += 10;
+            }
+        }
+        drop(slice);
+        assert_eq!(matrix.elements(), &[0, 11, 12, 3, 14, 15]);
+
+        let mut slice = matrix.slice_mut(0..2, 1..3).unwrap();
+        slice
+            .par_chunks_mut(2)
+            .for_each(|chunk| chunk.into_iter().for_each(|element| *element *= 2));
+        drop(slice);
+        assert_eq!(matrix.elements(), &[0, 22, 24, 3, 28, 30]);
+    }
+
+    #[test]
+    fn chunks_are_empty_for_zero_sized_regions() {
+        let mut no_rows_matrix = Matrix::<i32>::new(0, 3, vec![]).unwrap();
+        let no_rows = no_rows_matrix.slice_mut(0..0, 0..3).unwrap();
+        assert_eq!(no_rows.chunks(2).count(), 0);
+        assert_eq!(no_rows.par_chunks(2).count(), 0);
+        drop(no_rows);
+
+        let mut no_columns_matrix = Matrix::<i32>::new(3, 0, vec![]).unwrap();
+        let no_columns = no_columns_matrix.slice_mut(0..3, 0..0).unwrap();
+        assert_eq!(no_columns.chunks(2).count(), 0);
+        assert_eq!(no_columns.par_chunks(2).count(), 0);
+        drop(no_columns);
+
+        let mut no_rows = no_rows_matrix.slice_mut(0..0, 0..3).unwrap();
+        assert_eq!(no_rows.chunks_mut(2).count(), 0);
+        assert_eq!(no_rows.par_chunks_mut(2).count(), 0);
+        drop(no_rows);
+        let mut no_columns = no_columns_matrix.slice_mut(0..3, 0..0).unwrap();
+        assert_eq!(no_columns.chunks_mut(2).count(), 0);
+        assert_eq!(no_columns.par_chunks_mut(2).count(), 0);
+    }
+
+    #[test]
+    fn swap_exchanges_elements_and_reports_matrix_bounds_errors() {
+        let mut matrix = Matrix::new(3, 3, (0..9).collect()).unwrap();
+        let mut slice = matrix.slice_mut(1..3, 1..3).unwrap();
+
+        slice.swap((0, 0), (1, 1)).unwrap();
+        assert_eq!(slice[(0, 0)], 8);
+        assert_eq!(slice[(1, 1)], 4);
+        slice.swap((0, 0), (0, 0)).unwrap();
+        assert_eq!(
+            slice.swap((1, 1), (2, 1)),
+            Err(TensorErrors::IndexOutOfBounds {
+                index: 3,
+                axis: 0,
+                length: 3
+            })
+        );
+    }
+
+    #[test]
+    fn row_iterators_cover_only_selected_rows_and_columns() {
+        let mut matrix = Matrix::new(3, 4, (0..12).collect()).unwrap();
+        let slice = matrix.slice_mut(1..3, 1..3).unwrap();
+        let expected = vec![&[5, 6][..], &[9, 10][..]];
+        assert_eq!(slice.iter_rows().collect::<Vec<_>>(), expected);
+        assert_eq!(slice.par_iter_rows().collect::<Vec<_>>(), expected);
+        assert_eq!(slice.iter_rows().next_back(), Some(&[9, 10][..]));
+        drop(slice);
+
+        let mut slice = matrix.slice_mut(1..3, 1..3).unwrap();
+        for row in slice.iter_rows_mut() {
+            row[0] = -row[0];
+        }
+        drop(slice);
+        assert_eq!(matrix.elements(), &[0, 1, 2, 3, 4, -5, 6, 7, 8, -9, 10, 11]);
+
+        let mut slice = matrix.slice_mut(1..3, 1..3).unwrap();
+        slice.par_iter_rows_mut().for_each(|row| row[1] = -row[1]);
+        drop(slice);
+        assert_eq!(
+            matrix.elements(),
+            &[0, 1, 2, 3, 4, -5, -6, 7, 8, -9, -10, 11]
+        );
+
+        let mut matrix = Matrix::<i32>::new(0, 3, vec![]).unwrap();
+        let mut slice = matrix.slice_mut(0..0, 0..3).unwrap();
+        assert_eq!(slice.iter_rows().count(), 0);
+        assert_eq!(slice.par_iter_rows().count(), 0);
+        assert_eq!(slice.iter_rows_mut().count(), 0);
+        assert_eq!(slice.par_iter_rows_mut().count(), 0);
+    }
+
+    #[test]
+    fn both_mutable_index_forms_update_the_matrix() {
+        let mut matrix = Matrix::new(2, 3, (0..6).collect()).unwrap();
+        {
+            let mut slice = matrix.slice_mut(0..2, 1..3).unwrap();
+            slice[(0, 0)] = 10;
+            slice[&[1, 1]] = 20;
+            assert_eq!(slice[(0, 0)], 10);
+            assert_eq!(slice[&[1, 1]], 20);
+        }
+
+        assert_eq!(matrix.elements(), &[0, 10, 2, 3, 4, 20]);
+    }
+
+    #[test]
+    #[should_panic]
+    fn tuple_mutable_index_panics_outside_slice() {
+        let mut matrix = Matrix::new(2, 2, vec![1, 2, 3, 4]).unwrap();
+        let mut slice = matrix.slice_mut(0..1, 0..1).unwrap();
+        slice[(1, 0)] = 10;
+    }
+
+    #[test]
+    #[should_panic]
+    fn array_mutable_index_panics_outside_slice() {
+        let mut matrix = Matrix::new(2, 2, vec![1, 2, 3, 4]).unwrap();
+        let mut slice = matrix.slice_mut(0..1, 0..1).unwrap();
+        slice[&[0, 1]] = 10;
+    }
+
+    #[test]
+    fn clone_into_matrix_preserves_zero_dimension_slice_shapes() {
+        let mut matrix = Matrix::new(3, 4, (0..12).collect()).unwrap();
+        assert_eq!(
+            matrix.slice_mut(1..1, 0..4).unwrap().clone_into_matrix(),
+            Matrix::new(0, 4, vec![]).unwrap()
+        );
+        assert_eq!(
+            matrix.slice_mut(0..3, 2..2).unwrap().clone_into_matrix(),
+            Matrix::new(3, 0, vec![]).unwrap()
+        );
+
+        let mut no_rows = Matrix::<i32>::new(0, 3, vec![]).unwrap();
+        assert_eq!(
+            no_rows.slice_mut(0..0, 1..3).unwrap().clone_into_matrix(),
+            Matrix::new(0, 2, vec![]).unwrap()
+        );
     }
 }

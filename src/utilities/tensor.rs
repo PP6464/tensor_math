@@ -105,11 +105,7 @@ impl<T> Tensor<T> {
             return Err(TensorErrors::ShapeSizeDoesNotMatch);
         }
 
-        Ok(Tensor {
-            strides: Strides::from_shape(&new_shape),
-            shape: new_shape,
-            elements: self.elements,
-        })
+        Ok(unsafe { self.reshape_unchecked(new_shape) })
     }
 
     /// Reshapes the tensor without checking compatibility of shapes.
@@ -161,7 +157,13 @@ impl<T> Tensor<T> {
     where
         T: Send + Sync,
     {
-        self.into_par_iter().map(closure).collect()
+        let shape = self.shape();
+        unsafe {
+            self.into_par_iter()
+                .map(closure)
+                .collect::<Tensor<_>>()
+                .reshape_unchecked(shape)
+        }
     }
 
     /// Applies the given function over the entire tensor elementwise by reference.
@@ -180,7 +182,14 @@ impl<T> Tensor<T> {
     where
         T: Send + Sync,
     {
-        self.iter().map(closure).collect()
+        let shape = self.shape();
+        unsafe {
+            self.elements
+                .par_iter()
+                .map(closure)
+                .collect::<Tensor<_>>()
+                .reshape_unchecked(shape)
+        }
     }
 
     /// Returns an iterator that is enumerated with tensor indices.
@@ -301,13 +310,7 @@ impl<T> Tensor<T> {
             }
         }
 
-        let (start, end) = indices.iter().map(|range| (range.start, range.end)).unzip();
-
-        Ok(TensorSlice {
-            start,
-            orig: self,
-            end,
-        })
+        Ok(unsafe { self.slice_unchecked(indices) })
     }
 
     /// Slices the tensor without checking bounds.
@@ -363,20 +366,7 @@ impl<T> Tensor<T> {
             }
         }
 
-        let start = indices
-            .iter()
-            .map(|range| range.start)
-            .collect::<Vec<usize>>();
-        let end = indices
-            .iter()
-            .map(|range| range.end)
-            .collect::<Vec<usize>>();
-
-        Ok(TensorSliceMut {
-            start,
-            end,
-            orig: self,
-        })
+        Ok(unsafe { self.slice_unchecked_mut(indices) })
     }
 
     /// Slices the tensor mutably without checking bounds.
@@ -404,7 +394,7 @@ impl<T> Tensor<T> {
 
     /// Flips the tensor along a single axis.
     /// This fails if the axis is out of bounds.
-    pub fn flip_axis(mut self, axis: usize) -> Result<Tensor<T>, TensorErrors> {
+    pub fn flip_axis(self, axis: usize) -> Result<Tensor<T>, TensorErrors> {
         if axis >= self.rank() {
             return Err(TensorErrors::AxisOutOfBounds {
                 axis,
@@ -412,33 +402,15 @@ impl<T> Tensor<T> {
             });
         }
 
-        let inner = self.strides[axis];
-        let outer = self.shape[axis];
-
-        if axis == self.rank() - 1 {
-            self.chunks_mut(outer).for_each(|c| c.reverse());
-            return Ok(self);
-        }
-
-        self.elements
-            .chunks_mut(inner * outer)
-            .for_each(|outer_chunk| unsafe {
-                let mid = outer / 2;
-                let (top, rest) = outer_chunk.split_at_mut_unchecked(mid * inner);
-                let bottom = rest.get_unchecked_mut(rest.len() - mid * inner..);
-
-                top.chunks_mut(inner)
-                    .zip(bottom.chunks_mut(inner).rev())
-                    .for_each(|(t, b)| {
-                        t.swap_with_slice(b);
-                    });
-            });
-
-        Ok(self)
+        Ok(unsafe { self.flip_axis_unchecked(axis) })
     }
 
     /// Flips the tensor along a single axis without bounds checking the axis.
     pub(crate) unsafe fn flip_axis_unchecked(mut self, axis: usize) -> Tensor<T> {
+        if self.elements.is_empty() {
+            return self;
+        }
+
         let inner = self.strides[axis];
         let outer = self.shape[axis];
 
@@ -466,7 +438,7 @@ impl<T> Tensor<T> {
 
     /// Flips the tensor along a single axis.
     /// This fails if the axis is out of bounds.
-    pub fn flip_axis_mt(mut self, axis: usize) -> Result<Tensor<T>, TensorErrors>
+    pub fn flip_axis_mt(self, axis: usize) -> Result<Tensor<T>, TensorErrors>
     where
         T: Send + Sync,
     {
@@ -477,24 +449,7 @@ impl<T> Tensor<T> {
             });
         }
 
-        let inner = self.strides[axis];
-        let outer = self.shape[axis];
-
-        self.elements
-            .par_chunks_mut(inner * outer)
-            .for_each(|outer_chunk| unsafe {
-                let mid = outer / 2;
-                let (top, rest) = outer_chunk.split_at_mut_unchecked(mid * inner);
-                let bottom = rest.get_unchecked_mut(rest.len() - mid * inner..);
-
-                top.par_chunks_mut(inner)
-                    .zip(bottom.par_chunks_mut(inner).rev())
-                    .for_each(|(t, b)| {
-                        t.swap_with_slice(b);
-                    });
-            });
-
-        Ok(self)
+        Ok(unsafe { self.flip_axis_unchecked_mt(axis) })
     }
 
     /// Flips the tensor along a single axis without bounds checking the axis.
@@ -502,6 +457,10 @@ impl<T> Tensor<T> {
     where
         T: Send + Sync,
     {
+        if self.elements.is_empty() {
+            return self;
+        }
+
         let inner = self.strides[axis];
         let outer = self.shape[axis];
 
@@ -524,12 +483,15 @@ impl<T> Tensor<T> {
 
     /// Flips the tensor along the specified axes.
     /// This fails if any of the axes are out of bounds.
-    pub fn flip_axes(mut self, axes: &HashSet<usize>) -> Result<Tensor<T>, TensorErrors> {
+    pub fn flip_axes(self, axes: &HashSet<usize>) -> Result<Tensor<T>, TensorErrors> {
+        let rank = self.rank();
         for &axis in axes.iter() {
-            self = self.flip_axis(axis)?;
+            if axis >= rank {
+                return Err(TensorErrors::AxisOutOfBounds { axis, rank });
+            }
         }
 
-        Ok(self)
+        Ok(unsafe { self.flip_axes_unchecked(axes) })
     }
 
     /// Flips the tensor along the specified axes without bounds checking the axes.
@@ -545,7 +507,7 @@ impl<T> Tensor<T> {
 
     /// Flips the tensor along the specified axes.
     /// This fails if any of the axes are out of bounds.
-    pub fn flip_axes_mt(mut self, axes: &HashSet<usize>) -> Result<Tensor<T>, TensorErrors>
+    pub fn flip_axes_mt(self, axes: &HashSet<usize>) -> Result<Tensor<T>, TensorErrors>
     where
         T: Send + Sync,
     {
@@ -555,13 +517,9 @@ impl<T> Tensor<T> {
             if axis >= rank {
                 return Err(TensorErrors::AxisOutOfBounds { axis, rank });
             }
-
-            unsafe {
-                self = self.flip_axis_unchecked_mt(axis);
-            }
         }
 
-        Ok(self)
+        Ok(unsafe { self.flip_axes_unchecked_mt(axes) })
     }
 
     /// Flips the tensor along the specified axes without bounds checking the axes.
@@ -603,30 +561,7 @@ impl<T> Tensor<T> {
             });
         }
 
-        let mut new_elements = Vec::with_capacity(self.shape().element_count());
-        let buf = new_elements.spare_capacity_mut();
-
-        let shape = self.shape;
-
-        self.elements
-            .into_iter()
-            .enumerate()
-            .for_each(|(index, elem)| unsafe {
-                let new_index = transpose.new_index_unchecked(shape.tensor_index_unchecked(index));
-                let new_address = shape.address_unchecked(&new_index);
-                buf.get_unchecked_mut(new_address).write(elem);
-            });
-
-        unsafe {
-            new_elements.set_len(shape.element_count());
-            let new_shape = transpose.new_shape_unchecked(shape);
-
-            Ok(Tensor {
-                strides: Strides::from_shape(&new_shape),
-                shape: new_shape,
-                elements: new_elements,
-            })
-        }
+        Ok(unsafe { self.transpose_unchecked(transpose) })
     }
 
     /// Transposes a tensor without checking the rank of the transpose.
@@ -634,20 +569,21 @@ impl<T> Tensor<T> {
         let mut new_elements = Vec::with_capacity(self.shape().element_count());
         let buf = new_elements.spare_capacity_mut();
 
-        let shape = self.shape;
+        let old_shape = self.shape;
+        let new_shape = transpose.new_shape_unchecked(old_shape.clone());
 
         self.elements
             .into_iter()
             .enumerate()
             .for_each(|(index, elem)| unsafe {
-                let new_index = transpose.new_index_unchecked(shape.tensor_index_unchecked(index));
-                let new_address = shape.address_unchecked(&new_index);
+                let old_index = old_shape.tensor_index_unchecked(index);
+                let new_index = transpose.new_index_unchecked(old_index);
+                let new_address = new_shape.address_unchecked(&new_index);
                 buf.get_unchecked_mut(new_address).write(elem);
             });
 
         unsafe {
-            new_elements.set_len(shape.element_count());
-            let new_shape = transpose.new_shape_unchecked(shape);
+            new_elements.set_len(new_shape.element_count());
 
             Tensor {
                 strides: Strides::from_shape(&new_shape),
@@ -663,21 +599,6 @@ impl<T> Tensor<T> {
     where
         T: Send + Sync,
     {
-        struct ThreadSafePtr<O>(*mut O);
-
-        impl<O> ThreadSafePtr<O> {
-            fn add(&self, offset: usize) -> ThreadSafePtr<O> {
-                unsafe { ThreadSafePtr(self.0.add(offset)) }
-            }
-
-            fn write(&self, value: O) {
-                unsafe { self.0.write(value) }
-            }
-        }
-
-        unsafe impl<O> Sync for ThreadSafePtr<O> {}
-        unsafe impl<O> Send for ThreadSafePtr<O> {}
-
         if transpose.permutation.len() != self.shape().rank() {
             return Err(TensorErrors::TransposeIncompatibleRank {
                 rank: self.rank(),
@@ -685,31 +606,7 @@ impl<T> Tensor<T> {
             });
         }
 
-        let mut new_elements = Vec::with_capacity(self.shape().element_count());
-        let buf = new_elements.spare_capacity_mut();
-        let buf_ptr = ThreadSafePtr(buf.as_mut_ptr());
-
-        let shape = self.shape;
-
-        self.elements
-            .into_par_iter()
-            .enumerate()
-            .for_each(|(index, elem)| unsafe {
-                let new_index = transpose.new_index_unchecked(shape.tensor_index_unchecked(index));
-                let new_address = shape.address_unchecked(&new_index);
-                buf_ptr.add(new_address).write(MaybeUninit::new(elem));
-            });
-
-        unsafe {
-            new_elements.set_len(shape.element_count());
-            let new_shape = transpose.new_shape_unchecked(shape);
-
-            Ok(Tensor {
-                strides: Strides::from_shape(&new_shape),
-                shape: new_shape,
-                elements: new_elements,
-            })
-        }
+        Ok(unsafe { self.transpose_unchecked_mt(transpose) })
     }
 
     /// Transposes a tensor and returns the result, without checking the rank of the transpose.
@@ -736,20 +633,21 @@ impl<T> Tensor<T> {
         let buf = new_elements.spare_capacity_mut();
         let buf_ptr = ThreadSafePtr(buf.as_mut_ptr());
 
-        let shape = self.shape;
+        let old_shape = self.shape;
+        let new_shape = transpose.new_shape_unchecked(old_shape.clone());
 
         self.elements
             .into_par_iter()
             .enumerate()
             .for_each(|(index, elem)| unsafe {
-                let new_index = transpose.new_index_unchecked(shape.tensor_index_unchecked(index));
-                let new_address = shape.address_unchecked(&new_index);
+                let old_index = old_shape.tensor_index_unchecked(index);
+                let new_index = transpose.new_index_unchecked(old_index);
+                let new_address = new_shape.address_unchecked(&new_index);
                 buf_ptr.add(new_address).write(MaybeUninit::new(elem));
             });
 
         unsafe {
-            new_elements.set_len(shape.element_count());
-            let new_shape = transpose.new_shape_unchecked(shape);
+            new_elements.set_len(new_shape.element_count());
 
             Tensor {
                 strides: Strides::from_shape(&new_shape),
@@ -805,12 +703,26 @@ impl<T> Tensor<T> {
         let mut new_elements =
             Vec::with_capacity(self.shape.element_count() + other.shape.element_count());
 
+        if resultant_shape.element_count() == 0 {
+            return Tensor {
+                strides: Strides::from_shape(&resultant_shape),
+                shape: resultant_shape,
+                elements: new_elements,
+            };
+        }
+
+        let inner = self.strides[axis];
+        let outer = self.shape.0[..axis].iter().product::<usize>();
         let mut self_iter = self.elements.into_iter();
         let mut other_iter = other.elements.into_iter();
 
-        for _ in 0..self.shape.element_count() / self.strides[axis] {
-            new_elements.extend(self_iter.by_ref().take(self.strides[axis]));
-            new_elements.extend(other_iter.by_ref().take(other.strides[axis]));
+        for _ in 0..outer {
+            for _ in 0..self.shape[axis] {
+                new_elements.extend(self_iter.by_ref().take(inner));
+            }
+            for _ in 0..other.shape[axis] {
+                new_elements.extend(other_iter.by_ref().take(inner));
+            }
         }
 
         Tensor {
@@ -1249,5 +1161,1129 @@ pub fn pool_avg<T: Add<Output = T> + Div<f64, Output = T> + Clone>(t: TensorSlic
     match (sum, elems) {
         (Some(s), Some(e)) => Some(s / e),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tensor_utils_tests {
+    use rayon::prelude::*;
+    use std::collections::HashSet;
+    use std::f64::consts::PI;
+    use tensor_math::definitions::errors::TensorErrors;
+    use tensor_math::definitions::tensor::Tensor;
+    use tensor_math::definitions::transpose::Transpose;
+    use tensor_math::utilities::tensor::{pool_avg, pool_max, pool_min, pool_sum};
+    use tensor_math::{shape, transpose};
+
+    #[test]
+    fn concat() {
+        let t1 = Tensor::<i32>::from_shape(shape![4, 2, 3]);
+        let t2 = Tensor::<i32>::from_value(shape![4, 1, 3], 1);
+        let ans1 = Tensor::new(
+            shape![4, 3, 3],
+            vec![
+                0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0,
+                0, 0, 0, 0, 0, 1, 1, 1,
+            ],
+        )
+        .unwrap();
+        assert_eq!(ans1, t1.clone().concat(t2.clone(), 1).unwrap());
+
+        let t3 = Tensor::<i32>::from_shape(shape![2, 3]);
+        let t4 = Tensor::<i32>::from_value(shape![1, 3], -1);
+        let ans2 = Tensor::new(shape![3, 3], vec![0, 0, 0, 0, 0, 0, -1, -1, -1]).unwrap();
+        assert_eq!(ans2, t3.clone().concat(t4.clone(), 0).unwrap());
+    }
+
+    #[test]
+    fn invalid_concat() {
+        let t1 = Tensor::<i32>::from_shape(shape![4, 2, 3]);
+        let t2 = Tensor::<i32>::from_shape(shape![3, 1, 2]);
+
+        assert!(matches!(
+            t1.clone().concat(t2.clone(), 0).unwrap_err(),
+            TensorErrors::IncompatibleShapes { .. }
+        ));
+    }
+
+    #[test]
+    fn reshape_correctly() {
+        let t1 = Tensor::<i32>::from_shape(shape![2, 3, 4]);
+        let t1 = t1
+            .reshape(shape![4, 6])
+            .expect("Was a valid reshape but failed");
+
+        assert_eq!(t1.shape(), shape![4, 6]);
+    }
+
+    #[test]
+    fn invalid_reshape() {
+        Tensor::<i32>::from_shape(shape![2, 3, 4])
+            .reshape(shape![1, 1, 1, 1, 1, 12])
+            .expect_err("Should've panicked");
+    }
+
+    #[test]
+    fn flatten_correctly() {
+        let t1 = Tensor::<i32>::from_shape(shape![2, 3, 1, 4, 1])
+            .flatten(2)
+            .expect("Valid flatten but failed");
+        let t1 = t1.clone().flatten(3).expect("Valid flatten but failed");
+        assert_eq!(t1.shape(), shape![2, 3, 4]);
+    }
+
+    #[test]
+    fn invalid_flatten_dim_out_of_bounds() {
+        let t1 = Tensor::<i32>::from_shape(shape![2, 3, 4]);
+        let error = t1.clone().flatten(5).err().unwrap();
+
+        assert!(matches!(
+            error,
+            TensorErrors::AxisOutOfBounds { axis: _, rank: _ }
+        ));
+    }
+
+    #[test]
+    fn invalid_flatten_dim_not_one() {
+        let t1 = Tensor::<i32>::from_shape(shape![2, 3, 4]);
+        let error = t1.clone().flatten(1).err().unwrap();
+
+        assert!(matches!(error, TensorErrors::AxisIsNotOne(_)));
+    }
+
+    #[test]
+    fn iterator() {
+        let shape = shape![2, 3];
+        let t1 = Tensor::<i32>::from_shape(shape.clone());
+        let iter1 = t1.clone().into_iter();
+        let iter2 = t1.clone().into_iter();
+
+        let mut count = 0;
+        for x in iter1 {
+            assert_eq!(x, 0);
+            count += 1;
+        }
+
+        assert_eq!(count, shape.element_count());
+
+        let t2: Tensor<i32> = iter2.collect();
+        assert_eq!(t2.shape(), shape![shape.element_count()]);
+        assert_eq!(t2.elements(), t1.elements());
+        let t2 = t2
+            .clone()
+            .reshape(shape.clone())
+            .expect("Was a valid reshape but failed");
+        assert_eq!(t2, t1);
+
+        let shape2 = shape![5, 2];
+        let iter3 = vec![0; shape2.element_count()];
+        let t3: Tensor<i32> = iter3.iter().copied().collect();
+        assert_eq!(t3, Tensor::from_value(shape![shape2.element_count()], 0));
+        let t3 = t3
+            .clone()
+            .reshape(shape2.clone())
+            .expect("Was a valid reshape but failed");
+        assert_eq!(t3, Tensor::from_value(shape2.clone(), 0));
+    }
+
+    #[test]
+    fn random() {
+        Tensor::<i32>::rand(shape![2, 3]);
+    }
+
+    #[test]
+    fn transform_elementwise() {
+        let t1 = Tensor::<f64>::new(
+            shape![2, 3],
+            vec![
+                0.0,
+                PI / 6.0,
+                PI / 3.0,
+                PI / 2.0,
+                2.0 * PI / 3.0,
+                5.0 * PI / 6.0,
+            ],
+        )
+        .unwrap();
+        let transformed = t1.clone().map(f64::cos);
+        let ans = Tensor::<f64>::new(
+            shape![2, 3],
+            vec![
+                1.0,
+                f64::sqrt(3.0) / 2.0,
+                0.5,
+                0.0,
+                -0.5,
+                -f64::sqrt(3.0) / 2.0,
+            ],
+        )
+        .unwrap();
+        assert!((ans - transformed).into_iter().map(f64::abs).sum::<f64>() < 1e-6);
+    }
+
+    #[test]
+    fn slicing() {
+        let t1 = Tensor::<i32>::new(shape![3, 3, 3], (0..27).collect()).unwrap();
+
+        let sliced = t1.slice(&[0..3, 1..2, 1..3]).unwrap();
+        let ans = Tensor::<i32>::new(shape![3, 1, 2], vec![4, 5, 13, 14, 22, 23]).unwrap();
+
+        assert_eq!(sliced.clone_into_tensor(), ans);
+    }
+
+    #[test]
+    #[should_panic]
+    fn invalid_slice_out_of_bounds() {
+        let t1 = Tensor::<i32>::from_shape(shape![2, 3]);
+        t1.slice(&[1..5, 0..3]).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn invalid_slice_incorrect_rank() {
+        let t1 = Tensor::<i32>::from_shape(shape![2, 3]);
+        t1.slice(&[]).unwrap();
+    }
+
+    #[test]
+    fn slicing_mut() {
+        let mut t1 = Tensor::<i32>::new(shape![3, 3, 3], (0..27).collect()).unwrap();
+        let mut slice = t1.slice_mut(&[1..2, 1..2, 1..2]).unwrap();
+        slice[&[0, 0, 0]] = 69;
+        let ans = Tensor::<i32>::new(
+            shape![3, 3, 3],
+            (0..27).map(|x| if x != 13 { x } else { 69 }).collect(),
+        )
+        .unwrap();
+        assert_eq!(t1, ans);
+    }
+
+    #[test]
+    fn set_all() {
+        let mut t1 = Tensor::<i32>::new(shape![3, 3, 3], (0..27).collect()).unwrap();
+        let mut slice_mut = t1.slice_mut(&[0..2, 1..2, 0..2]).unwrap();
+        let inserted = Tensor::<i32>::new(shape![2, 1, 2], (0..4).collect()).unwrap();
+
+        slice_mut.set_all(&inserted).unwrap();
+        let ans = Tensor::<i32>::new(
+            shape![3, 3, 3],
+            vec![
+                0, 1, 2, 0, 1, 5, 6, 7, 8, 9, 10, 11, 2, 3, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+                24, 25, 26,
+            ],
+        )
+        .unwrap();
+
+        assert_eq!(t1, ans);
+    }
+
+    #[test]
+    #[should_panic]
+    fn set_all_fail() {
+        let mut t1 = Tensor::<i32>::new(shape![3, 3, 3], (0..27).collect()).unwrap();
+        let mut slice_mut = t1.slice_mut(&[0..2, 0..2, 0..2]).unwrap();
+
+        slice_mut.set_all(&Tensor::<i32>::zeros(shape![1])).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn slice_mut_out_of_bounds() {
+        let mut t1 = Tensor::<i32>::from_shape(shape![2, 3]);
+        let mut slice = t1.slice_mut(&[0..1, 0..1]).unwrap();
+
+        slice[&[0, 1]] = 69;
+    }
+
+    #[test]
+    fn concat_multithreaded() {
+        let t1 = Tensor::<i32>::from_shape(shape![20, 30]);
+        let t2 = Tensor::<i32>::from_value(shape![20, 20], 2);
+
+        let ans = t1.clone().concat(t2.clone(), 1).unwrap();
+        let mt_ans = t1.clone().concat(t2.clone(), 1).unwrap();
+
+        assert_eq!(ans, mt_ans);
+    }
+
+    #[test]
+    fn transpose() {
+        let t1 = Tensor::<i32>::new(shape![2, 3, 4], (0..24).collect()).unwrap();
+        let t2 = Tensor::<i32>::new(shape![2, 3], (0..6).collect()).unwrap();
+        let transposed_t1 = t1.clone().transpose(&transpose![0, 2, 1]).unwrap();
+        let t2 = t2
+            .clone()
+            .transpose(&Transpose::new(&vec![1, 0]).unwrap())
+            .unwrap();
+        let transposed_t2 = t2.clone();
+        let ans1 = Tensor::<i32>::new(
+            shape![2, 4, 3],
+            vec![
+                0, 4, 8, 1, 5, 9, 2, 6, 10, 3, 7, 11, 12, 16, 20, 13, 17, 21, 14, 18, 22, 15, 19,
+                23,
+            ],
+        )
+        .unwrap();
+        let ans2 = Tensor::<i32>::new(shape![3, 2], vec![0, 3, 1, 4, 2, 5]).unwrap();
+
+        assert_eq!(ans1, transposed_t1);
+        assert_eq!(ans2, transposed_t2);
+    }
+
+    #[test]
+    fn transpose_mt() {
+        let t1 = Tensor::<i32>::rand(shape![10, 60, 5]);
+        let transpose = transpose![1, 2, 0];
+
+        let ans = t1.clone().transpose(&transpose).unwrap();
+        let mt_ans = t1.clone().transpose_mt(&transpose).unwrap();
+
+        assert_eq!(mt_ans, ans);
+    }
+
+    #[test]
+    fn clipping() {
+        let t1 = Tensor::<i32>::new(shape![3, 3, 3], (0..27).collect()).unwrap();
+        let t1 = t1.clone().clip(5, 10);
+        let ans = Tensor::<i32>::new(
+            shape![3, 3, 3],
+            vec![
+                5, 5, 5, 5, 5, 5, 6, 7, 8, 9, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
+                10, 10, 10, 10,
+            ],
+        )
+        .unwrap();
+
+        assert_eq!(t1, ans);
+    }
+
+    #[test]
+    fn pool() {
+        let t1: Tensor<f64> = Tensor::<i32>::new(
+            shape![3, 3, 3],
+            vec![
+                1, 5, -1, 2, 3, -5, 12, 10, -10, 1, -4, 2, 9, 6, 8, -1, 0, -1, -8, 7, 4, 5, 1, 2,
+                -5, 3, 1,
+            ],
+        )
+        .unwrap()
+        .map(|x| x.into());
+
+        let avg_pool = t1
+            .pool(pool_avg, &shape![2, 2, 2], &shape![2, 2, 2])
+            .unwrap();
+        let sum_pool = t1
+            .pool(pool_sum, &shape![2, 2, 2], &shape![2, 2, 2])
+            .unwrap();
+        let max_pool = t1
+            .pool(pool_max, &shape![2, 2, 2], &shape![1, 1, 1])
+            .unwrap();
+        let min_pool = t1
+            .pool(pool_min, &shape![3, 1, 1], &shape![3, 1, 1])
+            .unwrap();
+
+        let sum_ans = Tensor::<f64>::new(
+            shape![2, 2, 2],
+            vec![23.0, 4.0, 21.0, -11.0, 5.0, 6.0, -2.0, 1.0],
+        )
+        .unwrap()
+        .map(Some);
+        let avg_ans = Tensor::<f64>::new(
+            shape![2, 2, 2],
+            vec![2.875, 1.0, 5.25, -5.5, 1.25, 3.0, -1.0, 1.0],
+        )
+        .unwrap()
+        .map(Some);
+        let max_ans = Tensor::<f64>::new(
+            shape![3, 3, 3],
+            vec![
+                9.0, 8.0, 8.0, 12.0, 10.0, 8.0, 12.0, 10.0, -1.0, 9.0, 8.0, 8.0, 9.0, 8.0, 8.0,
+                3.0, 3.0, 1.0, 7.0, 7.0, 4.0, 5.0, 3.0, 2.0, 3.0, 3.0, 1.0,
+            ],
+        )
+        .unwrap()
+        .map(Some);
+        let min_ans = Tensor::<f64>::new(
+            shape![1, 3, 3],
+            vec![-8.0, -4.0, -1.0, 2.0, 1.0, -5.0, -5.0, 0.0, -10.0],
+        )
+        .unwrap()
+        .map(Some);
+
+        assert_eq!(avg_pool, avg_ans);
+        assert_eq!(sum_pool, sum_ans);
+        assert_eq!(max_pool, max_ans);
+        assert_eq!(min_pool, min_ans);
+    }
+
+    #[test]
+    fn pool_mt() {
+        let t1 = Tensor::<i32>::rand(shape![200, 10, 10]);
+
+        let ans = t1
+            .pool(pool_min, &shape![10, 30, 1], &shape![10, 10, 10])
+            .unwrap();
+        let mt_ans = t1
+            .pool_mt(&pool_min, &shape![10, 30, 1], &shape![10, 10, 10])
+            .unwrap();
+
+        assert_eq!(ans, mt_ans);
+    }
+
+    #[test]
+    fn invalid_flip_axes_mt() {
+        let t1 = Tensor::<i32>::new(shape![1, 2, 3, 4], vec![1; 24]).unwrap();
+
+        let mut axes = HashSet::new();
+        axes.insert(4);
+
+        let err = t1.clone().flip_axes_mt(&axes).unwrap_err();
+        match err {
+            TensorErrors::AxisOutOfBounds { axis: _, rank: _ } => {}
+            _ => panic!("Incorrect error"),
+        }
+    }
+
+    #[test]
+    fn flip() {
+        let t1 = Tensor::<i32>::new(shape![2, 3, 4], (0..24).collect()).unwrap();
+        let mut axes = HashSet::new();
+        axes.insert(0);
+        axes.insert(2);
+
+        let res_axes = t1.clone().flip_axes(&axes).unwrap();
+        let res = t1.clone().flip();
+
+        let ans_axes = Tensor::<i32>::new(
+            shape![2, 3, 4],
+            vec![
+                15, 14, 13, 12, 19, 18, 17, 16, 23, 22, 21, 20, 3, 2, 1, 0, 7, 6, 5, 4, 11, 10, 9,
+                8,
+            ],
+        )
+        .unwrap();
+        let ans = Tensor::<i32>::new(
+            shape![2, 3, 4],
+            vec![
+                23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1,
+                0,
+            ],
+        )
+        .unwrap();
+
+        assert_eq!(res_axes, ans_axes);
+        assert_eq!(res, ans);
+    }
+
+    #[test]
+    fn flip_mt() {
+        let t1 = Tensor::<i32>::rand(shape![10, 20, 10]);
+        let mut axes = HashSet::new();
+        axes.insert(0);
+        axes.insert(1);
+
+        let res_axes = t1.clone().flip_axes(&axes).unwrap();
+        let res_axes_mt = t1.clone().flip_axes_mt(&axes).unwrap();
+
+        let res = t1.clone().flip();
+        let res_mt = t1.clone().flip_mt();
+
+        assert_eq!(res_axes, res_axes_mt);
+        assert_eq!(res, res_mt);
+    }
+
+    #[test]
+    fn invalid_flip_axes() {
+        let t1 = Tensor::<i32>::new(shape![1, 2, 3, 4], vec![1; 24]).unwrap();
+
+        let mut axes = HashSet::new();
+        axes.insert(4);
+
+        let err = t1.clone().flip_axes(&axes).unwrap_err();
+        match err {
+            TensorErrors::AxisOutOfBounds { axis: _, rank: _ } => {}
+            _ => panic!("Incorrect error"),
+        }
+    }
+
+    #[test]
+    fn transform_refs_elementwise() {
+        let t1 = Tensor::new(shape![2, 3, 4], (0..24).collect()).unwrap();
+        let ans = Tensor::new(shape![2, 3, 4], (1..25).collect()).unwrap();
+
+        assert_eq!(t1.clone().map(|x| x + &1), ans);
+    }
+
+    #[test]
+    fn invalid_concat_diff_ranks() {
+        let t1 = Tensor::<i32>::new(shape![1, 2, 3, 4], (0..24).collect()).unwrap();
+        let t2 = Tensor::<i32>::new(shape![2, 3, 4], (0..24).collect()).unwrap();
+
+        let err = t1.clone().concat(t2.clone(), 0).unwrap_err();
+        match err {
+            TensorErrors::RanksDoNotMatch(..) => {}
+            _ => panic!("Incorrect error"),
+        }
+
+        let err = t1.clone().concat(t2.clone(), 0).unwrap_err();
+        match err {
+            TensorErrors::RanksDoNotMatch(..) => {}
+            _ => panic!("Incorrect error"),
+        }
+    }
+
+    #[test]
+    fn pooling_invalid_shape_rank() {
+        let t1 = Tensor::<f64>::new(shape![2, 4, 3], (0..24).map(f64::from).collect()).unwrap();
+
+        let err = t1
+            .pool(pool_avg, &shape![1, 1, 1], &shape![1, 1])
+            .unwrap_err();
+        match err {
+            TensorErrors::RanksDoNotMatch(..) => {}
+            _ => panic!("Incorrect error"),
+        }
+
+        let err = t1
+            .pool(pool_avg, &shape![1, 1], &shape![1, 1, 1])
+            .unwrap_err();
+        match err {
+            TensorErrors::RanksDoNotMatch(..) => {}
+            _ => panic!("Incorrect error"),
+        }
+
+        let err = t1
+            .pool_indexed(|_, m| pool_max(m), &shape![1, 1], &shape![1, 1, 1])
+            .unwrap_err();
+        match err {
+            TensorErrors::RanksDoNotMatch(..) => {}
+            _ => panic!("Incorrect error"),
+        }
+
+        let err = t1
+            .pool_indexed(|_, m| pool_max(m), &shape![1, 1, 1], &shape![1, 1])
+            .unwrap_err();
+        match err {
+            TensorErrors::RanksDoNotMatch(..) => {}
+            _ => panic!("Incorrect error"),
+        }
+
+        let err = t1
+            .pool_mt(&pool_min, &shape![1, 1], &shape![1, 1, 1])
+            .unwrap_err();
+        match err {
+            TensorErrors::RanksDoNotMatch(..) => {}
+            _ => panic!("Incorrect error"),
+        }
+
+        let err = t1
+            .pool_mt(&pool_min, &shape![1, 1, 1], &shape![1, 1])
+            .unwrap_err();
+        match err {
+            TensorErrors::RanksDoNotMatch(..) => {}
+            _ => panic!("Incorrect error"),
+        }
+
+        let err = t1
+            .pool_indexed_mt(&|_, m| pool_sum(m), &shape![1, 1, 1], &shape![1, 1])
+            .unwrap_err();
+        match err {
+            TensorErrors::RanksDoNotMatch(..) => {}
+            _ => panic!("Incorrect error"),
+        }
+
+        let err = t1
+            .pool_indexed_mt(&|_, m| pool_sum(m), &shape![1, 1], &shape![1, 1, 1])
+            .unwrap_err();
+        match err {
+            TensorErrors::RanksDoNotMatch(..) => {}
+            _ => panic!("Incorrect error"),
+        }
+
+        let scalar = Tensor::<f64>::new(shape![], vec![1.0]).unwrap();
+
+        let err = scalar.pool(pool_avg, &shape![], &shape![]).unwrap_err();
+        match err {
+            TensorErrors::RankZero { .. } => {}
+            _ => panic!("Incorrect error for scalar pooling"),
+        }
+
+        let err = scalar
+            .pool_indexed(|_, m| pool_avg(m), &shape![], &shape![])
+            .unwrap_err();
+        match err {
+            TensorErrors::RankZero { .. } => {}
+            _ => panic!("Incorrect error for scalar pooling"),
+        }
+
+        let err = scalar.pool_mt(&pool_sum, &shape![], &shape![]).unwrap_err();
+        match err {
+            TensorErrors::RankZero { .. } => {}
+            _ => panic!("Incorrect error for scalar pooling"),
+        }
+
+        let err = scalar
+            .pool_indexed_mt(&|_, m| pool_avg(m), &shape![], &shape![])
+            .unwrap_err();
+        match err {
+            TensorErrors::RankZero { .. } => {}
+            _ => panic!("Incorrect error for scalar pooling"),
+        }
+
+        let empty = Tensor::<f64>::new(shape![0, 3], vec![]).unwrap();
+
+        let err = empty
+            .clone()
+            .pool(pool_avg, &shape![], &shape![])
+            .unwrap_err();
+        match err {
+            TensorErrors::TensorEmpty { .. } => {}
+            _ => panic!("Incorrect error for scalar pooling"),
+        }
+
+        let err = empty
+            .pool_indexed(|_, m| pool_avg(m), &shape![], &shape![])
+            .unwrap_err();
+        match err {
+            TensorErrors::TensorEmpty { .. } => {}
+            _ => panic!("Incorrect error for scalar pooling"),
+        }
+
+        let err = empty.pool_mt(&pool_sum, &shape![], &shape![]).unwrap_err();
+        match err {
+            TensorErrors::TensorEmpty { .. } => {}
+            _ => panic!("Incorrect error for scalar pooling"),
+        }
+
+        let err = empty
+            .pool_indexed_mt(&|_, m| pool_avg(m), &shape![], &shape![])
+            .unwrap_err();
+        match err {
+            TensorErrors::TensorEmpty { .. } => {}
+            _ => panic!("Incorrect error for scalar pooling"),
+        }
+    }
+
+    #[test]
+    fn invalid_transpose_rank() {
+        let t1 = Tensor::new(shape![2, 3, 4], (0..24).collect()).unwrap();
+
+        let err = t1.clone().transpose(&Transpose::identity(1)).unwrap_err();
+        match err {
+            TensorErrors::TransposeIncompatibleRank { .. } => {}
+            _ => panic!("Incorrect error"),
+        }
+
+        let err = t1
+            .clone()
+            .transpose_mt(&Transpose::identity(4))
+            .unwrap_err();
+        match err {
+            TensorErrors::TransposeIncompatibleRank { .. } => {}
+            _ => panic!("Incorrect error"),
+        }
+    }
+
+    #[test]
+    fn invalid_slicing_incorrect_ranges() {
+        let mut t1 = Tensor::<i32>::new(shape![1, 2, 3, 4], (0..24).collect()).unwrap();
+
+        let err = t1.slice(&[0..1, 0..1, 1..0, 0..1]).unwrap_err();
+        match err {
+            TensorErrors::InvalidInterval { .. } => {}
+            _ => panic!("Incorrect error"),
+        }
+
+        let err = t1.slice_mut(&[0..1, 0..1, 1..0, 0..1]).unwrap_err();
+        match err {
+            TensorErrors::InvalidInterval { .. } => {}
+            _ => panic!("Incorrect error"),
+        }
+    }
+
+    #[test]
+    fn invalid_slicing_num_indices_wrong() {
+        let mut t1 = Tensor::<i32>::new(shape![1, 2, 3, 4], (0..24).collect()).unwrap();
+
+        let err = t1.slice(&[0..1]).unwrap_err();
+        match err {
+            TensorErrors::IncompatibleShapes { .. } => {}
+            _ => panic!("Incorrect error"),
+        }
+
+        let err = t1.slice_mut(&[0..1]).unwrap_err();
+        match err {
+            TensorErrors::IncompatibleShapes { .. } => {}
+            _ => panic!("Incorrect error"),
+        }
+    }
+
+    #[test]
+    fn slice_mut_invalid_indices_out_of_bounds() {
+        let mut t1 = Tensor::<i32>::new(shape![1, 2, 3, 4], (0..24).collect()).unwrap();
+
+        let err = t1.slice_mut(&[0..1, 0..1, 2..5, 0..3]).unwrap_err();
+        match err {
+            TensorErrors::SliceIndicesOutOfBounds { .. } => {}
+            _ => panic!("Incorrect error"),
+        }
+    }
+
+    #[test]
+    fn slicing_scalar_tensor() {
+        let t1 = Tensor::<i32>::new(shape![], vec![42]).unwrap();
+        let sliced = t1.slice(&[]).unwrap();
+        assert_eq!(sliced.clone_into_tensor(), t1);
+        assert_eq!(sliced.iter().copied().collect::<Vec<_>>(), [42]);
+    }
+
+    #[test]
+    fn slicing_empty_tensor() {
+        let t1 = Tensor::<i32>::new(shape![0, 3], vec![]).unwrap();
+        let sliced = t1.slice(&[0..0, 1..2]).unwrap();
+        let ans = Tensor::<i32>::new(shape![0, 1], vec![]).unwrap();
+
+        assert_eq!(sliced.clone_into_tensor(), ans);
+        assert_eq!(sliced.iter().count(), 0);
+    }
+
+    #[test]
+    fn cannot_flatten_scalar_tensor() {
+        let t1 = Tensor::<i32>::new(shape![], vec![42]).unwrap();
+        let error = t1.clone().flatten(0).err().unwrap();
+
+        match error {
+            TensorErrors::AxisOutOfBounds { .. } => {}
+            _ => panic!("Incorrect error"),
+        }
+    }
+
+    #[test]
+    fn flip_scalar_tensor() {
+        let t1 = Tensor::new(shape![], vec![42]).unwrap();
+
+        assert_eq!(t1.clone().flip(), t1);
+        assert_eq!(t1.clone().flip_mt(), t1);
+
+        let axes = HashSet::new();
+        assert_eq!(t1.clone().flip_axes(&axes).unwrap(), t1);
+        assert_eq!(t1.clone().flip_axes_mt(&axes).unwrap(), t1);
+
+        let mut invalid_axes = HashSet::new();
+        invalid_axes.insert(0);
+        let err = t1.clone().flip_axes(&invalid_axes).unwrap_err();
+        match err {
+            TensorErrors::AxisOutOfBounds { .. } => {}
+            _ => panic!("Incorrect error"),
+        }
+    }
+
+    #[test]
+    fn collect_empty_tensor() {
+        let empty_vec: Vec<i32> = vec![];
+        let t: Tensor<i32> = empty_vec.into_iter().collect();
+
+        assert_eq!(t.rank(), 1);
+        assert_eq!(t.shape()[0], 0);
+        assert!(t.elements().is_empty());
+    }
+
+    #[test]
+    fn enumerated_iter() {
+        let mut t1 = Tensor::<i32>::new(shape![2, 2], vec![1, 2, 3, 4]).unwrap();
+
+        let expected = vec![
+            (vec![0, 0], 1),
+            (vec![0, 1], 2),
+            (vec![1, 0], 3),
+            (vec![1, 1], 4),
+        ];
+
+        let actual: Vec<(Vec<usize>, i32)> = t1
+            .enumerated_iter()
+            .map(|(idx, value)| (idx, *value))
+            .collect();
+        assert_eq!(actual, expected);
+
+        for (idx, val) in t1.enumerated_iter_mut() {
+            *val += idx.iter().sum::<usize>() as i32;
+        }
+
+        let expected_mut = vec![
+            (vec![0, 0], 1), // 1 + 0
+            (vec![0, 1], 3), // 2 + 1
+            (vec![1, 0], 4), // 3 + 1
+            (vec![1, 1], 6), // 4 + 2
+        ];
+        let actual_mut: Vec<(Vec<usize>, i32)> =
+            t1.enumerated_iter().map(|(i, v)| (i, *v)).collect();
+        assert_eq!(actual_mut, expected_mut);
+    }
+
+    #[test]
+    fn enumerated_iter_rank_0() {
+        let mut t1 = Tensor::<i32>::new(shape![], vec![42]).unwrap();
+
+        let expected = vec![(vec![], 42)];
+        let actual: Vec<(Vec<usize>, i32)> = t1
+            .enumerated_iter()
+            .map(|(idx, value)| (idx, *value))
+            .collect();
+        assert_eq!(actual, expected);
+
+        for (idx, val) in t1.enumerated_iter_mut() {
+            assert!(idx.is_empty());
+            *val += 1;
+        }
+        assert_eq!(t1.elements()[0], 43);
+    }
+
+    #[test]
+    fn enumerated_iter_empty() {
+        let mut t1 = Tensor::<i32>::new(shape![0, 2], vec![]).unwrap();
+
+        assert_eq!(t1.enumerated_iter().count(), 0);
+        for (_, _) in t1.enumerated_iter_mut() {
+            panic!("Should not iterate over empty tensor");
+        }
+    }
+
+    #[test]
+    fn enumerated_par_iter_and_mut() {
+        let mut t1 = Tensor::<i32>::new(shape![2, 2], vec![1, 2, 3, 4]).unwrap();
+
+        let expected = vec![
+            (vec![0, 0], 1),
+            (vec![0, 1], 2),
+            (vec![1, 0], 3),
+            (vec![1, 1], 4),
+        ];
+
+        let actual: Vec<(Vec<usize>, i32)> = t1
+            .enumerated_par_iter()
+            .map(|(idx, value)| (idx, *value))
+            .collect();
+        assert_eq!(actual, expected);
+
+        t1.enumerated_par_iter_mut().for_each(|(idx, val)| {
+            *val += idx.iter().sum::<usize>() as i32;
+        });
+
+        let expected_mut = vec![
+            (vec![0, 0], 1),
+            (vec![0, 1], 3),
+            (vec![1, 0], 4),
+            (vec![1, 1], 6),
+        ];
+        let actual_mut: Vec<(Vec<usize>, i32)> =
+            t1.enumerated_par_iter().map(|(i, v)| (i, *v)).collect();
+        assert_eq!(actual_mut, expected_mut);
+    }
+
+    #[test]
+    fn enumerated_par_iter_rank_0_and_mut() {
+        let mut t1 = Tensor::<i32>::new(shape![], vec![42]).unwrap();
+
+        let expected = vec![(vec![], 42)];
+        let actual: Vec<(Vec<usize>, i32)> = t1
+            .enumerated_par_iter()
+            .map(|(idx, value)| (idx, *value))
+            .collect();
+        assert_eq!(actual, expected);
+
+        t1.enumerated_par_iter_mut().for_each(|(idx, val)| {
+            assert!(idx.is_empty());
+            *val += 1;
+        });
+        assert_eq!(t1.elements()[0], 43);
+    }
+
+    #[test]
+    fn enumerated_par_iter_empty_and_mut() {
+        let mut t1 = Tensor::<i32>::new(shape![0, 2], vec![]).unwrap();
+
+        assert_eq!(t1.enumerated_par_iter().count(), 0);
+        t1.enumerated_par_iter_mut().for_each(|(_, _)| {
+            panic!("Should not iterate over empty tensor");
+        });
+    }
+
+    #[test]
+    fn concat_scalar_tensors() {
+        let t1 = Tensor::new(shape![], vec![1]).unwrap();
+        let t2 = Tensor::new(shape![], vec![2]).unwrap();
+
+        let err = t1.clone().concat(t2.clone(), 0).unwrap_err();
+        match err {
+            TensorErrors::AxisOutOfBounds { .. } => {}
+            _ => panic!("Incorrect error"),
+        }
+    }
+
+    #[test]
+    fn concat_with_empty_tensor() {
+        let t1 = Tensor::<i32>::from_shape(shape![2, 3]);
+        let t2 = Tensor::<i32>::new(shape![0, 3], vec![]).unwrap();
+
+        let res = t1.clone().concat(t2.clone(), 0).unwrap();
+        assert_eq!(res.shape(), shape![2, 3]);
+        assert_eq!(res.elements(), t1.elements());
+
+        let t3 = Tensor::<i32>::new(shape![2, 0], vec![]).unwrap();
+        let res2 = t1.clone().concat(t3.clone(), 1).unwrap();
+        assert_eq!(res2.shape(), shape![2, 3]);
+        assert_eq!(res2.elements(), t1.elements());
+
+        // Test concatenating into an empty tensor
+        let res3 = t2.clone().concat(t1.clone(), 0).unwrap();
+        assert_eq!(res3.shape(), shape![2, 3]);
+        assert_eq!(res3.elements(), t1.elements());
+    }
+
+    #[test]
+    fn concat_multithreaded_with_empty_tensor() {
+        let t1 = Tensor::<i32>::from_shape(shape![100, 10]);
+        let t2 = Tensor::<i32>::new(shape![0, 10], vec![]).unwrap();
+
+        let res = t1.clone().concat(t2.clone(), 0).unwrap();
+        assert_eq!(res.shape(), shape![100, 10]);
+        assert_eq!(res.elements(), t1.elements());
+
+        let res2 = t2.clone().concat(t1.clone(), 0).unwrap();
+        assert_eq!(res2.shape(), shape![100, 10]);
+        assert_eq!(res2.elements(), t1.elements());
+    }
+
+    #[test]
+    fn constructors_maps_and_reshape_cover_scalar_and_empty_shapes() {
+        let scalar = Tensor::<i32>::from_value(shape![], 7);
+        assert_eq!(scalar.shape(), shape![]);
+        assert_eq!(scalar.elements(), &[7]);
+        assert_eq!(Tensor::<i32>::from_shape(shape![]).elements(), &[0]);
+        assert_eq!(Tensor::<i32>::zeros(shape![0, 3]).elements(), &[]);
+        assert_eq!(Tensor::<i32>::default().shape(), shape![1]);
+
+        assert_eq!(
+            scalar.clone().map(|value| value * 2),
+            Tensor::new(shape![], vec![14]).unwrap()
+        );
+        assert_eq!(
+            scalar.clone().par_map(|value| value * 2),
+            Tensor::new(shape![], vec![14]).unwrap()
+        );
+        assert_eq!(
+            scalar.map_refs(|value| value + 1),
+            Tensor::new(shape![], vec![8]).unwrap()
+        );
+        assert_eq!(
+            scalar.par_map_refs(|value| value + 1),
+            Tensor::new(shape![], vec![8]).unwrap()
+        );
+
+        let empty = Tensor::<i32>::zeros(shape![2, 0, 3]);
+        assert_eq!(
+            empty.clone().map(|value| value + 1).shape(),
+            shape![2, 0, 3]
+        );
+        assert_eq!(empty.clone().par_map(|value| value + 1), empty);
+        assert_eq!(empty.map_refs(|value| value + 1), empty);
+        assert_eq!(empty.par_map_refs(|value| value + 1), empty);
+        assert_eq!(
+            Tensor::new(shape![], vec![9])
+                .unwrap()
+                .reshape(shape![1])
+                .unwrap(),
+            Tensor::new(shape![1], vec![9]).unwrap()
+        );
+    }
+
+    #[test]
+    fn zero_sized_tensor_set_all_flip_transpose_and_clip_preserve_shape() {
+        let mut empty = Tensor::<i32>::new(shape![2, 0, 3], vec![]).unwrap();
+        empty
+            .set_all(&Tensor::new(shape![2, 0, 3], vec![]).unwrap())
+            .unwrap();
+        let source = Tensor::<i32>::new(shape![2, 0, 3], vec![]).unwrap();
+        empty.set_all_from_slice(&source.as_tensor_slice()).unwrap();
+        assert_eq!(empty.clone().flip_axis(1).unwrap(), empty);
+        assert_eq!(empty.clone().flip_axis_mt(1).unwrap(), empty);
+        assert_eq!(
+            empty
+                .clone()
+                .transpose(&transpose![2, 1, 0])
+                .unwrap()
+                .shape(),
+            shape![3, 0, 2]
+        );
+        assert_eq!(
+            empty
+                .clone()
+                .transpose_mt(&transpose![2, 1, 0])
+                .unwrap()
+                .shape(),
+            shape![3, 0, 2]
+        );
+        assert_eq!(empty.clone().clip(-1, 1), empty);
+        assert_eq!(empty.clone().par_clip(-1, 1), empty);
+
+        let mut scalar = Tensor::new(shape![], vec![1]).unwrap();
+        scalar
+            .set_all(&Tensor::new(shape![], vec![2]).unwrap())
+            .unwrap();
+        assert_eq!(scalar.elements(), &[2]);
+        let scalar_source = Tensor::new(shape![], vec![3]).unwrap();
+        scalar
+            .set_all_from_slice(&scalar_source.as_tensor_slice())
+            .unwrap();
+        assert_eq!(scalar.elements(), &[3]);
+        assert_eq!(scalar.clone().clip(0, 2).elements(), &[2]);
+    }
+
+    #[test]
+    fn valid_set_all() {
+        let mut t1 = Tensor::<i32>::new(shape![2, 2], vec![1, 2, 3, 4]).unwrap();
+        let t2 = Tensor::<i32>::new(shape![2, 2], vec![5, 6, 7, 8]).unwrap();
+        t1.set_all(&t2).unwrap();
+        let ans = Tensor::<i32>::new(shape![2, 2], vec![5, 6, 7, 8]).unwrap();
+        assert_eq!(t1, ans);
+    }
+
+    #[test]
+    fn invalid_set_all() {
+        let mut t1 = Tensor::<i32>::new(shape![2, 2], vec![1, 2, 3, 4]).unwrap();
+        let t2 = Tensor::<i32>::new(shape![3, 3], vec![5, 6, 7, 8, 9, 10, 11, 12, 13]).unwrap();
+        let err = t1.set_all(&t2).unwrap_err();
+        assert!(matches!(err, TensorErrors::IncompatibleShapes { .. }));
+    }
+
+    #[test]
+    fn set_all_from_slice() {
+        let mut t1 = Tensor::<i32>::new(shape![2, 2], vec![1, 2, 3, 4]).unwrap();
+        let source = Tensor::<i32>::new(shape![2, 2], vec![5, 6, 7, 8]).unwrap();
+        t1.set_all_from_slice(&source.as_tensor_slice()).unwrap();
+        let ans = Tensor::<i32>::new(shape![2, 2], vec![5, 6, 7, 8]).unwrap();
+        assert_eq!(t1, ans);
+    }
+
+    #[test]
+    fn invalid_set_all_from_slice() {
+        let mut t1 = Tensor::<i32>::new(shape![2, 2], vec![1, 2, 3, 4]).unwrap();
+        let source = Tensor::<i32>::new(shape![3, 3], vec![5, 6, 7, 8, 9, 10, 11, 12, 13]).unwrap();
+        let err = t1
+            .set_all_from_slice(&source.as_tensor_slice())
+            .unwrap_err();
+        assert!(matches!(err, TensorErrors::IncompatibleShapes { .. }));
+    }
+
+    #[test]
+    fn as_tensor_slice_and_slice_mut() {
+        let mut t1 = Tensor::<i32>::new(shape![2, 2], vec![1, 2, 3, 4]).unwrap();
+        let slice = t1.as_tensor_slice();
+        assert_eq!(slice.shape(), shape![2, 2]);
+        assert_eq!(slice.iter().copied().collect::<Vec<_>>(), vec![1, 2, 3, 4]);
+
+        let mut slice_mut = t1.as_tensor_slice_mut();
+        assert_eq!(slice_mut.shape(), shape![2, 2]);
+        assert_eq!(
+            slice_mut.iter().copied().collect::<Vec<_>>(),
+            vec![1, 2, 3, 4]
+        );
+
+        // Modify the mutable slice and check if the original tensor is updated
+        slice_mut[&[0, 0]] = 10;
+        assert_eq!(t1.elements(), &[10, 2, 3, 4]);
+    }
+
+    #[test]
+    fn flip_invalid_axis_out_of_bounds() {
+        let t1 = Tensor::<i32>::new(shape![2, 2], vec![1, 2, 3, 4]).unwrap();
+        let err = t1.clone().flip_axis(2).unwrap_err();
+        assert!(matches!(err, TensorErrors::AxisOutOfBounds { .. }));
+
+        let err_mt = t1.flip_axis_mt(2).unwrap_err();
+        assert!(matches!(err_mt, TensorErrors::AxisOutOfBounds { .. }));
+    }
+
+    #[test]
+    fn concat_empty() {
+        let t1 = Tensor::<i32>::new(shape![0, 2], vec![]).unwrap();
+        let t2 = Tensor::<i32>::new(shape![0, 2], vec![]).unwrap();
+
+        let res1 = t1.clone().concat(t2.clone(), 0).unwrap();
+        let res2 = t1.clone().concat(t2.clone(), 1).unwrap();
+        assert_eq!(res1.shape(), shape![0, 2]);
+        assert_eq!(res1.elements(), &[]);
+        assert_eq!(res2.shape(), shape![0, 4]);
+        assert_eq!(res2.elements(), &[]);
+    }
+
+    #[test]
+    fn par_clip() {
+        let t1 = Tensor::<i32>::new(shape![3, 3], vec![1, 5, -1, 2, 3, -5, 12, 10, -10]).unwrap();
+        let t1_clipped = t1.clone().par_clip(0, 10);
+        let ans = Tensor::<i32>::new(shape![3, 3], vec![1, 5, 0, 2, 3, 0, 10, 10, 0]).unwrap();
+
+        assert_eq!(t1_clipped, ans);
+    }
+
+    #[test]
+    fn all_pools_are_same() {
+        let t1 = Tensor::<i32>::new(
+            shape![3, 3, 3],
+            vec![
+                1, 5, -1, 2, 3, -5, 12, 10, -10, 1, -4, 2, 9, 6, 8, -1, 0, -1, -8, 7, 4, 5, 1, 2,
+                -5, 3, 1,
+            ],
+        )
+        .unwrap();
+
+        let normal = t1
+            .pool(pool_max, &shape![2, 2, 2], &shape![2, 2, 2])
+            .unwrap();
+        let normal_mt = t1
+            .pool_mt(&pool_max, &shape![2, 2, 2], &shape![2, 2, 2])
+            .unwrap();
+        let indexed = t1
+            .pool_indexed(|_, m| pool_max(m), &shape![2, 2, 2], &shape![2, 2, 2])
+            .unwrap();
+        let indexed_mt = t1
+            .pool_indexed_mt(&|_, m| pool_max(m), &shape![2, 2, 2], &shape![2, 2, 2])
+            .unwrap();
+
+        assert_eq!(normal, normal_mt);
+        assert_eq!(normal, indexed);
+        assert_eq!(normal, indexed_mt);
+    }
+
+    #[test]
+    fn pool_kernel_shape_zero() {
+        let t1 = Tensor::<i32>::new(
+            shape![3, 3, 3],
+            vec![
+                1, 5, -1, 2, 3, -5, 12, 10, -10, 1, -4, 2, 9, 6, 8, -1, 0, -1, -8, 7, 4, 5, 1, 2,
+                -5, 3, 1,
+            ],
+        )
+        .unwrap();
+
+        let err = t1
+            .pool(pool_max, &shape![0, 2, 2], &shape![2, 2, 2])
+            .unwrap_err();
+        assert!(matches!(err, TensorErrors::ShapeContainsZero { .. }));
+
+        let err_mt = t1
+            .pool_mt(&pool_max, &shape![0, 2, 2], &shape![2, 2, 2])
+            .unwrap_err();
+        assert!(matches!(err_mt, TensorErrors::ShapeContainsZero { .. }));
+
+        let err_indexed = t1
+            .pool_indexed(|_, t| pool_max(t), &shape![0, 2, 2], &shape![2, 2, 2])
+            .unwrap_err();
+        assert!(matches!(err_indexed, TensorErrors::ShapeContainsZero { .. }));
+
+        let err_indexed_mt = t1
+            .pool_indexed_mt(&|_, t| pool_max(t), &shape![0, 2, 2], &shape![2, 2, 2])
+            .unwrap_err();
+        assert!(matches!(err_indexed_mt, TensorErrors::ShapeContainsZero { .. }));
     }
 }

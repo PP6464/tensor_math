@@ -68,17 +68,12 @@ impl Transpose {
 
     /// Swaps two axes.
     /// This fails if either axis is out of bounds.
-    pub fn swap_axes(mut self, axis1: usize, axis2: usize) -> Result<Self, TensorErrors> {
+    pub fn swap_axes(self, axis1: usize, axis2: usize) -> Result<Self, TensorErrors> {
         if axis1 >= self.permutation.len() || axis2 >= self.permutation.len() {
             return Err(TensorErrors::TransposePermutationInvalid);
         }
 
-        self.permutation.swap(axis1, axis2);
-
-        Ok(Transpose {
-            two_cycles: two_cycles_from_permutation(&self.permutation), // This allows for simplifying the two-cycles after the swap.
-            permutation: self.permutation,
-        })
+        Ok(unsafe { self.swap_axes_unchecked(axis1, axis2) })
     }
 
     /// Swaps two axes without bounds checking.
@@ -93,7 +88,7 @@ impl Transpose {
 
     /// Returns this transpose applied to `old_shape`.
     /// This fails if `old_shape.rank() != self.permutation().len()`.
-    pub fn new_shape(&self, mut old_shape: Shape) -> Result<Shape, TensorErrors> {
+    pub fn new_shape(&self, old_shape: Shape) -> Result<Shape, TensorErrors> {
         if old_shape.rank() != self.permutation.len() {
             return Err(TensorErrors::TransposeIncompatibleRank {
                 rank: old_shape.rank(),
@@ -101,11 +96,7 @@ impl Transpose {
             });
         }
 
-        for cycle in self.two_cycles.iter() {
-            old_shape.0.swap(cycle.0, cycle.1);
-        }
-
-        Ok(old_shape)
+        Ok(unsafe { self.new_shape_unchecked(old_shape) })
     }
 
     /// Returns this transpose applied to `old_shape`, without validity checking.
@@ -149,13 +140,7 @@ impl Transpose {
             });
         }
 
-        let mut new_index_vec = old_index.to_vec();
-
-        for &(i0, i1) in self.two_cycles.iter() {
-            new_index_vec.swap(i0, i1);
-        }
-
-        Ok(new_index_vec)
+        Ok(unsafe { self.new_index_unchecked(old_index.to_vec()) })
     }
 
     /// Returns this transpose applied to `old_index`, without validity checking.
@@ -200,5 +185,128 @@ impl Transpose {
         self.two_cycles.reverse();
 
         self
+    }
+}
+
+#[cfg(test)]
+mod transpose_tests {
+    use tensor_math::definitions::errors::TensorErrors;
+    use tensor_math::definitions::transpose::Transpose;
+    use tensor_math::{shape, transpose};
+
+    #[test]
+    fn old_and_new_shapes() {
+        let transpose = transpose![1, 0, 2];
+        let shape = shape![3, 4, 5];
+
+        let old_shape = transpose.old_shape(shape.clone()).unwrap();
+        let ans = transpose.clone().inverse().new_shape(shape).unwrap();
+
+        assert_eq!(old_shape, ans);
+
+        let shape = shape![2, 3];
+        let err = transpose.old_shape(shape.clone()).unwrap_err();
+        assert!(matches!(
+            err,
+            TensorErrors::TransposeIncompatibleRank { .. }
+        ));
+
+        let err = transpose.inverse().new_shape(shape).unwrap_err();
+        assert!(matches!(
+            err,
+            TensorErrors::TransposeIncompatibleRank { .. }
+        ));
+    }
+
+    #[test]
+    fn invalid_perm() {
+        let err = Transpose::new(&vec![4, 1]).unwrap_err();
+        assert!(matches!(err, TensorErrors::TransposePermutationInvalid));
+    }
+
+    #[test]
+    fn indices_do_not_match_rank() {
+        let transpose = transpose![1, 0, 2];
+        let index = vec![1, 2];
+
+        let err = transpose.new_index(&index).unwrap_err();
+        assert!(matches!(
+            err,
+            TensorErrors::TransposeIncompatibleRank { .. }
+        ));
+
+        let err = transpose.old_index(&index).unwrap_err();
+        assert!(matches!(
+            err,
+            TensorErrors::TransposeIncompatibleRank { .. }
+        ));
+    }
+
+    #[test]
+    fn default_perm() {
+        let transpose = Transpose::identity(3);
+        let ans = transpose![0, 1, 2];
+
+        assert_eq!(transpose, ans);
+    }
+
+    #[test]
+    fn swap_axes() {
+        let transpose = transpose![1, 0, 2];
+
+        let transpose = transpose.swap_axes(0, 1).unwrap();
+        assert_eq!(transpose![0, 1, 2], transpose);
+
+        let err = transpose.swap_axes(1, 10).unwrap_err();
+        assert!(matches!(err, TensorErrors::TransposePermutationInvalid));
+    }
+
+    #[test]
+    fn transpose_for_scalar_tensor() {
+        let transpose = Transpose::identity(0);
+        assert_eq!(transpose.permutation().len(), 0);
+
+        let shape = shape![];
+        let new_shape = transpose.new_shape(shape).unwrap();
+        assert_eq!(new_shape, shape![]);
+
+        let index = vec![];
+        let new_index = transpose.new_index(&index).unwrap();
+        assert_eq!(new_index.len(), 0);
+
+        assert_eq!(transpose.clone().inverse(), transpose);
+    }
+
+    #[test]
+    fn old_and_new_indices() {
+        let transpose = transpose![1, 0, 2];
+        let index = vec![1, 2, 3];
+
+        let new_index = transpose.new_index(&index).unwrap();
+
+        assert_eq!(new_index, vec![2, 1, 3]);
+
+        let old_index = transpose.old_index(&new_index).unwrap();
+
+        assert_eq!(index, old_index);
+    }
+
+    #[test]
+    fn two_cycles() {
+        let transpose = transpose![2, 0, 1];
+        let two_cycles = transpose.two_cycles();
+
+        for i in 0..3 {
+            let mut pos = i;
+            for cycle in two_cycles.iter().rev() {
+                assert!(cycle.0 < 3 && cycle.1 < 3);
+                if pos == cycle.0 {
+                    pos = cycle.1;
+                } else if pos == cycle.1 {
+                    pos = cycle.0;
+                }
+            }
+            assert_eq!(pos, transpose.permutation()[i]);
+        }
     }
 }

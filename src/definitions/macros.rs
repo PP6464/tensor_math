@@ -1,26 +1,24 @@
 #[macro_export]
 /// Creates a shape from varargs of type usize.
-/// You will need to import the Shape struct, at `tensor_math::definitions::shape::Shape;`
 macro_rules! shape {
     ($($shape_dimensions:expr),*$(,)?) => {
-        Shape::new(vec![$($shape_dimensions),*])
+        tensor_math::definitions::shape::Shape::new(vec![$($shape_dimensions),*])
     };
 }
 
 #[macro_export]
 /// Constructs a transpose using the specified permutation.
 /// Assumes the permutation is valid so will panic if it is not.
-/// You will need to import the Transpose struct, at `tensor_math::definitions::transpose::Transpose;`
 macro_rules! transpose {
     ($($x:expr),*$(,)?) => {
-        Transpose::new(&vec![$($x),*]).unwrap()
+        tensor_math::definitions::transpose::Transpose::new(&vec![$($x),*]).unwrap()
     };
 }
 
 #[macro_export]
-/// Implement an operation element-wise for tensors and matrices
+/// Implement an operation element-wise for tensors and matrices.
 /// Also allows you to implement operations with a tensor/matrix and a single value
-/// By applying the operation between it and each element of the tensor/matrix in turn
+/// By applying the operation between it and each element of the tensor/matrix in turn.
 macro_rules! impl_bin_op {
     ($op:ident, $op_fn:ident) => {
         impl<T: $op<Output = T>> $op<Tensor<T>> for Tensor<T> {
@@ -292,6 +290,41 @@ macro_rules! impl_bin_op {
 
             fn $op_fn(self, rhs: &T) -> Matrix<T> {
                 self.map_refs(|x| x.clone().$op_fn(rhs.clone()))
+            }
+        }
+    };
+}
+#[macro_export]
+
+/// Implement an assignment operation element-wise for tensors and matrices.
+macro_rules! impl_assign_op {
+    ($op:ident, $op_fn:ident) => {
+        impl<T: $op> $op<Tensor<T>> for Tensor<T> {
+            fn $op_fn(&mut self, rhs: Tensor<T>) {
+                assert_eq!(
+                    self.shape(),
+                    rhs.shape(),
+                    "{}",
+                    TensorErrors::IncompatibleShapes { shape_1: self.shape(), shape_2: rhs.shape(), op: "elementwise_op", }
+                );
+
+                for (a, b) in self.elements.iter_mut().zip(rhs.elements.into_iter()) {
+                    a.$op_fn(b);
+                }
+            }
+        }
+        impl<T: $op> $op<Matrix<T>> for Matrix<T> {
+            fn $op_fn(&mut self, rhs: Matrix<T>) {
+                assert_eq!(
+                    self.shape(),
+                    rhs.shape(),
+                    "{}",
+                    TensorErrors::IncompatibleShapes { shape_1: self.shape(), shape_2: rhs.shape(), op: "elementwise_op", }
+                );
+
+                for (a, b) in self.elements.iter_mut().zip(rhs.elements.into_iter()) {
+                    a.$op_fn(b);
+                }
             }
         }
     };

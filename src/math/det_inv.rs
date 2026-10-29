@@ -40,7 +40,8 @@ impl Matrix<f64> {
             return Ok(self.clone());
         }
 
-        let a_i_rref = unsafe { self.concat_cols_unchecked(identity(ord)) }.reduced_row_echelon();
+        let a_i_rref =
+            unsafe { self.concat_along_rows_unchecked(identity(ord)) }.reduced_row_echelon();
         let left = unsafe { a_i_rref.slice_unchecked(0..ord, 0..ord) };
         let right = unsafe { a_i_rref.slice_unchecked(0..ord, ord..2 * ord) };
 
@@ -87,7 +88,8 @@ impl Matrix<Complex64> {
             return Ok(self.clone());
         }
 
-        let a_i_rref = unsafe { self.concat_cols_unchecked(identity(ord)) }.reduced_row_echelon();
+        let a_i_rref =
+            unsafe { self.concat_along_rows_unchecked(identity(ord)) }.reduced_row_echelon();
         let left = a_i_rref.slice(0..ord, 0..ord)?;
         let right = a_i_rref.slice(0..ord, ord..2 * ord)?;
 
@@ -158,7 +160,9 @@ pub fn det_slow<T: Add<Output = T> + Mul<Output = T> + Sub<Output = T> + Clone +
             let slice = m
                 .slice_unchecked(1..ord, 0..i)
                 .clone_into_matrix()
-                .concat_cols_unchecked(m.slice_unchecked(1..ord, i + 1..ord).clone_into_matrix());
+                .concat_along_rows_unchecked(
+                    m.slice_unchecked(1..ord, i + 1..ord).clone_into_matrix(),
+                );
 
             if is_minus {
                 determinant = determinant - m[&[0, i]].clone() * det_slow(&slice)?
@@ -228,43 +232,43 @@ where
                     _ if i == 0 => m
                         .slice_unchecked(1..ord, 0..j)
                         .clone_into_matrix()
-                        .concat_cols_unchecked(
+                        .concat_along_rows_unchecked(
                             m.slice_unchecked(1..ord, j + 1..ord).clone_into_matrix(),
                         ),
                     _ if i == ord - 1 => m
                         .slice_unchecked(0..i, 0..j)
                         .clone_into_matrix()
-                        .concat_cols_unchecked(
+                        .concat_along_rows_unchecked(
                             m.slice_unchecked(0..i, j + 1..ord).clone_into_matrix(),
                         ),
                     _ if j == 0 => m
                         .slice_unchecked(0..i, 1..ord)
                         .clone_into_matrix()
-                        .concat_rows_unchecked(
+                        .concat_along_cols_unchecked(
                             m.slice_unchecked((i + 1)..ord, 1..ord).clone_into_matrix(),
                         ),
                     _ if j == ord - 1 => m
                         .slice_unchecked(0..i, 0..j)
                         .clone_into_matrix()
-                        .concat_rows_unchecked(
+                        .concat_along_cols_unchecked(
                             m.slice_unchecked((i + 1)..ord, 0..j).clone_into_matrix(),
                         ),
                     _ => {
                         let slice_top = m
                             .slice_unchecked(0..i, 0..j)
                             .clone_into_matrix()
-                            .concat_cols_unchecked(
+                            .concat_along_rows_unchecked(
                                 m.slice_unchecked(0..i, (j + 1)..ord).clone_into_matrix(),
                             );
                         let slice_bottom = m
                             .slice_unchecked((i + 1)..ord, 0..j)
                             .clone_into_matrix()
-                            .concat_cols_unchecked(
+                            .concat_along_rows_unchecked(
                                 m.slice_unchecked((i + 1)..ord, (j + 1)..ord)
                                     .clone_into_matrix(),
                             );
 
-                        slice_top.concat_rows_unchecked(slice_bottom)
+                        slice_top.concat_along_cols_unchecked(slice_bottom)
                     }
                 };
 
@@ -278,4 +282,216 @@ where
     }
 
     Ok(res / d)
+}
+
+#[cfg(test)]
+mod det_inv_tests {
+    use float_cmp::approx_eq;
+    use num::complex::Complex64;
+    use num::FromPrimitive;
+    use tensor_math::definitions::errors::TensorErrors;
+    use tensor_math::definitions::matrix::Matrix;
+    use tensor_math::definitions::traits::IntoMatrix;
+    use tensor_math::math::det_inv::{det_slow, inv_slow};
+    use tensor_math::utilities::matrix::eye;
+
+    #[test]
+    fn invalid_inversion_square_matrix_only() {
+        let m1 = Matrix::<f64>::new(3, 2, (0..6).map(f64::from).collect()).unwrap();
+
+        let err = inv_slow(&m1).unwrap_err();
+        assert!(matches!(err, TensorErrors::NonSquareMatrix));
+
+        let err = m1.clone().inv().unwrap_err();
+        assert!(matches!(err, TensorErrors::NonSquareMatrix));
+
+        let m2 = Matrix::new(
+            3,
+            2,
+            (0..6)
+                .map(Complex64::from_i32)
+                .map(|x| x.unwrap())
+                .collect(),
+        )
+        .unwrap();
+        let err = m2.clone().inv().unwrap_err();
+
+        assert!(matches!(err, TensorErrors::NonSquareMatrix));
+    }
+
+    #[test]
+    fn determinant() {
+        let m1 = Matrix::<i32>::new(3, 3, vec![5, -2, 1, 8, 9, -5, 1, 0, 2]).unwrap();
+        let m2 = vec![1].into_matrix();
+        let m3 = Matrix::<f64>::zeros(10, 10);
+
+        assert_eq!(det_slow(&m2).unwrap(), 1);
+        assert_eq!(det_slow(&m1).unwrap(), 123);
+        assert_eq!(det_slow(&m3).unwrap(), 0.0);
+        assert!(approx_eq!(
+            f64,
+            m1.clone().map(|x| x as f64).det().unwrap(),
+            123.0
+        ));
+        assert_eq!(m3.clone().det().unwrap(), 0.0);
+        assert_eq!(m3.into_complex().det().unwrap(), 0.0.into());
+    }
+
+    #[test]
+    fn invalid_det_square_matrix_only() {
+        let m1 = Matrix::<f64>::new(3, 2, (0..6).map(f64::from).collect()).unwrap();
+
+        let err = det_slow(&m1).unwrap_err();
+        assert!(matches!(err, TensorErrors::NonSquareMatrix));
+
+
+        let err = m1.clone().det().unwrap_err();
+        assert!(matches!(err, TensorErrors::NonSquareMatrix));
+
+
+        let m2 = Matrix::new(
+            3,
+            2,
+            (0..6)
+                .map(Complex64::from_i32)
+                .map(|x| x.unwrap())
+                .collect(),
+        )
+        .unwrap();
+
+        let err = m2.clone().det().unwrap_err();
+        assert!(matches!(err, TensorErrors::NonSquareMatrix));
+    }
+
+    #[test]
+    fn inverse() {
+        let m1 = Matrix::<f64>::new(3, 3, vec![3.0, 4.0, 5.0, 2.0, -1.0, 4.0, 3.0, -5.0, -10.0])
+            .unwrap();
+        let inverse = inv_slow(&m1).unwrap();
+        let fast_inverse = m1.clone().inv().unwrap();
+        let ans = Matrix::<f64>::new(
+            3,
+            3,
+            vec![
+                10.0 / 61.0,
+                5.0 / 61.0,
+                7.0 / 61.0,
+                32.0 / 183.0,
+                -15.0 / 61.0,
+                -2.0 / 183.0,
+                -7.0 / 183.0,
+                9.0 / 61.0,
+                -11.0 / 183.0,
+            ],
+        )
+        .unwrap();
+
+        assert!(approx_eq!(
+            Matrix<f64>,
+            inverse.clone(),
+            ans.clone(),
+            epsilon = 1e-15
+        ));
+        assert!(approx_eq!(Matrix<f64>, fast_inverse, ans, epsilon = 1e-15));
+        assert!(m1
+            .mat_mul(inverse.clone())
+            .unwrap()
+            .enumerated_iter()
+            .all(|(i, x)| { approx_eq!(f64, *x, eye::<f64>(3)[i], epsilon = 1e-15) }));
+
+        let m2 = Matrix::new(
+            2,
+            2,
+            vec![
+                Complex64 { re: 1.0, im: 1.0 },
+                Complex64 { re: 1.0, im: 0.0 },
+                Complex64 { re: -1.0, im: 1.0 },
+                Complex64 { re: 0.0, im: -1.0 },
+            ],
+        )
+        .unwrap();
+
+        let slow_res = inv_slow(&m2).unwrap();
+        let fast_res = m2.clone().inv().unwrap();
+        let ans = Matrix::new(
+            2,
+            2,
+            vec![
+                Complex64 {
+                    re: 0.25,
+                    im: -0.25,
+                },
+                Complex64 {
+                    re: -0.25,
+                    im: -0.25,
+                },
+                Complex64 { re: 0.5, im: 0.0 },
+                Complex64 { re: 0.0, im: 0.5 },
+            ],
+        )
+        .unwrap();
+
+        assert!(approx_eq!(
+            Matrix<Complex64>,
+            slow_res.clone(),
+            ans.clone(),
+            epsilon = 1e-15
+        ));
+        assert!(approx_eq!(
+            Matrix<Complex64>,
+            fast_res,
+            ans,
+            epsilon = 1e-15
+        ));
+        assert!(m2
+            .mat_mul(slow_res.clone())
+            .unwrap()
+            .enumerated_iter()
+            .all(|(i, x)| {
+                approx_eq!(f64, x.re, eye(3)[i], epsilon = 1e-15);
+                approx_eq!(f64, x.im, 0.0, epsilon = 1e-15)
+            }));
+    }
+
+    #[test]
+    fn inverse_det_0() {
+        let m1 = Matrix::<f64>::new(3, 3, vec![0.0; 9]).unwrap();
+        let m2 = Matrix::new(
+            2,
+            2,
+            vec![
+                Complex64 { re: 1.0, im: 1.0 },
+                Complex64 { re: 1.0, im: 0.0 },
+                Complex64 { re: 1.0, im: 1.0 },
+                Complex64 { re: 1.0, im: 0.0 },
+            ],
+        )
+        .unwrap();
+
+        let err = inv_slow(&m1).unwrap_err();
+        assert!(matches!(err, TensorErrors::DeterminantZero));
+
+        let err = m1.clone().inv().unwrap_err();
+        assert!(matches!(err, TensorErrors::DeterminantZero));
+
+        let err = m2.clone().inv().unwrap_err();
+        assert!(matches!(err, TensorErrors::DeterminantZero));
+    }
+
+    #[test]
+    fn empty_matrix_det_inv() {
+        let m_f64 = Matrix::<f64>::new(0, 0, vec![]).unwrap();
+        let m_complex = Matrix::<Complex64>::new(0, 0, vec![]).unwrap();
+
+        // f64 tests
+        assert_eq!(m_f64.clone().det().unwrap(), 1.0);
+        assert_eq!(det_slow(&m_f64).unwrap(), 1.0);
+        assert_eq!(m_f64.clone().inv().unwrap().rows(), 0);
+        assert_eq!(inv_slow(&m_f64).unwrap().rows(), 0);
+
+        // Complex64 tests
+        assert_eq!(m_complex.clone().det().unwrap(), Complex64::new(1.0, 0.0));
+        assert_eq!(m_complex.clone().inv().unwrap().rows(), 0);
+        assert_eq!(inv_slow(&m_complex).unwrap().rows(), 0);
+    }
 }
