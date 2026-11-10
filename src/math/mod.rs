@@ -17,3 +17,4 @@ pub mod polynomials;
 pub mod row_echelon;
 pub mod sum;
 pub mod transformation_rank;
+mod fft_internals;

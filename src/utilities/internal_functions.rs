@@ -1,15 +1,17 @@
-use num::complex::Complex64;
-use num::{One, Zero};
+use num::Zero;
 use rayon::iter::IndexedParallelIterator;
-use rayon::iter::IntoParallelRefMutIterator;
 use rayon::iter::ParallelIterator;
 use rayon::prelude::ParallelSliceMut;
 use rayon::slice::ParallelSlice;
-use std::f64::consts::PI;
 use std::ops::{AddAssign, Mul};
 
+const PARALLEL_THRESHOLD: usize = 4096;
+
 /// This computes the dot product of two vectors of any type `T` that implements `Add` and `Mul`
-pub fn dot_vectors<T: AddAssign + Mul<Output = T> + Zero + Clone>(vec1: &[T], vec2: &[T]) -> T {
+pub(crate) fn dot_vectors<T: AddAssign + Mul<Output = T> + Zero + Clone>(
+    vec1: &[T],
+    vec2: &[T],
+) -> T {
     // Use accumulators so that the compiler can optimise this when possible
     let mut acc = [T::zero(), T::zero(), T::zero(), T::zero()];
 
@@ -40,7 +42,7 @@ pub fn dot_vectors<T: AddAssign + Mul<Output = T> + Zero + Clone>(vec1: &[T], ve
 }
 
 /// This computes the dot product of two vectors using many threads.
-pub fn dot_vectors_mt<T: AddAssign + Mul<Output = T> + Zero + Clone + Send + Sync>(
+pub(crate) fn dot_vectors_mt<T: AddAssign + Mul<Output = T> + Zero + Clone + Send + Sync>(
     vec1: &[T],
     vec2: &[T],
 ) -> T {
@@ -50,818 +52,63 @@ pub fn dot_vectors_mt<T: AddAssign + Mul<Output = T> + Zero + Clone + Send + Syn
         .reduce(|| T::zero(), |a, b| a + b)
 }
 
-/// This computes the FFT of a vector of Complex64 values
-/// where the length of the vector is a power of 2. This
-pub fn radix_2_fft_vec(x: &[Complex64]) -> Vec<Complex64> {
-    let n = x.len();
-
-    if n == 0 {
-        return vec![];
-    }
-
-    let log2_n = n.trailing_zeros() as usize;
-    let mut res = x.to_vec();
-
-    let omega = Complex64::from_polar(1.0, -2.0 * PI / n as f64);
-
-    // Bit-reverse indices
-    res.par_chunks_mut(4096)
-        .enumerate()
-        .for_each(|(chunk_i, vals)| {
-            for i in chunk_i * 4096..chunk_i * 4096 + vals.len() {
-                let mut orig = i;
-                let mut rev = 0;
-
-                for _ in 0..log2_n {
-                    rev <<= 1;
-                    rev |= orig & 1;
-                    orig >>= 1;
-                }
-
-                vals[i & 4095] = x[rev];
-            }
-        });
-
-    // Compute twiddle factors
-    let mut twiddle_factors: Vec<Complex64> = Vec::with_capacity(n);
-    twiddle_factors.push(Complex64::one());
-
-    for _ in 1..n {
-        twiddle_factors.push(twiddle_factors.last().unwrap() * omega);
-    }
-
-    // FFT Butterfly
-    for iters in 1..=log2_n {
-        let half_len = (1 << iters) >> 1;
-        let n_chunks = n >> iters;
-
-        // Only parallelise when the work is significant
-        if n_chunks >= 8 {
-            res.par_chunks_mut(1 << iters).for_each(|chunk| {
-                let (firsts, seconds) = chunk.split_at_mut(half_len);
-
-                if half_len >= 512 {
-                    firsts
-                        .par_iter_mut()
-                        .zip(seconds.par_iter_mut())
-                        .enumerate()
-                        .for_each(|(i, (first_val, second_val))| {
-                            let twiddle_index = (n >> iters) * (i & (n - 1));
-                            let twiddle = twiddle_factors[twiddle_index];
-
-                            let first = *first_val;
-                            let second = *second_val;
-
-                            *first_val = first + twiddle * second;
-                            *second_val = first - twiddle * second;
-                        });
-                } else {
-                    firsts
-                        .iter_mut()
-                        .zip(seconds.iter_mut())
-                        .enumerate()
-                        .for_each(|(i, (first_val, second_val))| {
-                            let twiddle_index = (n >> iters) * (i & (n - 1));
-                            let twiddle = twiddle_factors[twiddle_index];
-
-                            let first = *first_val;
-                            let second = *second_val;
-
-                            *first_val = first + twiddle * second;
-                            *second_val = first - twiddle * second;
-                        });
-                }
-            });
-        } else {
-            res.chunks_mut(1 << iters).for_each(|chunk| {
-                let (firsts, seconds) = chunk.split_at_mut(half_len);
-                if half_len >= 512 {
-                    firsts
-                        .par_iter_mut()
-                        .zip(seconds.par_iter_mut())
-                        .enumerate()
-                        .for_each(|(i, (first_val, second_val))| {
-                            let twiddle_index = (n >> iters) * (i & (n - 1));
-                            let twiddle = twiddle_factors[twiddle_index];
-
-                            let first = *first_val;
-                            let second = *second_val;
-
-                            *first_val = first + twiddle * second;
-                            *second_val = first - twiddle * second;
-                        });
-                } else {
-                    firsts
-                        .iter_mut()
-                        .zip(seconds.iter_mut())
-                        .enumerate()
-                        .for_each(|(i, (first_val, second_val))| {
-                            let twiddle_index = (n >> iters) * (i & (n - 1));
-                            let twiddle = twiddle_factors[twiddle_index];
-
-                            let first = *first_val;
-                            let second = *second_val;
-
-                            *first_val = first + twiddle * second;
-                            *second_val = first - twiddle * second;
-                        });
-                }
-            });
-        }
-    }
-
-    res
-}
-
-/// Computes an FFT for an arbitrarily long vector using the Bluestein method.
-pub fn bluestein_fft_vec(x: &[Complex64]) -> Vec<Complex64> {
-    let n = x.len();
-    if n == 0 {
-        return vec![];
-    }
-
-    let l = ((n << 1) - 1).next_power_of_two();
-
-    let mut res = vec![Complex64::zero(); n];
-    let mut u = vec![Complex64::zero(); l];
-    let mut v = vec![Complex64::zero(); l];
-    let mut v_star = vec![Complex64::zero(); n];
-
-    for i in 0..n {
-        let w_i = Complex64::from_polar(1.0, -PI * (i * i) as f64 / n as f64);
-
-        u[i] = x[i] * w_i;
-        v[i] = w_i.conj();
-        v_star[i] = w_i;
-
-        if i > 0 {
-            v[l - i] = v[i];
-        }
-    }
-
-    u = radix_2_fft_vec(&u);
-    v = radix_2_fft_vec(&v);
-
-    // Note that IFFT(x) = FFT(x.conj_each()).conj_each()
-    let mut conv_res = (0..l).map(|i| (u[i] * v[i]).conj()).collect::<Vec<_>>();
-    conv_res = radix_2_fft_vec(&conv_res)
-        .iter()
-        .map(|x| x.conj() / l as f64)
-        .collect();
-
-    for i in 0..n {
-        res[i] = conv_res[i] * v_star[i];
-    }
-
-    res
-}
-
-/// Computes an FFT for an arbitrarily long vector, using radix 2 FFT
-/// directly where appropriate, otherwise using the Bluestein method.
-pub fn fft_vec(x: &[Complex64]) -> Vec<Complex64> {
-    let n = x.len();
-    if n == 0 {
-        return vec![];
-    }
-
-    if n & (n - 1) == 0 {
-        radix_2_fft_vec(x)
+/// Splits (mutable) work between parallel and sequential processing.
+/// Change `PARALLEL_THRESHOLD` to adjust the threshold for parallel processing.
+pub(crate) fn for_each_chunk_mut<T, F>(data: &mut [T], func: F, chunk_size: usize)
+where
+    T: Send + Sync,
+    F: Fn(usize, &mut [T]) + Send + Sync,
+{
+    if chunk_size >= PARALLEL_THRESHOLD && data.len() >= PARALLEL_THRESHOLD {
+        data.par_chunks_mut(chunk_size)
+            .enumerate()
+            .for_each(|(i, chunk)| func(i, chunk));
+    } else if data.len() >= PARALLEL_THRESHOLD {
+        data.chunks_mut(chunk_size)
+            .enumerate()
+            .for_each(|(i, chunk)| func(i, chunk));
     } else {
-        bluestein_fft_vec(x)
+        func(0, data);
     }
 }
 
-/// Computes an inverse FFT using the `fft` function and the identity
-/// IFFT(x) === 1/N × FFT(x*)* where * means conjugating every element
-/// and N is the size of the list x.
-pub fn ifft_vec(x: &[Complex64]) -> Vec<Complex64> {
-    let n = x.len() as f64;
-    if n == 0.0 {
-        return vec![];
+/// Like for_each_chunk_mut, but for two mutable slices of the same length.
+/// The function `func` is called with the index of the chunk and two mutable slices of the same length.
+pub(crate) fn for_each_chunk_mut_pair<T, F>(
+    first: &mut [T],
+    second: &mut [T],
+    func: F,
+    chunk_size: usize,
+) where
+    T: Send + Sync,
+    F: Fn(usize, &mut [T], &mut [T]) + Send + Sync,
+{
+    assert_eq!(first.len(), second.len());
+    if chunk_size >= PARALLEL_THRESHOLD && first.len() >= PARALLEL_THRESHOLD {
+        first
+            .par_chunks_mut(chunk_size)
+            .zip(second.par_chunks_mut(chunk_size))
+            .enumerate()
+            .for_each(|(i, (first, second))| func(i, first, second));
+    } else if first.len() >= PARALLEL_THRESHOLD {
+        first
+            .chunks_mut(chunk_size)
+            .zip(second.chunks_mut(chunk_size))
+            .enumerate()
+            .for_each(|(i, (first, second))| func(i, first, second));
+    } else {
+        func(0, first, second);
     }
-    fft_vec(&x.iter().map(|z| z.conj()).collect::<Vec<_>>())
-        .iter()
-        .map(|z| z.conj() / n)
-        .collect()
 }
-
 
 #[cfg(test)]
 mod internal_functions_tests {
+    use crate::utilities::internal_functions::PARALLEL_THRESHOLD;
     use float_cmp::approx_eq;
     use num::complex::Complex64;
     use tensor_math::utilities::internal_functions::{
-        bluestein_fft_vec, dot_vectors, dot_vectors_mt, fft_vec, ifft_vec, radix_2_fft_vec,
+        dot_vectors, dot_vectors_mt, for_each_chunk_mut, for_each_chunk_mut_pair,
     };
-
-    #[test]
-    fn radix_2_vec_fft_test() {
-        let v1 = vec![
-            Complex64::new(1.0, 0.0),
-            Complex64::new(2.0, -1.0),
-            Complex64::new(3.0, 2.0),
-            Complex64::new(4.0, -5.0),
-            Complex64::new(6.0, 7.0),
-            Complex64::new(8.0, -4.0),
-            Complex64::new(2.0, 1.0),
-            Complex64::new(0.0, 0.0),
-        ];
-        let v2 = vec![
-            Complex64 { re: 0.0, im: 1.0 },
-            Complex64 {
-                re: -0.1453217681275245,
-                im: -3.6026214877097886,
-            },
-            Complex64 {
-                re: -1.3968022466674206,
-                im: 0.2212317420824741,
-            },
-            Complex64 {
-                re: 6.39622598104463,
-                im: -0.29714171603742257,
-            },
-            Complex64 {
-                re: -2.3576391889522714,
-                im: 10.365400978964416,
-            },
-            Complex64 { re: 0.0, im: 0.0 },
-            Complex64 { re: 0.0, im: 0.0 },
-            Complex64 { re: 0.0, im: 0.0 },
-            Complex64 { re: 0.0, im: 0.0 },
-            Complex64 { re: 0.0, im: 0.0 },
-            Complex64 { re: 0.0, im: 0.0 },
-            Complex64 { re: 0.0, im: 0.0 },
-            Complex64 { re: 0.0, im: 0.0 },
-            Complex64 { re: 0.0, im: 0.0 },
-            Complex64 { re: 0.0, im: 0.0 },
-            Complex64 { re: 0.0, im: 0.0 },
-        ];
-        let res1 = radix_2_fft_vec(&v1);
-        let res2 = radix_2_fft_vec(&v2);
-
-        let ans1 = vec![
-            Complex64 { re: 26.0, im: 0.0 },
-            Complex64 {
-                re: -12.485281374238571,
-                im: -0.9289321881345245,
-            },
-            Complex64 {
-                re: 2.0,
-                im: -2.0000000000000018,
-            },
-            Complex64 {
-                re: -0.34314575050761853,
-                im: -10.242640687119287,
-            },
-            Complex64 { re: -2.0, im: 20.0 },
-            Complex64 {
-                re: 4.485281374238571,
-                im: -15.071067811865476,
-            },
-            Complex64 {
-                re: 2.0,
-                im: 10.000000000000002,
-            },
-            Complex64 {
-                re: -11.656854249492381,
-                im: -1.7573593128807126,
-            },
-        ];
-        let ans2 = vec![
-            Complex64 {
-                re: 2.4964627772974133,
-                im: 7.686869517299678,
-            },
-            Complex64 {
-                re: 10.194430302685799,
-                im: -4.794067509264503,
-            },
-            Complex64 {
-                re: -4.804250848251911,
-                im: -14.725982651422731,
-            },
-            Complex64 {
-                re: -18.400909719645895,
-                im: 0.9514637996861768,
-            },
-            Complex64 {
-                re: -4.266316713957217,
-                im: 17.685716986054096,
-            },
-            Complex64 {
-                re: 13.946932312659404,
-                im: 5.899646309853949,
-            },
-            Complex64 {
-                re: 4.004431213373595,
-                im: -12.84493282150859,
-            },
-            Complex64 {
-                re: -15.4761803961386,
-                im: -4.600523633014343,
-            },
-            Complex64 {
-                re: -10.005345648536798,
-                im: 15.4863959247941,
-            },
-            Complex64 {
-                re: 8.873863904133222,
-                im: 13.797591498439782,
-            },
-            Complex64 {
-                re: 9.961992710321402,
-                im: -1.211214813171261,
-            },
-            Complex64 {
-                re: -0.041646627012200454,
-                im: -2.0042344264809056,
-            },
-            Complex64 {
-                re: 2.3446428293875154,
-                im: 4.602621487709789,
-            },
-            Complex64 {
-                re: 8.446377396379242,
-                im: -1.472613543220143,
-            },
-            Complex64 {
-                re: 0.2683836803659996,
-                im: -8.679473629755085,
-            },
-            Complex64 {
-                re: -7.542867173060969,
-                im: 0.2227375039999857,
-            },
-        ];
-
-        for i in 0..8 {
-            assert!(approx_eq!(f64, res1[i].re, ans1[i].re, epsilon = 1e-10));
-            assert!(approx_eq!(f64, res1[i].im, ans1[i].im, epsilon = 1e-10));
-        }
-
-        for i in 0..16 {
-            assert!(approx_eq!(f64, res2[i].re, ans2[i].re, epsilon = 1e-10));
-            assert!(approx_eq!(f64, res2[i].im, ans2[i].im, epsilon = 1e-10));
-        }
-    }
-
-    #[test]
-    fn large_ffts_test() {
-        let v1 = (0..10000)
-            .map(|i| Complex64::new(i as f64, (i % 10) as f64))
-            .collect::<Vec<_>>();
-        let res1 = fft_vec(&v1);
-        let original = ifft_vec(&res1);
-
-        for i in 0..10000 {
-            assert!(approx_eq!(
-                f64,
-                original[i].re,
-                v1[i].re,
-                epsilon = 1e-5
-            ));
-            assert!(approx_eq!(
-                f64,
-                original[i].im,
-                v1[i].im,
-                epsilon = 1e-5
-            ));
-        }
-
-        let v2 = (0..1<<15)
-            .map(|i| Complex64::new((i % 10) as f64, i as f64))
-            .collect::<Vec<_>>();
-
-        let res2 = fft_vec(&v2);
-        let original2 = ifft_vec(&res2);
-        for i in 0..1<<15 {
-            assert!(approx_eq!(
-                f64,
-                original2[i].re,
-                v2[i].re,
-                epsilon = 1e-5
-            ));
-            assert!(approx_eq!(
-                f64,
-                original2[i].im,
-                v2[i].im,
-                epsilon = 1e-5
-            ));
-        }
-    }
-
-    #[test]
-    fn bluestein_fft_test() {
-        let v1 = vec![
-            Complex64::new(0.0, 1.0),
-            Complex64::new(2.0, -3.0),
-            Complex64::new(1.0, -1.0),
-            Complex64::new(5.0, -4.0),
-            Complex64::new(8.0, -7.0),
-        ];
-        let res = bluestein_fft_vec(&v1);
-        let ans = vec![
-            Complex64 {
-                re: 16.0,
-                im: -14.0,
-            },
-            Complex64 {
-                re: 3.8036497995578236,
-                im: 10.012395135066075,
-            },
-            Complex64 {
-                re: -6.738096517215357,
-                im: 7.267570420448962,
-            },
-            Complex64 {
-                re: -5.734039437784222,
-                im: 7.822599523300513,
-            },
-            Complex64 {
-                re: -7.331513844558244,
-                im: -6.102565078815551,
-            },
-        ];
-
-        for i in 0..5 {
-            assert!(approx_eq!(f64, res[i].re, ans[i].re, epsilon = 1e-10));
-            assert!(approx_eq!(f64, res[i].im, ans[i].im, epsilon = 1e-10));
-        }
-    }
-
-    #[test]
-    fn fft_test() {
-        let v1 = vec![
-            Complex64::new(1.0, 0.0),
-            Complex64::new(2.0, -1.0),
-            Complex64::new(3.0, 2.0),
-            Complex64::new(4.0, -5.0),
-            Complex64::new(6.0, 7.0),
-            Complex64::new(8.0, -4.0),
-            Complex64::new(2.0, 1.0),
-            Complex64::new(0.0, 0.0),
-        ];
-        let v2 = vec![
-            Complex64 { re: 0.0, im: 1.0 },
-            Complex64 {
-                re: -0.1453217681275245,
-                im: -3.6026214877097886,
-            },
-            Complex64 {
-                re: -1.3968022466674206,
-                im: 0.2212317420824741,
-            },
-            Complex64 {
-                re: 6.39622598104463,
-                im: -0.29714171603742257,
-            },
-            Complex64 {
-                re: -2.3576391889522714,
-                im: 10.365400978964416,
-            },
-            Complex64 { re: 0.0, im: 0.0 },
-            Complex64 { re: 0.0, im: 0.0 },
-            Complex64 { re: 0.0, im: 0.0 },
-            Complex64 { re: 0.0, im: 0.0 },
-            Complex64 { re: 0.0, im: 0.0 },
-            Complex64 { re: 0.0, im: 0.0 },
-            Complex64 { re: 0.0, im: 0.0 },
-            Complex64 { re: 0.0, im: 0.0 },
-            Complex64 { re: 0.0, im: 0.0 },
-            Complex64 { re: 0.0, im: 0.0 },
-            Complex64 { re: 0.0, im: 0.0 },
-        ];
-        let v3 = vec![
-            Complex64::new(0.0, 1.0),
-            Complex64::new(2.0, -3.0),
-            Complex64::new(1.0, -1.0),
-            Complex64::new(5.0, -4.0),
-            Complex64::new(8.0, -7.0),
-        ];
-
-        let res1 = fft_vec(&v1);
-        let res2 = fft_vec(&v2);
-        let res3 = fft_vec(&v3);
-
-        let ans1 = vec![
-            Complex64 { re: 26.0, im: 0.0 },
-            Complex64 {
-                re: -12.485281374238571,
-                im: -0.9289321881345245,
-            },
-            Complex64 {
-                re: 2.0,
-                im: -2.0000000000000018,
-            },
-            Complex64 {
-                re: -0.34314575050761853,
-                im: -10.242640687119287,
-            },
-            Complex64 { re: -2.0, im: 20.0 },
-            Complex64 {
-                re: 4.485281374238571,
-                im: -15.071067811865476,
-            },
-            Complex64 {
-                re: 2.0,
-                im: 10.000000000000002,
-            },
-            Complex64 {
-                re: -11.656854249492381,
-                im: -1.7573593128807126,
-            },
-        ];
-        let ans2 = vec![
-            Complex64 {
-                re: 2.4964627772974133,
-                im: 7.686869517299678,
-            },
-            Complex64 {
-                re: 10.194430302685799,
-                im: -4.794067509264503,
-            },
-            Complex64 {
-                re: -4.804250848251911,
-                im: -14.725982651422731,
-            },
-            Complex64 {
-                re: -18.400909719645895,
-                im: 0.9514637996861768,
-            },
-            Complex64 {
-                re: -4.266316713957217,
-                im: 17.685716986054096,
-            },
-            Complex64 {
-                re: 13.946932312659404,
-                im: 5.899646309853949,
-            },
-            Complex64 {
-                re: 4.004431213373595,
-                im: -12.84493282150859,
-            },
-            Complex64 {
-                re: -15.4761803961386,
-                im: -4.600523633014343,
-            },
-            Complex64 {
-                re: -10.005345648536798,
-                im: 15.4863959247941,
-            },
-            Complex64 {
-                re: 8.873863904133222,
-                im: 13.797591498439782,
-            },
-            Complex64 {
-                re: 9.961992710321402,
-                im: -1.211214813171261,
-            },
-            Complex64 {
-                re: -0.041646627012200454,
-                im: -2.0042344264809056,
-            },
-            Complex64 {
-                re: 2.3446428293875154,
-                im: 4.602621487709789,
-            },
-            Complex64 {
-                re: 8.446377396379242,
-                im: -1.472613543220143,
-            },
-            Complex64 {
-                re: 0.2683836803659996,
-                im: -8.679473629755085,
-            },
-            Complex64 {
-                re: -7.542867173060969,
-                im: 0.2227375039999857,
-            },
-        ];
-        let ans3 = vec![
-            Complex64 {
-                re: 16.0,
-                im: -14.0,
-            },
-            Complex64 {
-                re: 3.8036497995578236,
-                im: 10.012395135066075,
-            },
-            Complex64 {
-                re: -6.738096517215357,
-                im: 7.267570420448962,
-            },
-            Complex64 {
-                re: -5.734039437784222,
-                im: 7.822599523300513,
-            },
-            Complex64 {
-                re: -7.331513844558244,
-                im: -6.102565078815551,
-            },
-        ];
-
-        for i in 0..8 {
-            assert!(approx_eq!(f64, res1[i].re, ans1[i].re, epsilon = 1e-10));
-            assert!(approx_eq!(f64, res1[i].im, ans1[i].im, epsilon = 1e-10));
-        }
-
-        for i in 0..16 {
-            assert!(approx_eq!(f64, res2[i].re, ans2[i].re, epsilon = 1e-10));
-            assert!(approx_eq!(f64, res2[i].im, ans2[i].im, epsilon = 1e-10));
-        }
-
-        for i in 0..5 {
-            assert!(approx_eq!(f64, res3[i].re, ans3[i].re, epsilon = 1e-10));
-            assert!(approx_eq!(f64, res3[i].im, ans3[i].im, epsilon = 1e-10));
-        }
-    }
-
-    #[test]
-    fn ifft_test() {
-        let v1 = vec![
-            Complex64 { re: 26.0, im: 0.0 },
-            Complex64 {
-                re: -12.485281374238571,
-                im: -0.9289321881345245,
-            },
-            Complex64 {
-                re: 2.0,
-                im: -2.0000000000000018,
-            },
-            Complex64 {
-                re: -0.34314575050761853,
-                im: -10.242640687119287,
-            },
-            Complex64 { re: -2.0, im: 20.0 },
-            Complex64 {
-                re: 4.485281374238571,
-                im: -15.071067811865476,
-            },
-            Complex64 {
-                re: 2.0,
-                im: 10.000000000000002,
-            },
-            Complex64 {
-                re: -11.656854249492381,
-                im: -1.7573593128807126,
-            },
-        ];
-        let v2 = vec![
-            Complex64 {
-                re: 2.4964627772974133,
-                im: 7.686869517299678,
-            },
-            Complex64 {
-                re: 10.194430302685799,
-                im: -4.794067509264503,
-            },
-            Complex64 {
-                re: -4.804250848251911,
-                im: -14.725982651422731,
-            },
-            Complex64 {
-                re: -18.400909719645895,
-                im: 0.9514637996861768,
-            },
-            Complex64 {
-                re: -4.266316713957217,
-                im: 17.685716986054096,
-            },
-            Complex64 {
-                re: 13.946932312659404,
-                im: 5.899646309853949,
-            },
-            Complex64 {
-                re: 4.004431213373595,
-                im: -12.84493282150859,
-            },
-            Complex64 {
-                re: -15.4761803961386,
-                im: -4.600523633014343,
-            },
-            Complex64 {
-                re: -10.005345648536798,
-                im: 15.4863959247941,
-            },
-            Complex64 {
-                re: 8.873863904133222,
-                im: 13.797591498439782,
-            },
-            Complex64 {
-                re: 9.961992710321402,
-                im: -1.211214813171261,
-            },
-            Complex64 {
-                re: -0.041646627012200454,
-                im: -2.0042344264809056,
-            },
-            Complex64 {
-                re: 2.3446428293875154,
-                im: 4.602621487709789,
-            },
-            Complex64 {
-                re: 8.446377396379242,
-                im: -1.472613543220143,
-            },
-            Complex64 {
-                re: 0.2683836803659996,
-                im: -8.679473629755085,
-            },
-            Complex64 {
-                re: -7.542867173060969,
-                im: 0.2227375039999857,
-            },
-        ];
-        let v3 = vec![
-            Complex64 {
-                re: 16.0,
-                im: -14.0,
-            },
-            Complex64 {
-                re: 3.8036497995578236,
-                im: 10.012395135066075,
-            },
-            Complex64 {
-                re: -6.738096517215357,
-                im: 7.267570420448962,
-            },
-            Complex64 {
-                re: -5.734039437784222,
-                im: 7.822599523300513,
-            },
-            Complex64 {
-                re: -7.331513844558244,
-                im: -6.102565078815551,
-            },
-        ];
-
-        let ans1 = vec![
-            Complex64::new(1.0, 0.0),
-            Complex64::new(2.0, -1.0),
-            Complex64::new(3.0, 2.0),
-            Complex64::new(4.0, -5.0),
-            Complex64::new(6.0, 7.0),
-            Complex64::new(8.0, -4.0),
-            Complex64::new(2.0, 1.0),
-            Complex64::new(0.0, 0.0),
-        ];
-        let ans2 = vec![
-            Complex64 { re: 0.0, im: 1.0 },
-            Complex64 {
-                re: -0.1453217681275245,
-                im: -3.6026214877097886,
-            },
-            Complex64 {
-                re: -1.3968022466674206,
-                im: 0.2212317420824741,
-            },
-            Complex64 {
-                re: 6.39622598104463,
-                im: -0.29714171603742257,
-            },
-            Complex64 {
-                re: -2.3576391889522714,
-                im: 10.365400978964416,
-            },
-            Complex64 { re: 0.0, im: 0.0 },
-            Complex64 { re: 0.0, im: 0.0 },
-            Complex64 { re: 0.0, im: 0.0 },
-            Complex64 { re: 0.0, im: 0.0 },
-            Complex64 { re: 0.0, im: 0.0 },
-            Complex64 { re: 0.0, im: 0.0 },
-            Complex64 { re: 0.0, im: 0.0 },
-            Complex64 { re: 0.0, im: 0.0 },
-            Complex64 { re: 0.0, im: 0.0 },
-            Complex64 { re: 0.0, im: 0.0 },
-            Complex64 { re: 0.0, im: 0.0 },
-        ];
-        let ans3 = vec![
-            Complex64::new(0.0, 1.0),
-            Complex64::new(2.0, -3.0),
-            Complex64::new(1.0, -1.0),
-            Complex64::new(5.0, -4.0),
-            Complex64::new(8.0, -7.0),
-        ];
-
-        let res1 = ifft_vec(&v1);
-        let res2 = ifft_vec(&v2);
-        let res3 = ifft_vec(&v3);
-
-        for i in 0..8 {
-            assert!(approx_eq!(f64, res1[i].re, ans1[i].re, epsilon = 1e-10));
-            assert!(approx_eq!(f64, res1[i].im, ans1[i].im, epsilon = 1e-10));
-        }
-
-        for i in 0..16 {
-            assert!(approx_eq!(f64, res2[i].re, ans2[i].re, epsilon = 1e-10));
-            assert!(approx_eq!(f64, res2[i].im, ans2[i].im, epsilon = 1e-10));
-        }
-
-        for i in 0..5 {
-            assert!(approx_eq!(f64, res3[i].re, ans3[i].re, epsilon = 1e-10));
-            assert!(approx_eq!(f64, res3[i].im, ans3[i].im, epsilon = 1e-10));
-        }
-    }
 
     #[test]
     fn dot_vectors_test() {
@@ -912,20 +159,69 @@ mod internal_functions_tests {
     }
 
     #[test]
-    fn fft_empty_vec() {
-        let v: Vec<Complex64> = vec![];
-        assert_eq!(fft_vec(&v).len(), 0);
-        assert_eq!(ifft_vec(&v).len(), 0);
-        assert_eq!(radix_2_fft_vec(&v).len(), 0);
-        assert_eq!(bluestein_fft_vec(&v).len(), 0);
+    fn split_parallel_work_larger_chunk_size_than_threshold() {
+        let f = |i: usize, chunk: &mut [i32]| {
+            assert_eq!(chunk.len(), PARALLEL_THRESHOLD << 1);
+            for x in chunk.iter_mut() {
+                *x += i as i32;
+            }
+        };
+        let mut data = vec![0; PARALLEL_THRESHOLD << 2];
+        for_each_chunk_mut(&mut data, f, PARALLEL_THRESHOLD << 1);
+        assert_eq!(
+            data,
+            (0..(PARALLEL_THRESHOLD << 2))
+                .map(|i| (i / (PARALLEL_THRESHOLD << 1)) as i32)
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn split_parallel_work_smaller_chunk_size_than_threshold() {
+        let f = |i: usize, chunk: &mut [i32]| {
+            assert_eq!(chunk.len(), PARALLEL_THRESHOLD >> 1);
+            for x in chunk.iter_mut() {
+                *x += i as i32;
+            }
+        };
+        let mut data = vec![0; PARALLEL_THRESHOLD << 2];
+        for_each_chunk_mut(&mut data, f, PARALLEL_THRESHOLD >> 1);
+        assert_eq!(
+            data,
+            (0..(PARALLEL_THRESHOLD << 2))
+                .map(|i| (i / (PARALLEL_THRESHOLD >> 1)) as i32)
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn split_parallel_work_across_paired_chunks() {
+        let mut first = vec![1; PARALLEL_THRESHOLD << 2];
+        let mut second = vec![0; PARALLEL_THRESHOLD << 2];
+        for_each_chunk_mut_pair(
+            &mut first,
+            &mut second,
+            |i, first, second| {
+                for (a, b) in first.iter().zip(second.iter_mut()) {
+                    *b = *a + i as i32;
+                }
+            },
+            PARALLEL_THRESHOLD,
+        );
+        assert_eq!(
+            second,
+            (0..(PARALLEL_THRESHOLD << 2))
+                .map(|i| 1 + (i / PARALLEL_THRESHOLD) as i32)
+                .collect::<Vec<_>>()
+        );
     }
 }
 
 #[cfg(test)]
 mod noncommutative_dot_tests {
-    use std::ops::{Add, AddAssign, Mul};
-    use num::traits::Zero;
     use super::{dot_vectors, dot_vectors_mt};
+    use num::traits::Zero;
+    use std::ops::{Add, AddAssign, Mul};
 
     /// A two-component value whose `Mul` implementation is non-commutative.
     ///

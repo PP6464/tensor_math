@@ -3,16 +3,36 @@ use crate::definitions::matrix::Matrix;
 use crate::definitions::shape::Shape;
 use crate::definitions::tensor::Tensor;
 use crate::definitions::transpose::Transpose;
-use crate::utilities::internal_functions::{fft_vec, ifft_vec};
+use crate::math::fft_internals::FFTPlan;
 use num::complex::Complex64;
+use num::Zero;
 use rayon::iter::ParallelIterator;
-use rayon::prelude::ParallelSlice;
+use rayon::prelude::ParallelSliceMut;
 use std::collections::HashSet;
+
+fn transform_lanes<const INVERSE: bool>(data: &mut [Complex64], lane_len: usize) {
+    if lane_len == 0 || data.is_empty() {
+        return;
+    }
+
+    let plan = FFTPlan::new(lane_len);
+    let scratch_len = plan.scratch_len();
+    data.par_chunks_mut(lane_len).for_each_init(
+        || vec![Complex64::zero(); scratch_len],
+        |scratch, lane| {
+            if INVERSE {
+                plan.inverse(lane, scratch);
+            } else {
+                plan.forward(lane, scratch);
+            }
+        },
+    );
+}
 
 impl Tensor<Complex64> {
     /// Computes an FFT along a single axis.
     /// Fails if the tensor is rank zero or the axis is out of bounds.
-    pub fn fft_single_axis(self, axis: usize) -> Result<Tensor<Complex64>, TensorErrors> {
+    pub fn fft_single_axis(mut self, axis: usize) -> Result<Tensor<Complex64>, TensorErrors> {
         if self.rank() == 0 {
             return Err(TensorErrors::RankZero {
                 op: "fft_single_axis",
@@ -25,18 +45,22 @@ impl Tensor<Complex64> {
             });
         }
         let shape = self.shape();
-
-        let transpose =
-            unsafe { Transpose::identity(self.rank()).swap_axes_unchecked(self.rank() - 1, axis) };
-        unsafe {
-            self.transpose_unchecked_mt(&transpose)
-                .par_chunks(shape[axis])
-                .map(fft_vec)
-                .flatten()
-                .collect::<Tensor<_>>()
-                .reshape_unchecked(transpose.new_shape_unchecked(shape))
-                .transpose_mt(&transpose)
+        let lane_len = shape[axis];
+        if lane_len == 0 || self.elements().is_empty() {
+            return Ok(self);
         }
+
+        if axis + 1 == self.rank() {
+            transform_lanes::<false>(self.elements_mut(), lane_len);
+        } else {
+            let transpose = unsafe {
+                Transpose::identity(self.rank()).swap_axes_unchecked(self.rank() - 1, axis)
+            };
+            let mut transposed = unsafe { self.transpose_unchecked_mt(&transpose) };
+            transform_lanes::<false>(transposed.elements_mut(), lane_len);
+            self = unsafe { transposed.transpose_unchecked_mt(&transpose.inverse()) };
+        }
+        Ok(self)
     }
 
     /// Computes an FFT along a list of axes
@@ -64,7 +88,7 @@ impl Tensor<Complex64> {
 
     /// Computes an inverse FFT along a single axis.
     /// Fails if the tensor is rank zero or the axis is out of bounds.
-    pub fn ifft_single_axis(self, axis: usize) -> Result<Tensor<Complex64>, TensorErrors> {
+    pub fn ifft_single_axis(mut self, axis: usize) -> Result<Tensor<Complex64>, TensorErrors> {
         if self.rank() == 0 {
             return Err(TensorErrors::RankZero {
                 op: "fft_single_axis",
@@ -78,18 +102,22 @@ impl Tensor<Complex64> {
         }
 
         let shape = self.shape();
-        let transpose =
-            unsafe { Transpose::identity(self.rank()).swap_axes_unchecked(self.rank() - 1, axis) };
-
-        unsafe {
-            self.transpose_unchecked_mt(&transpose)
-                .par_chunks(shape[axis])
-                .map(ifft_vec)
-                .flatten()
-                .collect::<Tensor<_>>()
-                .reshape_unchecked(transpose.new_shape_unchecked(shape))
-                .transpose_mt(&transpose.inverse())
+        let lane_len = shape[axis];
+        if lane_len == 0 || self.elements().is_empty() {
+            return Ok(self);
         }
+
+        if axis + 1 == self.rank() {
+            transform_lanes::<true>(self.elements_mut(), lane_len);
+        } else {
+            let transpose = unsafe {
+                Transpose::identity(self.rank()).swap_axes_unchecked(self.rank() - 1, axis)
+            };
+            let mut transposed = unsafe { self.transpose_unchecked_mt(&transpose) };
+            transform_lanes::<true>(transposed.elements_mut(), lane_len);
+            self = unsafe { transposed.transpose_unchecked_mt(&transpose.inverse()) };
+        }
+        Ok(self)
     }
 
     /// Computes an inverse FFT along a list of axes
@@ -276,26 +304,19 @@ impl Tensor<Complex64> {
 
 impl Matrix<Complex64> {
     /// Computes the FFT along the rows
-    pub fn fft_rows(self) -> Matrix<Complex64> {
-        self.par_chunks(self.cols)
-            .map(fft_vec)
-            .flatten()
-            .collect::<Matrix<_>>()
-            .reshape(self.rows, self.cols)
-            .unwrap()
+    pub fn fft_rows(mut self) -> Matrix<Complex64> {
+        let cols = self.cols;
+        transform_lanes::<false>(self.elements_mut(), cols);
+        self
     }
 
     /// Computes the FFT along the columns
     pub fn fft_cols(self) -> Matrix<Complex64> {
         let (rows, cols) = (self.rows, self.cols);
-        self.transpose_mt()
-            .par_chunks(rows)
-            .map(fft_vec)
-            .flatten()
-            .collect::<Matrix<_>>()
-            .reshape(cols, rows)
-            .unwrap()
-            .transpose_mt()
+        let mut transposed = self.transpose_mt();
+        transform_lanes::<false>(transposed.elements_mut(), rows);
+        debug_assert_eq!((transposed.rows, transposed.cols), (cols, rows));
+        transposed.transpose_mt()
     }
 
     /// Computes an FFT along the rows and the columns
@@ -304,27 +325,20 @@ impl Matrix<Complex64> {
     }
 
     /// Computes an IFFT along the rows
-    pub fn ifft_rows(&self) -> Matrix<Complex64> {
-        self.par_chunks(self.cols)
-            .map(ifft_vec)
-            .flatten()
-            .collect::<Matrix<_>>()
-            .reshape(self.rows, self.cols)
-            .unwrap()
+    pub fn ifft_rows(mut self) -> Matrix<Complex64> {
+        let cols = self.cols;
+        transform_lanes::<true>(self.elements_mut(), cols);
+        self
     }
 
     /// Computes an IFFT along the columns
     pub fn ifft_cols(self) -> Matrix<Complex64> {
         let (rows, cols) = (self.rows, self.cols);
 
-        self.transpose_mt()
-            .par_chunks(rows)
-            .map(ifft_vec)
-            .flatten()
-            .collect::<Matrix<_>>()
-            .reshape(cols, rows)
-            .unwrap()
-            .transpose_mt()
+        let mut transposed = self.transpose_mt();
+        transform_lanes::<true>(transposed.elements_mut(), rows);
+        debug_assert_eq!((transposed.rows, transposed.cols), (cols, rows));
+        transposed.transpose_mt()
     }
 
     /// Computes an IFFT along the rows and the columns
@@ -419,37 +433,37 @@ impl Matrix<Complex64> {
 
 impl Tensor<f64> {
     /// Computes an FFT along a single axis.
-    pub fn fft_single_axis(&self, axis: usize) -> Result<Tensor<Complex64>, TensorErrors> {
-        self.par_map_refs(|x| Complex64 { re: *x, im: 0.0 })
+    pub fn fft_single_axis(self, axis: usize) -> Result<Tensor<Complex64>, TensorErrors> {
+        self.par_map(|x| Complex64 { re: x, im: 0.0 })
             .fft_single_axis(axis)
     }
 
     /// Computes an FFT along a list of axes
-    pub fn fft_axes(&self, axes: &HashSet<usize>) -> Result<Tensor<Complex64>, TensorErrors> {
-        self.par_map_refs(|x| Complex64 { re: *x, im: 0.0 })
+    pub fn fft_axes(self, axes: &HashSet<usize>) -> Result<Tensor<Complex64>, TensorErrors> {
+        self.par_map(|x| Complex64 { re: x, im: 0.0 })
             .fft_axes(axes)
     }
 
     /// Computes an FFT along all the axes.
-    pub fn fft(&self) -> Result<Tensor<Complex64>, TensorErrors> {
-        self.par_map_refs(|x| Complex64 { re: *x, im: 0.0 }).fft()
+    pub fn fft(self) -> Result<Tensor<Complex64>, TensorErrors> {
+        self.par_map(|x| Complex64 { re: x, im: 0.0 }).fft()
     }
 
     /// Computes an inverse FFT along a single axis.
-    pub fn ifft_single_axis(&self, axis: usize) -> Result<Tensor<Complex64>, TensorErrors> {
-        self.par_map_refs(|x| Complex64 { re: *x, im: 0.0 })
+    pub fn ifft_single_axis(self, axis: usize) -> Result<Tensor<Complex64>, TensorErrors> {
+        self.par_map(|x| Complex64 { re: x, im: 0.0 })
             .ifft_single_axis(axis)
     }
 
     /// Computes an inverse FFT along a list of axes
-    pub fn ifft_axes(&self, axes: &HashSet<usize>) -> Result<Tensor<Complex64>, TensorErrors> {
-        self.par_map_refs(|x| Complex64 { re: *x, im: 0.0 })
+    pub fn ifft_axes(self, axes: &HashSet<usize>) -> Result<Tensor<Complex64>, TensorErrors> {
+        self.par_map(|x| Complex64 { re: x, im: 0.0 })
             .ifft_axes(axes)
     }
 
     /// Computes an inverse FFT along all the axes.
-    pub fn ifft(&self) -> Result<Tensor<Complex64>, TensorErrors> {
-        self.par_map_refs(|x| Complex64 { re: *x, im: 0.0 }).ifft()
+    pub fn ifft(self) -> Result<Tensor<Complex64>, TensorErrors> {
+        self.par_map(|x| Complex64 { re: x, im: 0.0 }).ifft()
     }
 
     /// Computes the correlation of this and another tensor along a specified list of axes.
@@ -491,37 +505,33 @@ impl Tensor<f64> {
 
 impl Matrix<f64> {
     /// Computes the FFT along the rows
-    pub fn fft_rows(&self) -> Matrix<Complex64> {
-        self.par_map_refs(|x| Complex64 { re: *x, im: 0.0 })
-            .fft_rows()
+    pub fn fft_rows(self) -> Matrix<Complex64> {
+        self.par_map(|x| Complex64 { re: x, im: 0.0 }).fft_rows()
     }
 
     /// Computes the FFT along the columns
-    pub fn fft_cols(&self) -> Matrix<Complex64> {
-        self.par_map_refs(|x| Complex64 { re: *x, im: 0.0 })
-            .fft_cols()
+    pub fn fft_cols(self) -> Matrix<Complex64> {
+        self.par_map(|x| Complex64 { re: x, im: 0.0 }).fft_cols()
     }
 
     /// Computes an FFT along the rows and the columns
-    pub fn fft(&self) -> Matrix<Complex64> {
-        self.par_map_refs(|x| Complex64 { re: *x, im: 0.0 }).fft()
+    pub fn fft(self) -> Matrix<Complex64> {
+        self.par_map(|x| Complex64 { re: x, im: 0.0 }).fft()
     }
 
     /// Computes an IFFT along the rows
-    pub fn ifft_rows(&self) -> Matrix<Complex64> {
-        self.par_map_refs(|x| Complex64 { re: *x, im: 0.0 })
-            .ifft_rows()
+    pub fn ifft_rows(self) -> Matrix<Complex64> {
+        self.par_map(|x| Complex64 { re: x, im: 0.0 }).ifft_rows()
     }
 
     /// Computes an IFFT along the columns
-    pub fn ifft_cols(&self) -> Matrix<Complex64> {
-        self.par_map_refs(|x| Complex64 { re: *x, im: 0.0 })
-            .ifft_cols()
+    pub fn ifft_cols(self) -> Matrix<Complex64> {
+        self.par_map(|x| Complex64 { re: x, im: 0.0 }).ifft_cols()
     }
 
     /// Computes an IFFT along the rows and the columns
     pub fn ifft(self) -> Matrix<Complex64> {
-        self.par_map_refs(|x| Complex64 { re: *x, im: 0.0 }).ifft()
+        self.par_map(|x| Complex64 { re: x, im: 0.0 }).ifft()
     }
 
     /// Computes convolution along the columns
@@ -1545,49 +1555,49 @@ mod fft_ops_tests {
 
         assert!(approx_eq!(
             Tensor<Complex64>,
-            values.fft_single_axis(0).unwrap(),
+            values.clone().fft_single_axis(0).unwrap(),
             complex_values.clone().fft_single_axis(0).unwrap(),
             epsilon = 1e-10
         ));
         assert!(approx_eq!(
             Tensor<Complex64>,
-            values.fft_axes(&axes).unwrap(),
+            values.clone().fft_axes(&axes).unwrap(),
             complex_values.clone().fft_axes(&axes).unwrap(),
             epsilon = 1e-10
         ));
         assert!(approx_eq!(
             Tensor<Complex64>,
-            values.fft().unwrap(),
+            values.clone().fft().unwrap(),
             complex_values.clone().fft().unwrap(),
             epsilon = 1e-10
         ));
         assert!(approx_eq!(
             Tensor<Complex64>,
-            values.ifft_single_axis(1).unwrap(),
+            values.clone().ifft_single_axis(1).unwrap(),
             complex_values.clone().ifft_single_axis(1).unwrap(),
             epsilon = 1e-10
         ));
         assert!(approx_eq!(
             Tensor<Complex64>,
-            values.ifft_axes(&axes).unwrap(),
+            values.clone().ifft_axes(&axes).unwrap(),
             complex_values.clone().ifft_axes(&axes).unwrap(),
             epsilon = 1e-10
         ));
         assert!(approx_eq!(
             Tensor<Complex64>,
-            values.ifft().unwrap(),
+            values.clone().ifft().unwrap(),
             complex_values.clone().ifft().unwrap(),
             epsilon = 1e-10
         ));
         assert!(approx_eq!(
             Tensor<Complex64>,
-            values.fft_axes(&no_axes).unwrap(),
+            values.clone().fft_axes(&no_axes).unwrap(),
             complex_values.clone(),
             epsilon = 1e-10
         ));
         assert!(approx_eq!(
             Tensor<Complex64>,
-            values.ifft_axes(&no_axes).unwrap(),
+            values.clone().ifft_axes(&no_axes).unwrap(),
             complex_values,
             epsilon = 1e-10
         ));
@@ -1639,12 +1649,12 @@ mod fft_ops_tests {
         let scalar_other = Tensor::new(shape![], vec![1.0]).unwrap();
         let no_axes = HashSet::new();
 
-        assert!(scalar.fft_single_axis(0).is_err());
-        assert!(scalar.fft_axes(&no_axes).is_err());
-        assert!(scalar.fft().is_err());
-        assert!(scalar.ifft_single_axis(0).is_err());
-        assert!(scalar.ifft_axes(&no_axes).is_err());
-        assert!(scalar.ifft().is_err());
+        assert!(scalar.clone().fft_single_axis(0).is_err());
+        assert!(scalar.clone().fft_axes(&no_axes).is_err());
+        assert!(scalar.clone().fft().is_err());
+        assert!(scalar.clone().ifft_single_axis(0).is_err());
+        assert!(scalar.clone().ifft_axes(&no_axes).is_err());
+        assert!(scalar.clone().ifft().is_err());
         assert!(scalar.fft_conv_axes(&scalar_other, &no_axes).is_err());
         assert!(scalar.fft_corr_axes(&scalar_other, &no_axes).is_err());
         assert!(scalar.fft_conv(&scalar_other).is_err());
@@ -1652,11 +1662,11 @@ mod fft_ops_tests {
 
         let values = Tensor::new(shape![2, 3], vec![1.0; 6]).unwrap();
         assert!(matches!(
-            values.fft_single_axis(2),
+            values.clone().fft_single_axis(2),
             Err(TensorErrors::AxisOutOfBounds { .. })
         ));
         assert!(matches!(
-            values.ifft_single_axis(2),
+            values.clone().ifft_single_axis(2),
             Err(TensorErrors::AxisOutOfBounds { .. })
         ));
         let mismatched_non_convolution_axis = Tensor::new(shape![3, 2], vec![1.0; 6]).unwrap();
@@ -1675,31 +1685,31 @@ mod fft_ops_tests {
 
         assert!(approx_eq!(
             Matrix<Complex64>,
-            values.fft_rows(),
+            values.clone().fft_rows(),
             complex_values.clone().fft_rows(),
             epsilon = 1e-10
         ));
         assert!(approx_eq!(
             Matrix<Complex64>,
-            values.fft_cols(),
+            values.clone().fft_cols(),
             complex_values.clone().fft_cols(),
             epsilon = 1e-10
         ));
         assert!(approx_eq!(
             Matrix<Complex64>,
-            values.fft(),
+            values.clone().fft(),
             complex_values.clone().fft(),
             epsilon = 1e-10
         ));
         assert!(approx_eq!(
             Matrix<Complex64>,
-            values.ifft_rows(),
+            values.clone().ifft_rows(),
             complex_values.clone().ifft_rows(),
             epsilon = 1e-10
         ));
         assert!(approx_eq!(
             Matrix<Complex64>,
-            values.ifft_cols(),
+            values.clone().ifft_cols(),
             complex_values.clone().ifft_cols(),
             epsilon = 1e-10
         ));
