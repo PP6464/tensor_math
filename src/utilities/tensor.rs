@@ -554,6 +554,10 @@ impl<T> Tensor<T> {
     /// Transposes a tensor and returns the result.
     /// This fails if `self.rank() != transpose.permutation().len()`.
     pub fn transpose(self, transpose: &Transpose) -> Result<Tensor<T>, TensorErrors> {
+        if transpose == &Transpose::identity(self.rank()) {
+            return Ok(self);
+        }
+
         if transpose.permutation.len() != self.shape().rank() {
             return Err(TensorErrors::TransposeIncompatibleRank {
                 rank: self.rank(),
@@ -599,6 +603,10 @@ impl<T> Tensor<T> {
     where
         T: Send + Sync,
     {
+        if transpose == &Transpose::identity(self.rank()) {
+            return Ok(self);
+        }
+
         if transpose.permutation.len() != self.shape().rank() {
             return Err(TensorErrors::TransposeIncompatibleRank {
                 rank: self.rank(),
